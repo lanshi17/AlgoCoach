@@ -6,3 +6,5 @@
 !README.md
 *.json
 build
+editor/cn/.work_logs.sh
+editor/cn/work_logs.sh
