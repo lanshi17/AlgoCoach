@@ -1,4 +1,6 @@
-
+*logs.*
+*logs.sh
+.work_logs.sh
 .vscode
 .idea
 .lcpr_data
@@ -6,7 +8,6 @@
 !README.md
 *.json
 build
-editor/cn/.work_logs.sh
-editor/cn/work_logs.sh
-.work_logs.sh
+
+
 
