@@ -6,33 +6,43 @@
  */
 
 // @lc code=start
-use std::collections::BinaryHeap;
-// 状态结构体
+use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashMap};
+
+// 包装 f64 类型以实现 Ord trait
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct State {
-    node: usize,
-    prob_from_start: f64,
-}
+struct Prob(f64);
 
-// 为State实现Eq和PartialEq以便比较
-impl Eq for State {}
+impl Eq for Prob {}
 
-// 实现Ord和PartialOrd以在BinaryHeap中正确排序
-// 求最大概率路径，所以需要把概率大的放在前面
-impl PartialOrd for State {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.prob_from_start.partial_cmp(&other.prob_from_start)
+impl PartialOrd for Prob {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.0.partial_cmp(&other.0)
     }
 }
 
-impl Ord for State {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.prob_from_start
-            .partial_cmp(&other.prob_from_start)
-            .unwrap_or(std::cmp::Ordering::Equal)
+// 实现 Ord trait，将 NaN 视为相等且最小的值
+impl Ord for Prob {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.partial_cmp(&other.0).unwrap_or(Ordering::Equal)
     }
 }
+
 impl Solution {
+    /// 找出从起点到终点成功概率最大的路径
+    ///
+    /// 在一个无向加权图中，每条边都有一个成功遍历的概率。
+    /// 目标是找到从起点到终点成功概率最大的路径。
+    ///
+    /// # 参数说明
+    /// * `n` - 图中节点的数量
+    /// * `edges` - 边的列表，每条边用 [a, b] 表示连接节点 a 和 b
+    /// * `succ_prob` - 每条边对应的成功概率
+    /// * `start` - 起点节点
+    /// * `end` - 终点节点
+    ///
+    /// # 返回值
+    /// 从起点到终点的最大成功概率，如果无法到达则返回 0
     pub fn max_probability(
         n: i32,
         edges: Vec<Vec<i32>>,
@@ -40,73 +50,61 @@ impl Solution {
         start: i32,
         end: i32,
     ) -> f64 {
-        let n = n as usize;
-        let start = start as usize;
-        let end = end as usize;
+        // 构建图的邻接表表示
+        let mut graph: HashMap<usize, Vec<(usize, f64)>> = HashMap::new();
 
-        // 构造无向图
-        let mut graph: Vec<Vec<(usize, f64)>> = vec![vec![]; n];
-        for i in 0..edges.len() {
-            let from = edges[i][0] as usize;
-            let to = edges[i][1] as usize;
-            let weight = succ_prob[i];
-            // 无向图其实就是双向图
-            graph[from].push((to, weight));
-            graph[to].push((from, weight));
+        for (i, edge) in edges.iter().enumerate() {
+            let a = edge[0] as usize;
+            let b = edge[1] as usize;
+            let prob = succ_prob[i];
+
+            graph.entry(a).or_insert_with(Vec::new).push((b, prob));
+            graph.entry(b).or_insert_with(Vec::new).push((a, prob));
         }
 
-        let res = Self::dijkstra(&graph, start, end);
-        // 如果 res 为 -1，说明没有从 start 到 end 的路径
-        if res == -1.0 {
-            0.0
-        } else {
-            res
-        }
-    }
+        // 初始化概率数组，记录从起点到每个节点的最大概率
+        // 起点的概率为 1.0，其他节点初始概率为 0.0
+        let mut probabilities = vec![0.0; n as usize];
+        probabilities[start as usize] = 1.0;
 
-    // Dijkstra 算法模板
-    fn dijkstra(graph: &Vec<Vec<(usize, f64)>>, src: usize, dst: usize) -> f64 {
-        let n = graph.len();
-        let mut prob_to = vec![-1.0; n];
+        // 初始化优先队列（最大堆），用于选择当前概率最大的节点
+        let mut pq: BinaryHeap<(Prob, usize)> = BinaryHeap::new();
 
-        let mut pq = BinaryHeap::new();
-        pq.push(State {
-            node: src,
-            prob_from_start: 1.0,
-        });
+        // 将起点加入优先队列，概率为 1.0
+        pq.push((Prob(1.0), start as usize));
 
-        while let Some(state) = pq.pop() {
-            let cur_node = state.node;
-            let cur_prob_from_start = state.prob_from_start;
-
-            if prob_to[cur_node] != -1.0 {
+        // Dijkstra 算法变种 - 寻找最大概率路径
+        while let Some((Prob(current_prob), node)) = pq.pop() {
+            // 如果当前概率小于已知的最大概率，则跳过
+            if current_prob < probabilities[node] {
                 continue;
             }
 
-            // curNode 节点第一次出队时，就找到了从 src 到 curNode 的最大概率路径
-            prob_to[cur_node] = cur_prob_from_start;
-
-            // 如果 curNode 是终点 dst，直接返回最大概率路径
-            if cur_node == dst {
-                return cur_prob_from_start;
+            // 如果该节点就是终点，返回其概率
+            if node == end as usize {
+                return probabilities[node];
             }
 
-            for &(next_node, weight) in &graph[cur_node] {
-                let next_prob_from_start = cur_prob_from_start * weight;
+            // 遍历该节点的所有邻居
+            if let Some(neighbors) = graph.get(&node) {
+                for &(neighbor, edge_prob) in neighbors {
+                    // 计算通过当前节点到达邻居的新概率
+                    let new_prob = current_prob * edge_prob;
 
-                if prob_to[next_node] != -1.0 {
-                    continue;
+                    // 如果新概率大于已记录的概率，则更新并加入优先队列
+                    if new_prob > probabilities[neighbor] {
+                        probabilities[neighbor] = new_prob;
+                        pq.push((Prob(new_prob), neighbor));
+                    }
                 }
-                pq.push(State {
-                    node: next_node,
-                    prob_from_start: next_prob_from_start,
-                });
             }
         }
 
-        -1.0
+        // 如果无法到达终点，返回 0.0
+        probabilities[end as usize]
     }
 }
+
 // @lc code=end
 
 /*
