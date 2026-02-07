@@ -25,11 +25,6 @@ impl Solution {
             }
             max_len = max_len.max(right - left + 1);
         }
-
-        if max_len == 0 {
-            return n as i32;
-        }
-
         (n - max_len) as i32
     }
 }
