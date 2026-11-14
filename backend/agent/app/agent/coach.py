@@ -53,6 +53,7 @@ from agentscope.model import (
     MiniMaxChatModel,
     MoonshotChatModel,
     OpenAIChatModel,
+    OpenAIResponseModel,
     ChatModelBase,
     VolcengineChatModel,
     XAIChatModel,
@@ -369,6 +370,11 @@ class AlgoCoach:
             return OpenAIChatModel(
                 credential=OpenAICredential(api_key=secret, base_url=compatible_url),
                 model=model, parameters=OpenAIChatModel.Parameters(**params),
+            )
+        if protocol == "openai-response":
+            return OpenAIResponseModel(
+                credential=OpenAICredential(api_key=secret, base_url=base_url),
+                model=model, parameters=OpenAIResponseModel.Parameters(max_tokens=1024),
             )
         if protocol == "deepseek":
             return DeepSeekChatModel(

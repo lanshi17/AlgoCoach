@@ -9,6 +9,7 @@ export interface ProviderPreset extends Omit<ModelProviderConfig, 'apiKey'> {
 export const PROVIDER_PRESETS: ProviderPreset[] = [
   { id: 'anthropic', name: 'Anthropic', protocol: 'anthropic', baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-4-5', hint: 'Claude API' },
   { id: 'openai', name: 'OpenAI', protocol: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', hint: 'OpenAI-compatible' },
+  { id: 'openai-response', name: 'OpenAI Responses', protocol: 'openai-response', baseUrl: 'https://api.openai.com/v1', model: 'o3-mini', hint: 'OpenAI Responses API' },
   { id: 'deepseek', name: 'DeepSeek', protocol: 'deepseek', baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat', hint: 'DeepSeek API' },
   { id: 'qwen', name: 'Qwen / DashScope', protocol: 'dashscope', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus', hint: '通义千问兼容接口' },
   { id: 'moonshot', name: 'Moonshot / Kimi', protocol: 'moonshot', baseUrl: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k', hint: 'Moonshot API' },
@@ -26,6 +27,7 @@ export const CUSTOM_PROVIDER_PRESET: ProviderPreset = {
 
 export const PROTOCOL_OPTIONS: Array<{ value: ProviderProtocol; label: string }> = [
   { value: 'openai', label: 'OpenAI-compatible' },
+  { value: 'openai-response', label: 'OpenAI Responses API' },
   { value: 'anthropic', label: 'Anthropic-compatible' },
 ]
 

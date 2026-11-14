@@ -6,7 +6,7 @@ export type AgentMode = 'IDLE' | 'PREP' | 'FOCUS' | 'REVIEW'
 export type TrainingGoal = 'interview_prep' | 'contest' | 'casual'
 
 export type ProviderProtocol =
-  | 'anthropic' | 'openai' | 'deepseek' | 'dashscope' | 'gemini'
+  | 'anthropic' | 'openai' | 'openai-response' | 'deepseek' | 'dashscope' | 'gemini'
   | 'moonshot' | 'minimax' | 'ollama' | 'volcengine' | 'xai'
 
 export interface ModelProviderConfig {

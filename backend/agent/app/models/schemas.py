@@ -71,7 +71,7 @@ class ProviderConfig(BaseModel):
     id: str = "custom"
     name: str = "Custom provider"
     protocol: Literal[
-        "anthropic", "openai", "deepseek", "dashscope", "gemini",
+        "anthropic", "openai", "openai-response", "deepseek", "dashscope", "gemini",
         "moonshot", "minimax", "ollama", "volcengine", "xai",
     ] = "openai"
     baseUrl: str = ""
