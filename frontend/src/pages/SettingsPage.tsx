@@ -4,13 +4,26 @@ import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '@/stores/useAppStore'
 import { agentService } from '@/services/agentService'
 import { leetcodeService } from '@/services/leetcodeService'
-import type { TrainingGoal } from '@/types'
+import type { ModelProviderConfig, TrainingGoal } from '@/types'
+import { CUSTOM_PROVIDER_PRESET, PROTOCOL_OPTIONS, PROVIDER_PRESETS, providerFromPreset } from '@/services/providerPresets'
 
 export default function SettingsPage() {
   const navigate = useNavigate()
-  const { lang, setLang, goal, setGoal, theme, toggleTheme } = useAppStore()
+  const { lang, setLang, goal, setGoal, theme, toggleTheme, provider, setProvider } = useAppStore()
   const [exporting, setExporting] = useState(false)
   const [message, setMessage] = useState('')
+  const [providerDraft, setProviderDraft] = useState<ModelProviderConfig>(provider)
+
+  const chooseProvider = (id: string) => {
+    const preset = id === 'custom'
+      ? CUSTOM_PROVIDER_PRESET
+      : PROVIDER_PRESETS.find(item => item.id === id) ?? PROVIDER_PRESETS[0]
+    setProviderDraft(providerFromPreset(preset, providerDraft.apiKey))
+  }
+
+  const updateProvider = (patch: Partial<ModelProviderConfig>) => {
+    setProviderDraft(current => ({ ...current, ...patch }))
+  }
 
   const exportData = async () => {
     if (exporting) return
@@ -61,6 +74,49 @@ export default function SettingsPage() {
               <option value="interview_prep">技术面试准备</option>
               <option value="casual">日常算法学习</option>
             </select>
+          </div>
+
+          <div className="border-t border-border pt-5 dark:border-border-dark">
+            <div>
+              <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">模型 Provider</p>
+              <p className="mt-1 text-xs text-text-muted dark:text-text-dark-muted">参考 omp 的 Provider 管理：预设可直接编辑，也支持 OpenAI / Anthropic 兼容的自定义端点。</p>
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="text-xs text-text-muted dark:text-text-dark-muted">预设
+                <select aria-label="模型 Provider 预设" value={providerDraft.id} onChange={event => chooseProvider(event.target.value)}
+                  className="mt-1 w-full rounded-md border border-border bg-surface-soft px-3 py-2 text-sm dark:border-border-dark dark:bg-surface-dark-soft">
+                  {PROVIDER_PRESETS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                  <option value="custom">自定义 Provider</option>
+                </select>
+              </label>
+              <label className="text-xs text-text-muted dark:text-text-dark-muted">显示名称
+                <input aria-label="Provider 名称" value={providerDraft.name} onChange={event => updateProvider({ name: event.target.value })}
+                  className="mt-1 w-full rounded-md border border-border bg-surface-soft px-3 py-2 text-sm dark:border-border-dark dark:bg-surface-dark-soft" />
+              </label>
+              {providerDraft.id === 'custom' && <label className="text-xs text-text-muted dark:text-text-dark-muted">协议
+                <select aria-label="Provider 协议" value={providerDraft.protocol} onChange={event => updateProvider({ protocol: event.target.value as ModelProviderConfig['protocol'] })}
+                  className="mt-1 w-full rounded-md border border-border bg-surface-soft px-3 py-2 text-sm dark:border-border-dark dark:bg-surface-dark-soft">
+                  {PROTOCOL_OPTIONS.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+                </select>
+              </label>}
+              <label className="text-xs text-text-muted dark:text-text-dark-muted">Base URL
+                <input aria-label="Provider Base URL" value={providerDraft.baseUrl} onChange={event => updateProvider({ baseUrl: event.target.value })}
+                  placeholder="https://api.example.com/v1"
+                  className="mt-1 w-full rounded-md border border-border bg-surface-soft px-3 py-2 text-sm dark:border-border-dark dark:bg-surface-dark-soft" />
+              </label>
+              <label className="text-xs text-text-muted dark:text-text-dark-muted">模型名
+                <input aria-label="Provider 模型名" value={providerDraft.model} onChange={event => updateProvider({ model: event.target.value })}
+                  placeholder="model-name"
+                  className="mt-1 w-full rounded-md border border-border bg-surface-soft px-3 py-2 text-sm dark:border-border-dark dark:bg-surface-dark-soft" />
+              </label>
+              {providerDraft.protocol !== 'ollama' && <label className="text-xs text-text-muted dark:text-text-dark-muted">API key
+                <input aria-label="Provider API key" type="password" autoComplete="off" value={providerDraft.apiKey} onChange={event => updateProvider({ apiKey: event.target.value })}
+                  placeholder="仅保存在当前浏览器会话"
+                  className="mt-1 w-full rounded-md border border-border bg-surface-soft px-3 py-2 text-sm dark:border-border-dark dark:bg-surface-dark-soft" />
+              </label>}
+            </div>
+            <button type="button" onClick={() => { setProvider(providerDraft); setMessage('Provider 设置已保存到当前浏览器会话。') }}
+              className="mt-3 rounded-md bg-accent px-3 py-2 text-sm text-white">保存 Provider</button>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-5 dark:border-border-dark">

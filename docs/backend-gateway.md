@@ -95,7 +95,7 @@ backend/gateway/
 避免把其他状态异常误判为 Cookie 缺失），由 `GlobalExceptionHandler` 返回 401 `COOKIE_MISSING`。
 
 ### `AuthController.java`
-- `POST /api/auth/cookie`：接收 `{session, csrf}` 存入 SQLite
+- `POST /api/auth/cookie`：接收前端从浏览器 curl 提取的 `{session, csrf}`，存入 SQLite；Gateway 不接收完整 curl
 - `GET /api/auth/status`：返回 `{authenticated: true/false}`
 
 请求体 Bean Validation 失败时由 `GlobalExceptionHandler` 统一返回 400 `VALIDATION_ERROR`。

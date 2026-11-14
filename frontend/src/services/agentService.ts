@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AgentProfile, AnimationJob, TrainingGoal } from '@/types'
+import type { AgentProfile, AnimationJob, ModelProviderConfig, TrainingGoal } from '@/types'
 
 interface ChatReply {
   content: string
@@ -22,6 +22,7 @@ interface ChatCtx {
   goal?: TrainingGoal
   trainingPhase?: TrainingPhase
   timeRemainingSec?: number
+  provider?: ModelProviderConfig
 }
 
 /**
@@ -39,7 +40,13 @@ export const agentService = {
   },
 
   async chat(message: string, ctx: ChatCtx): Promise<ChatReply> {
-    const { data } = await axios.post<ChatReply>('/api/agent/chat', { message, ...ctx })
+    const { provider, ...rest } = ctx
+    const shouldSendProvider = Boolean(provider?.apiKey) || provider?.protocol === 'ollama'
+    const { data } = await axios.post<ChatReply>('/api/agent/chat', {
+      message,
+      ...rest,
+      ...(shouldSendProvider ? { provider } : {}),
+    })
     return data
   },
 

@@ -100,9 +100,9 @@ with sync_playwright() as p:
     page.on('pageerror', lambda error: page_errors.append(str(error)))
     page.goto(os.environ.get('ALGOCOACH_FRONTEND_URL', 'http://localhost:5173') + '/', wait_until='networkidle')
     assert page.get_by_text('连接 LeetCode').is_visible()
-    passwords = page.locator('input[type=password]')
-    passwords.nth(0).fill('session-placeholder')
-    passwords.nth(1).fill('csrf-placeholder')
+    page.get_by_label('leetcode.cn curl').fill(
+        "curl 'https://leetcode.cn/' -b 'LEETCODE_SESSION=session-placeholder; csrftoken=csrf-placeholder'"
+    )
     page.get_by_role('button', name='保存并开始').click()
     page.get_by_role('heading', name='选择一道题目', exact=True).wait_for(timeout=10000)
     search = page.get_by_role('textbox', name='搜索当前页题目')

@@ -5,7 +5,7 @@ keeps ``agent/router.py`` focused on routing. Field names are part of the
 existing API contract (the frontend and the Java gateway use them verbatim),
 so they must not be renamed without a coordinated client change.
 """
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -31,6 +31,7 @@ class ChatRequest(BaseModel):
     goal: str | None = None
     trainingPhase: str = DEFAULT_TRAINING_PHASE.value
     timeRemainingSec: int | None = Field(default=None, ge=0)
+    provider: "ProviderConfig | None" = None
 
     @field_validator("trainingPhase", mode="before")
     @classmethod
@@ -58,6 +59,24 @@ class ChatResponse(BaseModel):
 
     content: str
     animationId: str | None = None
+
+
+class ProviderConfig(BaseModel):
+    """Ephemeral model connection selected in the local settings page.
+
+    The API key is accepted only for the current request and is never written
+    to SQLite, ReMe, logs, exports, or the browser's localStorage.
+    """
+
+    id: str = "custom"
+    name: str = "Custom provider"
+    protocol: Literal[
+        "anthropic", "openai", "deepseek", "dashscope", "gemini",
+        "moonshot", "minimax", "ollama", "volcengine", "xai",
+    ] = "openai"
+    baseUrl: str = ""
+    model: str = ""
+    apiKey: str = ""
 
 
 class AnimateRequest(BaseModel):

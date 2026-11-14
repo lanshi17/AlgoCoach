@@ -317,6 +317,38 @@ async def test_chat_route_forwards_training_fields_unchanged(client, monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_chat_route_forwards_ephemeral_provider_only_when_supplied(client, monkeypatch):
+    spy = _RecordingCoach()
+    monkeypatch.setattr(router_module, "coach", spy)
+
+    resp = await client.post(
+        "/chat",
+        json={
+            "message": "用自定义模型复盘",
+            "mode": "REVIEW",
+            "provider": {
+                "id": "custom",
+                "name": "Local gateway",
+                "protocol": "openai",
+                "baseUrl": "http://localhost:9000/v1",
+                "model": "local-model",
+                "apiKey": "request-only-secret",
+            },
+        },
+    )
+
+    assert resp.status_code == 200
+    assert spy.calls[0]["provider"] == {
+        "id": "custom",
+        "name": "Local gateway",
+        "protocol": "openai",
+        "baseUrl": "http://localhost:9000/v1",
+        "model": "local-model",
+        "apiKey": "request-only-secret",
+    }
+
+
+@pytest.mark.asyncio
 async def test_chat_route_normalises_unknown_phase_and_keeps_legacy_body(
     client, monkeypatch
 ):

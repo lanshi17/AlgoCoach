@@ -66,7 +66,7 @@ frontend/
     │       └── Badge.tsx           # 难度徽章
     └── pages/
         ├── CookieSetupPage.tsx     # 首次使用 Cookie 引导
-        ├── SettingsPage.tsx        # 语言/目标/主题/导出设置
+        ├── SettingsPage.tsx        # 语言/目标/主题/Provider/导出设置
         ├── ProgressPage.tsx        # 训练进度
         ├── KnowledgeGraphPage.tsx  # 掌握关系图
         └── graphLayout.ts          # 图布局算法
@@ -424,7 +424,11 @@ interface AppState {
 
 **路由**：`/settings`；首次启动未配置 Cookie 时由 `AppShell` 显示连接页，已登录用户通过 `/settings/cookie` 更新登录态。
 
-**当前实现**：重新录入 `LEETCODE_SESSION` 和 `csrftoken`。两个输入框使用密码字段，Cookie 明文不会写入前端持久化存储；保存后返回 `/workspace`。
+**当前实现**：粘贴浏览器 Copy as cURL (bash) 的完整请求，前端仅提取 `LEETCODE_SESSION` 和 `csrftoken` 再提交 Gateway；完整 curl 不写入前端持久化存储，保存后返回 `/workspace`。
+
+### 3.10 Provider 设置
+
+`SettingsPage` 提供 OMP 风格的 Provider 预设（Anthropic、OpenAI、DeepSeek、Qwen/DashScope、Moonshot/Kimi、MiniMax、Gemini、OpenRouter、Ollama、Volcengine、xAI）和自定义端点。用户可编辑协议、Base URL、模型名和 API key；API key 只放在当前浏览器 `sessionStorage`，每次聊天按请求传给本机 Agent，不进入 SQLite、ReMe、导出文件或 Git。未配置页面 Provider 时，Agent 继续使用服务端 `.env` 的默认 Anthropic 配置。
 
 语言偏好、训练目标和主题保存在当前浏览器；数据导出下载 Agent 训练记忆 ZIP 与 Gateway 提交历史 JSON。提交历史导出包含用户提交代码，LeetCode Cookie 不导出。
 

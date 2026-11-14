@@ -874,4 +874,5 @@ async def test_real_reme_auto_memory_write_and_search(tmp_path):
 | P2 | `remotion/codegen.py` | ✅ 已实现并本机实测：bwrap + systemd scope 沙箱、真实 preflight、静态校验、输出限制；默认关闭、未上线，Docker 内保持不可用 |
 | P2 | `agent/self_improve.py` | ✅ 本轮已实现（人工分析型 MVP）：`recommendation_log`、按 due 窗口重建 mastery 的 7 天回测（保存 `mastery_after`）、月度 strategy 汇总、`suggest_next_problem` tool、两个 cron job；自动调权/提示词改写/正式 UI/通知仍未实现 |
 | P3 | `prompts.py` | ✅ 本轮已实现：Soul 集中管理、`UserGoal` + `get_system_prompt(goal)` 变体、未知回退；coach 接收浏览器偏好目标，显式竞赛阶段优先 |
+| P3 | Provider 配置 | ✅ 设置页提供 OMP 风格主流预设与自定义 OpenAI/Anthropic-compatible 端点；请求级配置只在内存中创建 AgentScope 模型，不持久化 API key |
 | P3 | `/chat` contest 训练协议 | ✅ 本轮已实现：`trainingPhase` / `timeRemainingSec` 可选字段、六阶段指导、OI/xCPC 读题-分类-约束-部分分-补题节奏、剩余时间提醒、phase 进入 AgentScope 消息与 ReMe 记忆；无新 SQLite，`ChatResponse` 不变 |

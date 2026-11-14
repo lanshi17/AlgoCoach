@@ -14,7 +14,7 @@ export default function Header() {
   const {
     activeProblem, mode, lang, setLang, goal, theme, toggleTheme,
     code, testInput, enterFocus, exitFocus,
-    getFocusDurationSec, setRunResult, setRunError, setRunLoading,
+    getFocusDurationSec, setRunResult, setRunError, setRunLoading, provider,
     setLastSubmission, addMessage,
   } = useAppStore()
   const [runBusy, setRunBusy] = useState(false)
@@ -83,6 +83,7 @@ export default function Header() {
         problemId: activeProblem.platformId,
         goal,
         trainingPhase: 'review',
+        provider,
       }).then(reply => {
         addMessage({
           id: nanoid(), role: 'agent', content: reply.content,

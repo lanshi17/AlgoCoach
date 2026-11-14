@@ -26,6 +26,7 @@ Tools:
   - suggest_next_problem    : recommend next problem based on weak topics
 """
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -33,10 +34,29 @@ from contextvars import ContextVar
 from typing import Any
 
 from agentscope.agent import Agent
-from agentscope.credential import AnthropicCredential
+from agentscope.credential import (
+    AnthropicCredential,
+    DashScopeCredential,
+    DeepSeekCredential,
+    MiniMaxCredential,
+    MoonshotCredential,
+    OpenAICredential,
+    VolcengineCredential,
+    XAICredential,
+)
 from agentscope.message import UserMsg
 from agentscope.middleware import ReMeMiddleware
-from agentscope.model import AnthropicChatModel, ChatModelBase
+from agentscope.model import (
+    AnthropicChatModel,
+    DashScopeChatModel,
+    DeepSeekChatModel,
+    MiniMaxChatModel,
+    MoonshotChatModel,
+    OpenAIChatModel,
+    ChatModelBase,
+    VolcengineChatModel,
+    XAIChatModel,
+)
 from agentscope.permission import PermissionBehavior, PermissionDecision
 from agentscope.state import AgentState
 from agentscope.tool import FunctionTool, Toolkit
@@ -236,20 +256,30 @@ class AlgoCoach:
         self._agents: dict[str, Agent] = {}
         self._locks: dict[str, asyncio.Lock] = {}
         self._init_lock = asyncio.Lock()
+        self._provider_fingerprint: str | None = None
         # Successful gateway problem metadata, keyed by slug (process-local).
         self._problem_meta: dict[str, dict] = {}
 
     # ── Agent / middleware lifecycle ──────────────────────────
 
-    async def _get_agent(self, session_id: str) -> Agent:
+    async def _get_agent(self, session_id: str, provider: dict[str, Any] | None = None) -> Agent:
         """Return the per-session Agent, building the shared runtime once."""
         async with self._init_lock:
+            fingerprint = self._fingerprint_provider(provider)
+            if self._provider_fingerprint not in (None, fingerprint) and self._memory is not None:
+                middleware = self._memory
+                self._memory = None
+                self._chat_model = None
+                self._agents.clear()
+                self._locks.clear()
+                await middleware.close()
             existing = self._agents.get(session_id)
             if existing is not None:
                 return existing
 
             if self._chat_model is None:
-                self._chat_model = self._build_chat_model()
+                self._chat_model = self._build_chat_model(provider)
+            self._provider_fingerprint = fingerprint
             if self._memory is None:
                 self._memory = ReMeMiddleware(
                     workspace_dir=reme_workspace_dir(),
@@ -288,12 +318,18 @@ class AlgoCoach:
             self._memory = None
             self._agents.clear()
             self._locks.clear()
+            self._provider_fingerprint = None
         if middleware is not None:
             await middleware.close()
 
     # ── Model / tool wiring ──────────────────────────────────
 
-    def _build_chat_model(self) -> ChatModelBase:
+    @staticmethod
+    def _fingerprint_provider(provider: dict[str, Any] | None) -> str:
+        payload = json.dumps(provider or {"protocol": "env"}, sort_keys=True)
+        return hashlib.sha256(payload.encode()).hexdigest()
+
+    def _build_chat_model(self, provider: dict[str, Any] | None = None) -> ChatModelBase:
         """Build the Anthropic chat model from the existing environment.
 
         ``ANTHROPIC_API_KEY`` is required for non-FOCUS chat. The optional
@@ -301,19 +337,70 @@ class AlgoCoach:
         ``CLAUDE_MODEL`` defaults to the model name used before the migration.
         The model instance is shared by the agent and ReMe's memory extraction.
         """
-        api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
-        if not api_key:
-            raise RuntimeError(
-                "ANTHROPIC_API_KEY is required for non-FOCUS /chat requests"
+        cfg = provider or {
+            "protocol": "anthropic",
+            "baseUrl": anthropic_base_url() or "",
+            "model": claude_model(),
+            "apiKey": os.getenv("ANTHROPIC_API_KEY", ""),
+        }
+        protocol = str(cfg.get("protocol", "anthropic"))
+        model = str(cfg.get("model", "")).strip()
+        api_key = str(cfg.get("apiKey", "")).strip()
+        base_url = str(cfg.get("baseUrl", "")).strip() or None
+        if protocol != "ollama" and not api_key:
+            raise RuntimeError("当前 Provider 需要 API key，请在设置页配置")
+        if not model:
+            raise RuntimeError("当前 Provider 没有配置模型名")
+        # Ollama's OpenAI-compatible endpoint ignores the key, but the OpenAI
+        # SDK still requires a non-empty credential object.
+        secret = SecretStr(api_key or ("ollama" if protocol == "ollama" else ""))
+        params: dict[str, Any] = {"max_tokens": 1024}
+        if protocol == "anthropic":
+            return AnthropicChatModel(
+                credential=AnthropicCredential(api_key=secret, base_url=base_url),
+                model=model, parameters=AnthropicChatModel.Parameters(**params),
             )
-        return AnthropicChatModel(
-            credential=AnthropicCredential(
-                api_key=SecretStr(api_key),
-                base_url=anthropic_base_url(),
-            ),
-            model=claude_model(),
-            parameters=AnthropicChatModel.Parameters(max_tokens=1024),
-        )
+        if protocol in {"openai", "gemini", "ollama"}:
+            compatible_url = base_url
+            if protocol == "gemini" and not compatible_url:
+                compatible_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+            if protocol == "ollama" and not compatible_url:
+                compatible_url = "http://host.docker.internal:11434/v1"
+            return OpenAIChatModel(
+                credential=OpenAICredential(api_key=secret, base_url=compatible_url),
+                model=model, parameters=OpenAIChatModel.Parameters(**params),
+            )
+        if protocol == "deepseek":
+            return DeepSeekChatModel(
+                credential=DeepSeekCredential(api_key=secret, base_url=base_url or "https://api.deepseek.com"),
+                model=model, parameters=DeepSeekChatModel.Parameters(**params),
+            )
+        if protocol == "dashscope":
+            return DashScopeChatModel(
+                credential=DashScopeCredential(api_key=secret, base_url=base_url or "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+                model=model, parameters=DashScopeChatModel.Parameters(**params),
+            )
+        if protocol == "moonshot":
+            return MoonshotChatModel(
+                credential=MoonshotCredential(api_key=secret, base_url=base_url or "https://api.moonshot.cn/v1"),
+                model=model, parameters=MoonshotChatModel.Parameters(**params),
+            )
+        if protocol == "minimax":
+            return MiniMaxChatModel(
+                credential=MiniMaxCredential(api_key=secret, base_url=base_url or "https://api.minimax.io/anthropic"),
+                model=model, parameters=MiniMaxChatModel.Parameters(**params),
+            )
+        if protocol == "volcengine":
+            return VolcengineChatModel(
+                credential=VolcengineCredential(api_key=secret, base_url=base_url or "https://ark.cn-beijing.volces.com/api/v3"),
+                model=model, parameters=VolcengineChatModel.Parameters(**params),
+            )
+        if protocol == "xai":
+            return XAIChatModel(
+                credential=XAICredential(api_key=secret, api_host=base_url or "api.x.ai"),
+                model=model, parameters=XAIChatModel.Parameters(**params),
+            )
+        raise RuntimeError(f"不支持的 Provider 协议: {protocol}")
 
     def _build_tools(self) -> list[FunctionTool]:
         """Wrap the coach's internal tool dispatcher as AgentScope tools.
@@ -363,6 +450,7 @@ class AlgoCoach:
         goal: str | UserGoal | None = DEFAULT_GOAL,
         training_phase: str | TrainingPhase | None = DEFAULT_TRAINING_PHASE,
         time_remaining_sec: int | None = None,
+        provider: dict[str, Any] | None = None,
     ) -> dict:
         """Main entry point. Returns {"content": str, "animation_id": str | None}.
 
@@ -389,7 +477,7 @@ class AlgoCoach:
             f"{training_context}\n{message}" if training_context else message
         )
 
-        agent = await self._get_agent(session_id)
+        agent = await self._get_agent(session_id, provider)
         lock = self._locks[session_id]
 
         async with lock:

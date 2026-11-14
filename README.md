@@ -32,6 +32,7 @@ data/              SQLite 数据库 + 渲染出的 MP4 动画
 - **自我改进回测** — 记录推荐并在 7 天窗口后按训练事件评估效果，提供月度策略汇总；只生成分析结果，不自动修改 prompt 或推荐权重。
 - **Prompt 目标** — 提供 `interview_prep`、`contest`、`casual` 三种系统提示词目标；竞赛训练阶段通过 `/chat` 请求选择。
 - **OI / xCPC 训练协议** — `/chat` 支持 `virtual_contest`、`topic_drill`、`attempt`、`hint`、`review`、`upsolve` 阶段和剩余时间提醒，指导读题建模、约束推导、部分得分、逐级提示与赛后复盘。
+- **模型 Provider** — 设置页提供 OMP 风格的主流 Provider 预设与自定义 OpenAI/Anthropic-compatible 端点；API key 仅在当前浏览器会话中使用，不写入训练导出或 Git。
 
 Submit 后只把判题事实、用时和题目标签发给 Agent；提交源码发往 LeetCode，不会自动转发给模型。因此当前复盘不声称已检查用户代码。
 
@@ -107,9 +108,10 @@ docker compose build
 ## LeetCode Cookie 获取方式
 
 1. 浏览器打开 leetcode.cn 并登录
-2. F12 → Application → Cookies → `leetcode.cn`
-3. 复制 `LEETCODE_SESSION` 和 `csrftoken` 的值
-4. 粘贴到 AlgoCoach 设置页面
+2. F12 → Network，刷新页面后右键请求 → Copy → Copy as cURL (bash)
+3. 把完整 curl 粘贴到 AlgoCoach 设置页
+
+设置页只提取 `LEETCODE_SESSION` 和 `csrftoken`，完整 curl 不会保存、不会发送给 Agent。
 
 Cookie 明文只存在本机 Gateway 的 SQLite；Gateway 只把它附加到发往 `leetcode.cn` 的请求，不会发送给 Agent 或 AI 服务。
 

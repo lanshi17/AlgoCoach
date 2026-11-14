@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { AgentMode, Problem, ChatMessage, AnimationJob, RunResult, TrainingGoal } from '@/types'
+import type { AgentMode, Problem, ChatMessage, AnimationJob, RunResult, TrainingGoal, ModelProviderConfig } from '@/types'
 
 const LANGUAGES = ['rust', 'cpp', 'python3'] as const
 const GOALS: TrainingGoal[] = ['contest', 'interview_prep', 'casual']
@@ -25,6 +25,28 @@ function savePreference(key: string, value: string) {
   try { window.localStorage.setItem(key, value) } catch { /* optional preference storage */ }
 }
 
+const DEFAULT_PROVIDER: ModelProviderConfig = {
+  id: 'anthropic', name: 'Anthropic', protocol: 'anthropic',
+  baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-4-5', apiKey: '',
+}
+
+function initialProvider(): ModelProviderConfig {
+  try {
+    const saved = window.localStorage.getItem('algocoach.provider')
+    const apiKey = window.sessionStorage.getItem('algocoach.provider.apiKey') ?? ''
+    return saved ? { ...DEFAULT_PROVIDER, ...JSON.parse(saved), apiKey } : DEFAULT_PROVIDER
+  } catch { return DEFAULT_PROVIDER }
+}
+
+function saveProvider(provider: ModelProviderConfig) {
+  try {
+    const { apiKey, ...metadata } = provider
+    window.localStorage.setItem('algocoach.provider', JSON.stringify(metadata))
+    if (apiKey) window.sessionStorage.setItem('algocoach.provider.apiKey', apiKey)
+    else window.sessionStorage.removeItem('algocoach.provider.apiKey')
+  } catch { /* optional provider preference storage */ }
+}
+
 interface AppState {
   // ─── Mode / Focus ───
   mode: AgentMode
@@ -47,6 +69,8 @@ interface AppState {
   setLang: (l: 'rust' | 'cpp' | 'python3') => void
   goal: TrainingGoal
   setGoal: (goal: TrainingGoal) => void
+  provider: ModelProviderConfig
+  setProvider: (provider: ModelProviderConfig) => void
 
   // ─── Chat (agent对话) — locked in FOCUS ───
   messages: ChatMessage[]
@@ -137,6 +161,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setGoal: goal => {
     savePreference('algocoach.goal', goal)
     set({ goal })
+  },
+  provider: initialProvider(),
+  setProvider: provider => {
+    saveProvider(provider)
+    set({ provider })
   },
 
   messages: [],

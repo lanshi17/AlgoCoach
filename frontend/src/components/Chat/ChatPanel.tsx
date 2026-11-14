@@ -32,7 +32,7 @@ function toRemainingSeconds(raw: string): number | undefined {
  * Any other mode: fully interactive.
  */
 export default function ChatPanel() {
-  const { mode, messages, addMessage, activeAnimation, activeProblem, goal } = useAppStore()
+  const { mode, messages, addMessage, activeAnimation, activeProblem, goal, provider } = useAppStore()
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [trainingPhase, setTrainingPhase] = useState<TrainingPhase>('auto')
@@ -73,6 +73,7 @@ export default function ChatPanel() {
         mode,
         problemId: activeProblem?.platformId,
         goal,
+        provider,
         trainingPhase,
         ...(timeRemainingSec !== undefined ? { timeRemainingSec } : {}),
       })

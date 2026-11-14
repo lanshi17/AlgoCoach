@@ -6,26 +6,30 @@ import React, { useState } from 'react'
 import { Cookie } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { leetcodeService } from '@/services/leetcodeService'
+import { parseLeetCodeCurl } from '@/services/cookieParser'
 
 const STEPS = [
   '在浏览器中打开 leetcode.cn 并登录',
-  '按 F12 打开开发者工具，切换到「应用程序」→「Cookie」',
-  '找到 LEETCODE_SESSION 和 csrftoken 的值',
-  '粘贴到下方输入框',
+  '打开开发者工具，在 Network 中刷新 leetcode.cn 页面',
+  '右键页面请求 → Copy → Copy as cURL (bash)',
+  '把完整 curl 粘贴到下方；前端只提取登录 Cookie',
 ]
 
 export default function CookieSetupPage({ onDone }: { onDone: () => void }) {
   const navigate = useNavigate()
-  const [session, setSession] = useState('')
-  const [csrf, setCsrf] = useState('')
+  const [curl, setCurl] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const save = async () => {
-    if (!session.trim() || !csrf.trim()) { setError('两个字段都需要填写'); return }
+    const parsed = parseLeetCodeCurl(curl)
+    if (!parsed) {
+      setError('没有找到 LEETCODE_SESSION 和 csrftoken，请粘贴 leetcode.cn 的完整 curl。')
+      return
+    }
     setLoading(true); setError('')
     try {
-      await leetcodeService.setCookie(session.trim(), csrf.trim())
+      await leetcodeService.setCookie(parsed.session, parsed.csrf)
       if (!await leetcodeService.verifyCookie()) {
         setError('LeetCode 没有确认登录状态，请重新复制当前有效的 Cookie。')
         return
@@ -69,31 +73,28 @@ export default function CookieSetupPage({ onDone }: { onDone: () => void }) {
         </ol>
 
         <form onSubmit={event => { event.preventDefault(); void save() }}>
-        {/* Inputs */}
-        <div className="space-y-3 mb-4">
-          {[
-            { label: 'LEETCODE_SESSION', value: session, set: setSession },
-            { label: 'csrftoken', value: csrf, set: setCsrf },
-          ].map(({ label, value, set }) => (
-            <div key={label}>
-              <label htmlFor={`cookie-${label}`} className="block text-xs font-mono text-text-muted dark:text-text-dark-muted mb-1">
-                {label}
-              </label>
-              <input
-                id={`cookie-${label}`}
-                type="password"
-                autoComplete="off"
-                value={value}
-                onChange={e => set(e.target.value)}
-                placeholder={`粘贴 ${label} 值…`}
-                className="w-full px-3 py-2 rounded-lg bg-surface-soft dark:bg-surface-dark-soft
-                           border border-border dark:border-border-dark text-sm font-mono
-                           text-text-primary dark:text-text-dark-primary outline-none
-                           focus:border-accent transition-colors
-                           placeholder:text-text-muted dark:placeholder:text-text-dark-muted"
-              />
-            </div>
-          ))}
+        {/* Browser-generated curl stays local to this page. */}
+        <div className="mb-4">
+          <label htmlFor="leetcode-curl" className="block text-xs font-mono text-text-muted dark:text-text-dark-muted mb-1">
+            leetcode.cn curl
+          </label>
+          <textarea
+            id="leetcode-curl"
+            autoComplete="off"
+            value={curl}
+            onChange={event => setCurl(event.target.value)}
+            placeholder="curl 'https://leetcode.cn/' ... -b 'LEETCODE_SESSION=...; csrftoken=...'"
+            rows={7}
+            spellCheck={false}
+            className="w-full px-3 py-2 rounded-lg bg-surface-soft dark:bg-surface-dark-soft
+                       border border-border dark:border-border-dark text-xs font-mono
+                       text-text-primary dark:text-text-dark-primary outline-none resize-y
+                       focus:border-accent transition-colors
+                       placeholder:text-text-muted dark:placeholder:text-text-dark-muted"
+          />
+          <p className="mt-1 text-[11px] text-text-muted dark:text-text-dark-muted">
+            curl 只在浏览器内存中解析；保存时仅发送两个 Cookie 值到本机 Gateway。
+          </p>
         </div>
 
         {error && (

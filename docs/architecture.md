@@ -274,7 +274,7 @@ _render 完成：
 - Cookie 只存在 gateway 本地 SQLite（单用户本地部署）。
 - 不经过任何第三方服务器。
 - 多用户扩展时：加密存储（AES-GCM，密钥来自用户密码派生的 PBKDF2）。
-- Cookie 失效检测：gateway 在 LeetCode 返回 401 时清空 Cookie，前端收到 `{"error":"COOKIE_EXPIRED"}` 时跳转设置页。
+- Cookie 录入：前端接收浏览器 Copy as cURL (bash)，只提取 `LEETCODE_SESSION` 与 `csrftoken` 后提交 Gateway；完整 curl 不保存、不发给 Agent。Cookie 失效时 Gateway 清空 Cookie，前端收到 `COOKIE_EXPIRED` 后跳转设置页。
 
 ### 5.2 Remotion 代码沙箱
 

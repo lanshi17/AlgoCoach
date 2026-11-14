@@ -524,7 +524,7 @@ section.active { display: block; }
     <div class="card">
       <div class="card-title"><span class="dot" style="background:var(--yellow)"></span>LeetCode 接入方式</div>
       <ul class="feature-list">
-        <li data-icon="1️⃣"><span><strong>Cookie 注入</strong> — 引导用户从浏览器 DevTools 复制 <code style="font-family:var(--font-mono);font-size:11px;background:var(--bg3);padding:1px 5px;border-radius:3px">LEETCODE_SESSION</code> 和 <code style="font-family:var(--font-mono);font-size:11px;background:var(--bg3);padding:1px 5px;border-radius:3px">csrftoken</code>，粘贴到 App 配置页</span></li>
+        <li data-icon="1️⃣"><span><strong>Cookie 注入</strong> — 从浏览器 Network 复制 leetcode.cn 的 Copy as cURL (bash)，粘贴到 App 配置页；前端只提取必要 Cookie</span></li>
         <li data-icon="2️⃣"><span><strong>GraphQL API</strong> — 通过 Gateway 拉取题目列表、详情、筛选项与每日一题</span></li>
         <li data-icon="3️⃣"><span><strong>运行与提交代理</strong> — 用户主动触发 LeetCode Run/Submit；源码只发往 LeetCode</span></li>
         <li data-icon="4️⃣"><span><strong>Cookie 失效检测</strong> — 自动检测 401，提示用户重新粘贴</span></li>

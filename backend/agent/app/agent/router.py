@@ -34,15 +34,27 @@ async def chat(req: ChatRequest):
     # The public contract has no session field; use one stable process-wide
     # session so AgentScope keeps conversation and ReMe writes scoped to it.
     session_id = chat_session_id()
-    result = await coach.chat(
-        session_id=session_id,
-        message=req.message,
-        mode=req.mode,
-        problem_id=req.problemId,
-        goal=req.goal,
-        training_phase=req.trainingPhase,
-        time_remaining_sec=req.timeRemainingSec,
-    )
+    if req.provider is None:
+        result = await coach.chat(
+            session_id=session_id,
+            message=req.message,
+            mode=req.mode,
+            problem_id=req.problemId,
+            goal=req.goal,
+            training_phase=req.trainingPhase,
+            time_remaining_sec=req.timeRemainingSec,
+        )
+    else:
+        result = await coach.chat(
+            session_id=session_id,
+            message=req.message,
+            mode=req.mode,
+            problem_id=req.problemId,
+            goal=req.goal,
+            training_phase=req.trainingPhase,
+            time_remaining_sec=req.timeRemainingSec,
+            provider=req.provider.model_dump(),
+        )
     return ChatResponse(content=result["content"], animationId=result["animation_id"])
 
 
