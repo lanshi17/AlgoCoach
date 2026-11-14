@@ -7,8 +7,10 @@ the ReMe auto-memory write-back through the fake model / middleware doubles.
 No real model, ReMe app, gateway or vector store is touched.
 """
 
+import httpx
 import pytest
 from conftest import FakeChatModel, RecordingReMe
+from openai import APIStatusError
 from pydantic import ValidationError
 
 from app.agent import router as router_module
@@ -366,6 +368,34 @@ async def test_chat_route_normalises_unknown_phase_and_keeps_legacy_body(
     assert spy.calls[0]["time_remaining_sec"] is None
     assert spy.calls[1]["training_phase"] == "auto"
     assert spy.calls[1]["time_remaining_sec"] is None
+
+
+@pytest.mark.asyncio
+async def test_chat_route_explains_missing_openai_responses_endpoint(client, monkeypatch):
+    class FailingCoach:
+        async def chat(self, **kwargs):
+            request = httpx.Request("POST", "https://provider.invalid/v1/responses")
+            response = httpx.Response(404, request=request)
+            raise APIStatusError("not found", response=response, body={})
+
+    monkeypatch.setattr(router_module, "coach", FailingCoach())
+    response = await client.post(
+        "/chat",
+        json={
+            "message": "你好",
+            "mode": "PREP",
+            "provider": {
+                "protocol": "openai-response",
+                "baseUrl": "https://provider.invalid/v1",
+                "model": "gpt-4o-mini",
+                "apiKey": "test-key-not-used",
+            },
+        },
+    )
+
+    assert response.status_code == 502
+    assert "支持 /responses" in response.json()["detail"]
+    assert "test-key-not-used" not in response.text
 
 
 @pytest.mark.asyncio

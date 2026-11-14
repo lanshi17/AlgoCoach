@@ -1,5 +1,10 @@
 """HTTP routes for the agent service."""
+import logging
+
+import anthropic
 from fastapi import APIRouter, HTTPException, Request, Response
+from openai import APIConnectionError as OpenAIAPIConnectionError
+from openai import APIStatusError as OpenAIAPIStatusError
 from pydantic import ValidationError
 
 from app.agent.coach import coach
@@ -26,6 +31,26 @@ from app.remotion.codegen import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+def _provider_error_detail(status_code: int, protocol: str) -> str:
+    """Translate upstream model errors into actionable, credential-safe text."""
+    if status_code == 401:
+        return "模型服务认证失败，请检查 Provider API Key。"
+    if status_code == 403:
+        return "当前账号无权访问所选模型，请检查模型权限或更换模型。"
+    if status_code == 404:
+        if protocol == "openai-response":
+            return "模型或 Responses API 路径不存在。请检查模型名称，并确认 Base URL 对应的服务支持 /responses（通常 Base URL 以 /v1 结尾）。"
+        return "模型或 API 路径不存在，请检查模型名称和 Provider Base URL。"
+    if status_code == 429:
+        return "模型服务请求过于频繁或额度不足，请稍后重试并检查账号额度。"
+    if status_code in (400, 422):
+        return "模型服务无法接受当前请求。请检查模型是否支持所选协议及工具调用。"
+    if status_code >= 500:
+        return "模型服务暂时不可用，请稍后重试。"
+    return "模型服务请求失败，请检查 Provider 设置后重试。"
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -34,27 +59,55 @@ async def chat(req: ChatRequest):
     # The public contract has no session field; use one stable process-wide
     # session so AgentScope keeps conversation and ReMe writes scoped to it.
     session_id = chat_session_id()
-    if req.provider is None:
-        result = await coach.chat(
-            session_id=session_id,
-            message=req.message,
-            mode=req.mode,
-            problem_id=req.problemId,
-            goal=req.goal,
-            training_phase=req.trainingPhase,
-            time_remaining_sec=req.timeRemainingSec,
+    provider = req.provider
+    try:
+        if provider is None:
+            result = await coach.chat(
+                session_id=session_id,
+                message=req.message,
+                mode=req.mode,
+                problem_id=req.problemId,
+                goal=req.goal,
+                training_phase=req.trainingPhase,
+                time_remaining_sec=req.timeRemainingSec,
+            )
+        else:
+            result = await coach.chat(
+                session_id=session_id,
+                message=req.message,
+                mode=req.mode,
+                problem_id=req.problemId,
+                goal=req.goal,
+                training_phase=req.trainingPhase,
+                time_remaining_sec=req.timeRemainingSec,
+                provider=provider.model_dump(),
+            )
+    except (OpenAIAPIStatusError, anthropic.APIStatusError) as exc:
+        protocol = provider.protocol if provider is not None else ""
+        logger.warning(
+            "Model provider rejected chat request (protocol=%s, status=%s)",
+            protocol,
+            exc.status_code,
         )
-    else:
-        result = await coach.chat(
-            session_id=session_id,
-            message=req.message,
-            mode=req.mode,
-            problem_id=req.problemId,
-            goal=req.goal,
-            training_phase=req.trainingPhase,
-            time_remaining_sec=req.timeRemainingSec,
-            provider=req.provider.model_dump(),
-        )
+        raise HTTPException(
+            status_code=502,
+            detail=_provider_error_detail(exc.status_code, protocol),
+        ) from None
+    except (PermissionError, RuntimeError) as exc:
+        # Configuration failures are raised before the SDK request is made.
+        # Keep the message actionable, but never return arbitrary exception text
+        # that could contain a credential or provider response body.
+        logger.warning("Model provider configuration rejected: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc) if isinstance(exc, RuntimeError) else "模型 Provider 配置无效，请检查 API Key 和模型名称。",
+        ) from None
+    except (OpenAIAPIConnectionError, anthropic.APIConnectionError):
+        logger.warning("Model provider connection failed")
+        raise HTTPException(
+            status_code=502,
+            detail="无法连接模型服务，请检查网络和 Provider Base URL。",
+        ) from None
     return ChatResponse(content=result["content"], animationId=result["animation_id"])
 
 

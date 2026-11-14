@@ -4,7 +4,7 @@ import { useAppStore } from '@/stores/useAppStore'
 import ChatMessage from './ChatMessage'
 import AnimationCard from '../Animation/AnimationCard'
 import type { ChatMessage as Msg } from '@/types'
-import { agentService, type TrainingPhase } from '@/services/agentService'
+import { agentService, getAgentErrorMessage, type TrainingPhase } from '@/services/agentService'
 import { usePollAnimation } from '@/hooks/usePollAnimation'
 import { nanoid } from 'nanoid'
 
@@ -96,7 +96,7 @@ export default function ChatPanel() {
       addMessage({
         id: nanoid(),
         role: 'system',
-        content: '网络错误，请重试',
+        content: getAgentErrorMessage(e),
         timestamp: new Date().toISOString(),
       })
     } finally {

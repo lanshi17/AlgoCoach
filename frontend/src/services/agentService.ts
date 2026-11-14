@@ -6,6 +6,15 @@ interface ChatReply {
   animationId?: string
 }
 
+/** Keep provider/API errors visible in the conversation without raw network details. */
+export function getAgentErrorMessage(error: unknown): string {
+  if (axios.isAxiosError<{ detail?: unknown }>(error)) {
+    const detail = error.response?.data?.detail
+    if (typeof detail === 'string' && detail.trim()) return detail
+  }
+  return '教练暂时无法连接。请检查模型 Provider 设置后重试。'
+}
+
 /** OI / xCPC training stance understood by the backend chat route. */
 export type TrainingPhase =
   | 'auto'
