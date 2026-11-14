@@ -6,6 +6,8 @@
 .lcpr_data
 *.md
 !README.md
+!docs/
+!docs/**/*.md
 *.json
 build
 
@@ -35,4 +37,20 @@ target
 editor/en/.A_The_Way_to_Home.rs_5ea8531927ed2e97024897af0872eecb.prob
 editor/en/A_The_Way_to_Home.bin
 target/flycheck0/stderr
+
+# AlgoCoach additions
+data/
+.env
+frontend/node_modules/
+remotion-compositions/node_modules/
+backend/gateway/target/
+__pycache__/
+*.pyc
+.venv/
+**/logs/
+!frontend/**/*.json
+!remotion-compositions/**/*.json
+frontend/dist/
+remotion-compositions/out/
+frontend/coverage/
 command.log

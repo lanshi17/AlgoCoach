@@ -1,0 +1,28 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:sqlite:../data/algocoach.db
+    driver-class-name: org.sqlite.JDBC
+  jpa:
+    database-platform: org.hibernate.community.dialect.SQLiteDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+# LeetCode API base — cn for LeetCode China
+leetcode:
+  base-url: https://leetcode.cn
+  graphql-path: /graphql
+
+# Agent backend (Python FastAPI)
+agent:
+  base-url: http://localhost:8000
+
+# Remotion-rendered MP4s, served read-only at /animations/{jobId}.mp4.
+# Resolved against the gateway working directory, so the default points at
+# <repo>/data/animations when started from backend/gateway (local README).
+# docker-compose overrides this with file:/data/animations/ (shared ./data:/data mount).
+animations:
+  location: file:../../data/animations/

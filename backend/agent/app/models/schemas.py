@@ -1,0 +1,123 @@
+"""Pydantic request/response models shared by the agent HTTP routes.
+
+Keeping every wire model in one module makes the JSON contract explicit and
+keeps ``agent/router.py`` focused on routing. Field names are part of the
+existing API contract (the frontend and the Java gateway use them verbatim),
+so they must not be renamed without a coordinated client change.
+"""
+from typing import Any
+
+from pydantic import BaseModel, Field, field_validator
+
+from app.agent.prompts import (
+    DEFAULT_TRAINING_PHASE,
+    resolve_goal,
+    resolve_training_phase,
+)
+
+
+class ChatRequest(BaseModel):
+    """Body of ``POST /chat``.
+
+    ``trainingPhase`` and ``timeRemainingSec`` are optional additions for the
+    real OI / xCPC training protocol. They are deliberately forgiving: unknown
+    phases fall back to ``auto`` and the field is omitted by old clients, so the
+    existing wire contract keeps working. The response shape is unchanged.
+    """
+
+    message: str
+    mode: str                       # IDLE | PREP | FOCUS | REVIEW
+    problemId: str | None = None
+    goal: str | None = None
+    trainingPhase: str = DEFAULT_TRAINING_PHASE.value
+    timeRemainingSec: int | None = Field(default=None, ge=0)
+
+    @field_validator("trainingPhase", mode="before")
+    @classmethod
+    def _known_training_phase(cls, value: object) -> str:
+        """Normalise a phase; unknown values fall back to ``auto``."""
+        return resolve_training_phase(value).value
+
+    @field_validator("goal", mode="before")
+    @classmethod
+    def _known_goal(cls, value: object) -> str | None:
+        resolved = resolve_goal(value)
+        return resolved.value if resolved is not None else None
+
+    @field_validator("timeRemainingSec", mode="before")
+    @classmethod
+    def _seconds_not_bool(cls, value: object) -> object:
+        """Reject booleans; the field is an optional non-negative integer."""
+        if isinstance(value, bool):
+            raise ValueError("must be a non-negative integer")
+        return value
+
+
+class ChatResponse(BaseModel):
+    """Response of ``POST /chat``."""
+
+    content: str
+    animationId: str | None = None
+
+
+class AnimateRequest(BaseModel):
+    """Body of ``POST /animate``."""
+
+    type: str                       # PRE_EXPLAIN | SOLUTION_COMPARE | CONCEPT
+    topic: str
+    title: str
+    problemId: str | None = None
+
+
+class MemoryRecordRequest(BaseModel):
+    """Submission result the Java gateway reports via ``POST /memory/record``.
+
+    Field names follow the contract in ``docs/backend-agent.md`` §10. The
+    gateway owns submission storage; the agent only persists an episodic
+    record and propagates it to semantic mastery.
+    """
+
+    problem_id: str
+    platform: str
+    status: str
+    lang: str
+    duration_sec: int = Field(ge=0)
+    topics: list[str]
+
+    @field_validator("problem_id", "platform", "status", "lang", mode="before")
+    @classmethod
+    def _required_text(cls, value: object) -> str:
+        """Reject missing/blank scalars instead of persisting empty strings."""
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("must be a non-empty string")
+        return value.strip()
+
+    @field_validator("topics")
+    @classmethod
+    def _topic_names(cls, topics: list[str]) -> list[str]:
+        """Each topic must be a usable, non-blank name."""
+        cleaned: list[str] = []
+        for topic in topics:
+            if not isinstance(topic, str) or not topic.strip():
+                raise ValueError("topics must be a list of non-empty strings")
+            cleaned.append(topic.strip())
+        return cleaned
+
+
+class MemoryRecordResponse(BaseModel):
+    """Acknowledgement returned by ``POST /memory/record``."""
+
+    ok: bool = True
+
+
+class GeneratedAnimationRequest(BaseModel):
+    """Body of ``POST /animate/generated`` (P2, feature-flagged).
+
+    The generated TSX is untrusted input. The route only validates the wire
+    shape and delegates the allow-list/depth/size checks to
+    ``app.remotion.codegen`` before any scratch file or subprocess exists.
+    """
+
+    title: str = Field(default="Generated animation", max_length=120)
+    code: str = Field(min_length=1, max_length=48 * 1024)
+    props: dict[str, Any] = Field(default_factory=dict)

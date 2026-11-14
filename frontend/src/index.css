@@ -1,0 +1,96 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+@layer base {
+  :root {
+    --sidebar-w: 56px;
+    --sidebar-expanded-w: 220px;
+    --problem-w: 420px;
+    --header-h: 48px;
+  }
+
+  html { height: 100%; }
+
+  body {
+    @apply h-full bg-surface text-text-primary font-sans antialiased;
+    overflow: hidden;
+  }
+
+  .dark body {
+    @apply bg-surface-dark text-text-dark-primary;
+  }
+
+  #root { height: 100%; }
+
+  /* Scrollbar styling — Qwen-like minimal */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    @apply bg-border-dark;
+  }
+
+  /* Monaco editor container fix */
+  .monaco-editor-container {
+    height: 100% !important;
+  }
+}
+
+@layer components {
+  /* Qwen-style sidebar icon button */
+  .sidebar-btn {
+    @apply flex items-center justify-center w-10 h-10 rounded-lg
+           text-text-secondary hover:text-text-primary hover:bg-surface-muted
+           transition-all duration-150 cursor-pointer relative;
+  }
+  .dark .sidebar-btn {
+    @apply text-text-dark-secondary hover:text-text-dark-primary hover:bg-surface-dark-muted;
+  }
+  .sidebar-btn.active {
+    @apply text-accent bg-accent-soft;
+  }
+  .dark .sidebar-btn.active {
+    @apply text-accent bg-accent-dark-soft;
+  }
+
+  /* Tag / badge */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+  .badge-easy   { @apply bg-green-50  text-green-700; }
+  .badge-medium { @apply bg-amber-50  text-amber-700; }
+  .badge-hard   { @apply bg-red-50    text-red-700;   }
+  .dark .badge-easy   { @apply bg-green-900/30  text-green-400; }
+  .dark .badge-medium { @apply bg-amber-900/30  text-amber-400; }
+  .dark .badge-hard   { @apply bg-red-900/30    text-red-400;   }
+
+  /* Focus mode overlay indicator */
+  .focus-mode-bar {
+    @apply fixed top-0 left-0 right-0 h-0.5 bg-focus z-50 animate-pulse-soft;
+  }
+
+  /* Chat bubble */
+  .chat-bubble-user {
+    @apply ml-auto max-w-[80%] px-3.5 py-2.5 rounded-2xl rounded-br-sm
+           bg-accent text-white text-sm leading-relaxed;
+  }
+  .chat-bubble-agent {
+    @apply mr-auto max-w-[90%] px-3.5 py-2.5 rounded-2xl rounded-bl-sm
+           bg-surface-soft border border-border text-sm leading-relaxed;
+  }
+  .dark .chat-bubble-agent {
+    @apply bg-surface-dark-soft border-border-dark text-text-dark-primary;
+  }
+
+  /* Panel divider handle */
+  .resize-handle {
+    @apply w-1 cursor-col-resize hover:bg-accent/40 transition-colors
+           flex-shrink-0 bg-transparent;
+  }
+}

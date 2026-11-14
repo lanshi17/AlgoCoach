@@ -1,0 +1,21 @@
+fastapi==0.162.5
+uvicorn[standard]==0.54.0
+anthropic==2.8.0
+pydantic==2.14.3
+pydantic-settings==2.16.2
+sqlalchemy[asyncio]==2.1.8
+aiosqlite==0.22.1
+chromadb==1.5.9
+httpx==0.28.1
+python-dotenv==1.2.4
+nanoid==2.0.0
+apscheduler==3.11.3
+
+# /chat agent runtime: AgentScope 2.0.11 + the official ReMe long-term
+# memory middleware (embedded, in-process; no standalone ReMe service).
+# ReMe 0.4.1.10 is the newest release whose dream pipeline still provides the
+# `dream_topics_step` referenced by AgentScope 2.0.11's embedded ReMe config;
+# newer reme-ai releases removed that step and make the middleware fail on
+# startup, so this pin is intentional.
+agentscope[reme]==2.0.11
+reme-ai==0.4.1.10

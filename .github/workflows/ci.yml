@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r backend/agent/requirements.txt
+      - run: python -m pip install pytest==9.2.0 pytest-asyncio==1.5.0 mypy==1.18.2 ruff==0.15.17
+      - run: ruff check --isolated app tests
+        working-directory: backend/agent
+      - run: mypy app --ignore-missing-imports --follow-imports=silent
+        working-directory: backend/agent
+      - run: python -m pytest -q
+        working-directory: backend/agent
+
+  gateway:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/gateway/pom.xml
+      - run: mvn -B test
+        working-directory: backend/gateway
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - run: bun install --frozen-lockfile
+        working-directory: frontend
+      - run: bun run test:coverage
+        working-directory: frontend
+      - run: bun run build
+        working-directory: frontend
+
+  remotion:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - run: bun install --frozen-lockfile
+        working-directory: remotion-compositions
+      - run: bun run build
+        working-directory: remotion-compositions

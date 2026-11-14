@@ -1,0 +1,46 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_GATEWAY_PROXY_TARGET: http://gateway:8080
+    depends_on:
+      gateway:
+        condition: service_started
+
+  gateway:
+    build:
+      context: ./backend/gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:sqlite:/data/algocoach.db
+      AGENT_BASE_URL: http://agent:8000
+      ANIMATIONS_LOCATION: file:/data/animations/
+
+  agent:
+    build:
+      context: .
+      dockerfile: backend/agent/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    env_file:
+      - .env
+    environment:
+      DB_PATH: /data/agent.db
+      OUTPUT_DIR: /data/animations
+      CHROMA_PATH: /data/chroma
+      REME_WORKSPACE_DIR: /data/reme
+      REMOTION_PROJECT_ROOT: /remotion-compositions
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
+      GATEWAY_BASE_URL: http://gateway:8080
+    depends_on:
+      - gateway
