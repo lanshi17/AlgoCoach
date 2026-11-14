@@ -57,7 +57,9 @@ export const leetcodeService = {
       codeSnippets: [],
       sampleTestCases: '',
     })) as Problem[]
-    return { problems, total: Number(result?.total ?? problems.length) }
+    const hasMore = result?.hasMore === true
+    const fallbackTotal = hasMore ? Number(params.page ?? 1) * 50 + 1 : ((Number(params.page ?? 1) - 1) * 50 + problems.length)
+    return { problems, total: Number(result?.total ?? fallbackTotal) }
   },
 
   async getProblem(titleSlug: string) {

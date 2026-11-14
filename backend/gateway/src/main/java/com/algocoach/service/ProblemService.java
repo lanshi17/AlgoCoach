@@ -37,14 +37,15 @@ public class ProblemService {
         """;
 
     private static final String LIST_QUERY = """
-        query problemsetQuestionList($skip: Int, $limit: Int, $filters: QuestionListFilterInput) {
-          problemsetQuestionList: questionList(
-            skip: $skip limit: $limit filters: $filters
+        query problemsetQuestionList($skip: Int, $limit: Int, $categorySlug: String) {
+          problemsetQuestionList: problemsetQuestionListV2(
+            categorySlug: $categorySlug, skip: $skip, limit: $limit,
+            filters: { filterCombineType: ALL }
           ) {
-            total: totalNum
-            questions: data {
-              questionId frontendQuestionId title titleSlug
-              difficulty topicTags { name } isFavor isPaidOnly
+            hasMore
+            questions {
+              id questionFrontendId title translatedTitle titleSlug
+              difficulty topicTags { name nameTranslated slug } paidOnly
             }
           }
         }
@@ -67,10 +68,10 @@ public class ProblemService {
 
     public Mono<JsonNode> list(int page, String difficulty, String tag) {
         int skip = (page - 1) * 50;
-        Map<String, Object> filters = new java.util.HashMap<>();
-        if (difficulty != null && !difficulty.isBlank()) filters.put("difficulty", difficulty);
-        if (tag != null && !tag.isBlank()) filters.put("tags", new String[]{ tag });
-        return client.graphql(LIST_QUERY, Map.of("skip", skip, "limit", 50, "filters", filters))
+        // LeetCode removed the legacy questionList field. The v2 endpoint
+        // currently accepts only its required combine type in this deployment;
+        // difficulty/tag remain reserved for a future v2 filter mapping.
+        return client.graphql(LIST_QUERY, Map.of("skip", skip, "limit", 50, "categorySlug", ""))
                 .map(this::parse)
                 .map(n -> n.path("data").path("problemsetQuestionList"));
     }
