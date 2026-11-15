@@ -1,26 +1,56 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAppStore } from '@/stores/useAppStore'
 import { Badge } from '@/components/Common/Badge'
 import { AlertCircle, Loader2, Play, RefreshCw } from 'lucide-react'
 import { leetcodeService } from '@/services/leetcodeService'
+import { acwingService } from '@/services/acwingService'
+import { hduService } from '@/services/hduService'
+import { ACWING_TOPICS, findAcWingTopic, TRAINING_TOPICS, findTrainingTopic } from '@/services/trainingTopics'
 import type { Problem } from '@/types'
 import DOMPurify from 'dompurify'
+import renderMathInElement from 'katex/contrib/auto-render'
+import 'katex/dist/katex.min.css'
+
+type PickerPlatform = 'LEETCODE' | 'ACWING' | 'HDU'
+
+const PLATFORM_LABELS: Record<PickerPlatform, string> = {
+  LEETCODE: 'LeetCode',
+  ACWING: 'AcWing',
+  HDU: '杭电 HDU',
+}
 
 /**
  * Left panel — problem description (HTML rendered).
  * Includes title, tags, difficulty, rendered statement, and a "start solving" CTA.
  */
 export default function ProblemPanel() {
-  const { activeProblem, mode, enterFocus, setActiveProblem } = useAppStore()
+  const { activeProblem, mode, enterFocus, setActiveProblem, refreshActiveProblem } = useAppStore()
   const [problems, setProblems] = useState<Problem[]>([])
   const [loadingList, setLoadingList] = useState(false)
   const [loadingSlug, setLoadingSlug] = useState<string | null>(null)
+  const [restoredStatementStatus, setRestoredStatementStatus] = useState<'idle' | 'refreshing' | 'offline'>('idle')
   const [error, setError] = useState('')
   const [showPicker, setShowPicker] = useState(!activeProblem)
+  const [platform, setPlatform] = useState<PickerPlatform>('LEETCODE')
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
   const [total, setTotal] = useState(0)
   const [difficulty, setDifficulty] = useState('')
+  const [topic, setTopic] = useState('')
   const [search, setSearch] = useState('')
+  const selectedTopic = useMemo(() => findTrainingTopic(topic), [topic])
+  const selectedAcWingTopic = useMemo(() => findAcWingTopic(topic), [topic])
+  const topicSlugs = useMemo(() => selectedTopic?.slugs ?? [], [selectedTopic])
+  const requestSeq = useRef(0)
+  const detailSeq = useRef(0)
+  const activeProblemRef = useRef(activeProblem)
+  activeProblemRef.current = activeProblem
+  const restoredProblemKey = useRef(activeProblem
+    ? `${activeProblem.platform}:${activeProblem.platformId}`
+    : null)
+  const restoredRequestRef = useRef<{ key: string; promise: Promise<Problem> } | null>(null)
+  const statementRef = useRef<HTMLDivElement>(null)
   const safeContent = DOMPurify.sanitize(activeProblem?.contentHtml ?? '', {
     ALLOWED_TAGS: [
       'a', 'b', 'blockquote', 'br', 'caption', 'code', 'dd', 'div', 'dl', 'dt', 'em',
@@ -32,35 +62,147 @@ export default function ProblemPanel() {
     ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|\/|#)/i,
   })
 
-  const loadProblems = useCallback(async (nextPage: number, nextDifficulty: string) => {
+  useEffect(() => {
+    const statement = statementRef.current
+    if (!statement || !activeProblem || showPicker) return
+    renderMathInElement(statement, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '\\[', right: '\\]', display: true },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '$', right: '$', display: false },
+      ],
+      ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code', 'option'],
+      throwOnError: false,
+    })
+  }, [activeProblem, activeProblem?.platform, activeProblem?.platformId, safeContent, showPicker])
+
+  const loadProblems = useCallback(async (
+    nextPlatform: PickerPlatform,
+    nextPage: number,
+    nextDifficulty: string,
+    nextTopicSlugs: string[],
+    nextAcWingTag: string,
+  ) => {
+    const seq = ++requestSeq.current
     setLoadingList(true)
     setError('')
     try {
-      const result = await leetcodeService.listProblems({ page: nextPage, difficulty: nextDifficulty || undefined })
+      const result = nextPlatform === 'ACWING'
+        ? await acwingService.listProblems({
+            page: nextPage,
+            tag: nextAcWingTag || undefined,
+          })
+        : nextPlatform === 'HDU'
+          ? await hduService.listProblems({ volume: nextPage })
+          : await leetcodeService.listProblems({
+              page: nextPage,
+              difficulty: nextDifficulty || undefined,
+              topicSlugs: nextTopicSlugs.length ? nextTopicSlugs : undefined,
+            })
+      if (seq !== requestSeq.current) return
       setProblems(result.problems)
       setTotal(result.total)
+      setPageSize(result.pageSize)
     } catch (cause) {
-      setError(getErrorMessage(cause))
+      if (seq === requestSeq.current) setError(getErrorMessage(cause))
     } finally {
-      setLoadingList(false)
+      if (seq === requestSeq.current) setLoadingList(false)
     }
   }, [])
 
-  useEffect(() => { void loadProblems(page, difficulty) }, [loadProblems, page, difficulty])
+  const refreshRestoredProblem = useCallback((problem: Problem, seq: number, isCurrent: () => boolean) => {
+    const key = `${problem.platform}:${problem.platformId}`
+    setRestoredStatementStatus('refreshing')
+    const promise = restoredRequestRef.current?.key === key
+      ? restoredRequestRef.current.promise
+      : (problem.platform === 'LEETCODE'
+          ? leetcodeService.getProblem(problem.platformId)
+          : problem.platform === 'ACWING'
+            ? acwingService.getProblem(problem.platformId)
+            : hduService.getProblem(problem.platformId))
+    restoredRequestRef.current = { key, promise }
+    void promise.then(detail => {
+      const current = useAppStore.getState().activeProblem
+      if (!isCurrent() || seq !== detailSeq.current || !current
+        || current.platform !== problem.platform
+        || current.platformId !== problem.platformId) return
+      restoredProblemKey.current = null
+      refreshActiveProblem(detail)
+      setRestoredStatementStatus('idle')
+      if (restoredRequestRef.current?.promise === promise) restoredRequestRef.current = null
+    }).catch(() => {
+      if (!isCurrent() || seq !== detailSeq.current) return
+      setRestoredStatementStatus('offline')
+      if (restoredRequestRef.current?.promise === promise) restoredRequestRef.current = null
+    })
+  }, [refreshActiveProblem])
+
+  useEffect(() => {
+    const acWingTag = platform === 'ACWING' ? selectedAcWingTopic?.tag ?? '' : ''
+    void loadProblems(platform, page, difficulty, topicSlugs, acWingTag)
+  }, [loadProblems, platform, page, difficulty, topicSlugs, selectedAcWingTopic])
+
+  useEffect(() => () => {
+    requestSeq.current += 1
+    detailSeq.current += 1
+  }, [])
+
+  useEffect(() => {
+    const problem = activeProblemRef.current
+    if (!problem || showPicker || !restoredProblemKey.current) return
+    const key = `${problem.platform}:${problem.platformId}`
+    if (key !== restoredProblemKey.current) {
+      restoredProblemKey.current = null
+      return
+    }
+    const seq = ++detailSeq.current
+    let cancelled = false
+    refreshRestoredProblem(problem, seq, () => !cancelled)
+    return () => {
+      cancelled = true
+    }
+  }, [activeProblem?.platform, activeProblem?.platformId, showPicker, refreshRestoredProblem])
 
   const visibleProblems = problems.filter(problem =>
     `${problem.title} ${problem.platformId}`.toLowerCase().includes(search.trim().toLowerCase()))
 
+  const choosePlatform = (next: PickerPlatform) => {
+    if (next === platform) return
+    requestSeq.current += 1
+    detailSeq.current += 1
+    setLoadingSlug(null)
+    setProblems([])
+    setTotal(0)
+    setPlatform(next)
+    setTopic('')
+    setPage(1)
+    setSearch('')
+    setError('')
+    if (next !== 'LEETCODE') {
+      setDifficulty('')
+    }
+  }
+
   const openProblem = async (problem: Problem) => {
+    const seq = ++detailSeq.current
     setLoadingSlug(problem.platformId)
     setError('')
     try {
-      setActiveProblem(await leetcodeService.getProblem(problem.platformId))
+      const detail = problem.platform === 'LEETCODE'
+        ? await leetcodeService.getProblem(problem.platformId)
+        : problem.platform === 'ACWING'
+          ? await acwingService.getProblem(problem.platformId)
+          : await hduService.getProblem(problem.platformId)
+      if (seq !== detailSeq.current) return
+      restoredProblemKey.current = null
+      setRestoredStatementStatus('idle')
+      setActiveProblem(detail)
       setShowPicker(false)
     } catch (cause) {
-      setError(getErrorMessage(cause))
+      if (seq === detailSeq.current) setError(getErrorMessage(cause))
     } finally {
-      setLoadingSlug(null)
+      if (seq === detailSeq.current) setLoadingSlug(null)
     }
   }
 
@@ -71,18 +213,50 @@ export default function ProblemPanel() {
           <div className="flex items-center justify-between gap-2">
             <div>
               <h2 className="text-base font-semibold text-text-primary dark:text-text-dark-primary">选择一道题目</h2>
-              <p className="mt-1 text-xs text-text-muted dark:text-text-dark-muted">从 LeetCode 题库开始训练</p>
+              <p className="mt-1 text-xs text-text-muted dark:text-text-dark-muted">按专项训练，或检索题库</p>
             </div>
-            {activeProblem && <button onClick={() => setShowPicker(false)} className="text-xs text-accent hover:underline">返回当前题</button>}
+            {activeProblem && <button onClick={() => { detailSeq.current += 1; setLoadingSlug(null); setError(''); setShowPicker(false) }} className="text-xs text-accent hover:underline">返回当前题</button>}
           </div>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 space-y-2">
+            <div className="flex gap-2">
+              <select aria-label="选择题库平台" value={platform}
+                onChange={event => choosePlatform(event.target.value as PickerPlatform)}
+                className="min-w-0 flex-1 rounded-md border border-border bg-surface-soft px-2 py-1.5 text-xs outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft">
+                <option value="LEETCODE">LeetCode</option>
+                <option value="ACWING">AcWing</option>
+                <option value="HDU">杭电 HDU</option>
+              </select>
+              {platform === 'LEETCODE' && (
+                <select aria-label="按难度筛选" value={difficulty} onChange={event => { setPage(1); setDifficulty(event.target.value) }}
+                  className="rounded-md border border-border bg-surface-soft px-2 py-1.5 text-xs outline-none dark:border-border-dark dark:bg-surface-dark-soft">
+                  <option value="">全部难度</option><option value="EASY">简单</option><option value="MEDIUM">中等</option><option value="HARD">困难</option>
+                </select>
+              )}
+            </div>
+            {platform === 'LEETCODE' && (
+              <select aria-label="按专项训练筛选" value={topic}
+                onChange={event => { setPage(1); setTopic(event.target.value) }}
+                className="w-full rounded-md border border-border bg-surface-soft px-2 py-1.5 text-xs outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft">
+                <option value="">全部题库</option>
+                {TRAINING_TOPICS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+            )}
+            {platform === 'ACWING' && (
+              <select aria-label="按专项训练筛选" value={topic}
+                onChange={event => { setPage(1); setTopic(event.target.value) }}
+                className="w-full rounded-md border border-border bg-surface-soft px-2 py-1.5 text-xs outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft">
+                <option value="">全部题库</option>
+                {ACWING_TOPICS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+            )}
             <input value={search} onChange={event => setSearch(event.target.value)}
-              aria-label="搜索当前页题目" placeholder="搜索题名或 slug"
-              className="min-w-0 flex-1 rounded-md border border-border bg-surface-soft px-2 py-1.5 text-xs outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft" />
-            <select aria-label="按难度筛选" value={difficulty} onChange={event => { setPage(1); setDifficulty(event.target.value) }}
-              className="rounded-md border border-border bg-surface-soft px-2 py-1.5 text-xs outline-none dark:border-border-dark dark:bg-surface-dark-soft">
-              <option value="">全部难度</option><option value="EASY">简单</option><option value="MEDIUM">中等</option><option value="HARD">困难</option>
-            </select>
+              aria-label="搜索当前页题目" placeholder="搜索当前页题名或题号"
+              className="w-full rounded-md border border-border bg-surface-soft px-2 py-1.5 text-xs outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft" />
+            <p className="text-[11px] leading-relaxed text-text-muted dark:text-text-dark-muted">
+              平台登录态在
+              <Link to="/settings/platforms" className="mx-1 text-accent hover:underline">题库登录</Link>
+              页统一管理（AcWing 需要 Cookie，HDU 可匿名浏览）。
+            </p>
           </div>
         </div>
         {error && <div role="alert" className="mx-4 mt-3 rounded-md bg-red-50 p-3 text-xs text-danger dark:bg-red-900/10">{error}</div>}
@@ -92,6 +266,10 @@ export default function ProblemPanel() {
           </div>
         ) : visibleProblems.length ? (
           <div className="flex-1 min-h-0 overflow-y-auto p-3">
+            <div className="mb-2 px-1 text-[11px] text-text-muted dark:text-text-dark-muted">
+              {PLATFORM_LABELS[platform]} · {topicLabel(platform, topic)}
+              {difficulty ? ` · ${difficulty === 'EASY' ? '简单' : difficulty === 'MEDIUM' ? '中等' : '困难'}` : ''} · 共 {total} 题
+            </div>
             <div className="space-y-1">
               {visibleProblems.map(problem => (
                 <button key={problem.platformId} onClick={() => void openProblem(problem)}
@@ -113,16 +291,20 @@ export default function ProblemPanel() {
             <div className="mt-3 flex items-center justify-between border-t border-border px-1 pt-3 text-xs dark:border-border-dark">
               <button onClick={() => setPage(value => Math.max(1, value - 1))} disabled={page <= 1}
                 className="text-text-secondary hover:text-accent disabled:opacity-40 dark:text-text-dark-secondary">上一页</button>
-              <span className="text-text-muted dark:text-text-dark-muted">{page} / {Math.max(1, Math.ceil(total / 50))}</span>
-              <button onClick={() => setPage(value => value + 1)} disabled={page >= Math.ceil(total / 50)}
+              <span className="text-text-muted dark:text-text-dark-muted">{page} / {Math.max(1, Math.ceil(total / pageSize))}</span>
+              <button onClick={() => setPage(value => value + 1)} disabled={page >= Math.ceil(total / pageSize)}
                 className="text-text-secondary hover:text-accent disabled:opacity-40 dark:text-text-dark-secondary">下一页</button>
             </div>
           </div>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-sm text-text-muted dark:text-text-dark-muted">
             <AlertCircle size={24} />
-            <p>{search.trim() ? '当前页没有匹配的题目。可以换个关键词，或切换到其他页面继续搜索。' : '暂时没有题目可显示。请检查 LeetCode Cookie 和网关连接。'}</p>
-            <button onClick={() => void loadProblems(page, difficulty)} className="inline-flex items-center gap-2 text-accent hover:underline">
+            <p>{search.trim()
+              ? '当前页没有匹配的题目。可以换个关键词，或切换到其他页面继续搜索。'
+              : platform === 'LEETCODE'
+                ? '暂时没有题目可显示。请检查 LeetCode Cookie 和网关连接。'
+                : '暂时没有题目可显示。请检查平台 Cookie（设置页）和网关连接。'}</p>
+            <button onClick={() => void loadProblems(platform, page, difficulty, platform === 'ACWING' ? [] : topicSlugs, platform === 'ACWING' ? selectedAcWingTopic?.tag ?? '' : '')} className="inline-flex items-center gap-2 text-accent hover:underline">
               <RefreshCw size={14} /> 重新加载
             </button>
           </div>
@@ -151,6 +333,28 @@ export default function ProblemPanel() {
         <h1 className="text-lg font-semibold text-text-primary dark:text-text-dark-primary mb-2">
           {activeProblem.titleCn ?? activeProblem.title}
         </h1>
+        {restoredStatementStatus !== 'idle' && (
+          <div className="mb-2 flex items-center gap-2 text-[11px] text-text-muted dark:text-text-dark-muted">
+            <p role="status">
+              {restoredStatementStatus === 'refreshing'
+                ? '正在确认题面是否有更新…'
+                : '暂时无法更新题面，继续显示已缓存内容。'}
+            </p>
+            {restoredStatementStatus === 'offline' && (
+              <button type="button" aria-label="重试更新题面"
+                onClick={() => {
+                  const problem = activeProblemRef.current
+                  if (!problem) return
+                  restoredProblemKey.current = `${problem.platform}:${problem.platformId}`
+                  const seq = ++detailSeq.current
+                  refreshRestoredProblem(problem, seq, () => true)
+                }}
+                className="shrink-0 text-accent hover:underline">
+                重试
+              </button>
+            )}
+          </div>
+        )}
         <div className="flex flex-wrap gap-1">
           {activeProblem.topics.map(t => (
             <span key={t} className="badge bg-surface-muted dark:bg-surface-dark-muted
@@ -163,6 +367,7 @@ export default function ProblemPanel() {
 
       {/* Statement body */}
       <div
+        ref={statementRef}
         className="flex-1 overflow-y-auto px-5 py-4 text-sm leading-relaxed
                    text-text-primary dark:text-text-dark-primary prose prose-sm
                    dark:prose-invert max-w-none
@@ -192,11 +397,20 @@ export default function ProblemPanel() {
   )
 }
 
+function topicLabel(platform: PickerPlatform, topicId: string): string {
+  if (!topicId) return '全部题库'
+  return platform === 'LEETCODE'
+    ? `${findTrainingTopic(topicId)?.name ?? topicId}专项`
+    : platform === 'ACWING'
+      ? `${findAcWingTopic(topicId)?.name ?? topicId}专项`
+      : topicId
+}
+
 function getErrorMessage(error: unknown): string {
   if (typeof error === 'object' && error !== null && 'response' in error) {
     const response = (error as { response?: { data?: { message?: string } } }).response
     if (response?.data?.message) return response.data.message
   }
   if (error instanceof Error) return error.message
-  return '请求失败，请检查网关和 LeetCode Cookie 后重试'
+  return '请求失败，请检查网关和平台 Cookie 后重试'
 }

@@ -1,9 +1,12 @@
 // ─── Domain Types ───
 
 export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD'
-export type Platform = 'LEETCODE' | 'LUOGU' | 'CODEFORCES'
+export type Platform = 'LEETCODE' | 'LUOGU' | 'CODEFORCES' | 'ACWING' | 'HDU'
 export type AgentMode = 'IDLE' | 'PREP' | 'FOCUS' | 'REVIEW'
 export type TrainingGoal = 'interview_prep' | 'contest' | 'casual'
+
+/** LeetCode langSlug values the editor supports. */
+export type CodeLanguage = 'rust' | 'cpp' | 'python3' | 'typescript' | 'golang' | 'java'
 
 export type ProviderProtocol =
   | 'anthropic' | 'openai' | 'openai-response' | 'deepseek' | 'dashscope' | 'gemini'
@@ -36,7 +39,7 @@ export interface Problem {
 }
 
 export interface CodeSnippet {
-  lang: string                // 'rust' | 'cpp' | 'python3'
+  lang: string               // LeetCode langSlug (superset of CodeLanguage)
   code: string
 }
 
@@ -107,7 +110,7 @@ export interface KnowledgeNode {
 }
 
 export interface UserProfile {
-  preferredLang: 'rust' | 'cpp' | 'python3'
+  preferredLang: CodeLanguage
   weakTopics: string[]
   strongTopics: string[]
   avgSolveTimeSec: number

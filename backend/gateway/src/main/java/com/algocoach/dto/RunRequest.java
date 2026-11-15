@@ -7,7 +7,7 @@ import jakarta.validation.constraints.NotBlank;
  *
  * @param titleSlug LeetCode problem slug, used for the run URL and the problem cache lookup
  * @param code      source code to run
- * @param lang      gateway language key ({@code rust} / {@code cpp} / {@code python3})
+ * @param lang      gateway language key ({@code rust} / {@code cpp} / {@code python3} / {@code typescript} / {@code golang} / {@code java})
  * @param testInput optional custom stdin; when blank the cached sample test case is used
  */
 public record RunRequest(

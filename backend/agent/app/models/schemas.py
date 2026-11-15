@@ -28,6 +28,8 @@ class ChatRequest(BaseModel):
     message: str
     mode: str                       # IDLE | PREP | FOCUS | REVIEW
     problemId: str | None = None
+    platform: str | None = None
+    conversationId: str | None = Field(default=None, min_length=1, max_length=128)
     goal: str | None = None
     trainingPhase: str = DEFAULT_TRAINING_PHASE.value
     timeRemainingSec: int | None = Field(default=None, ge=0)

@@ -139,7 +139,7 @@ class FullFlowIT {
         // A fresh cache hit means the flow never needs a GraphQL problem lookup.
         problemCacheRepository.save(new ProblemCache(SLUG, """
                 {"questionId":"1","titleSlug":"two-sum","sampleTestCase":"1 2",
-                 "topicTags":[{"name":"Array","nameTranslated":"数组"}]}
+                 "topicTags":[{"name":"Array","translatedName":"数组"}]}
                 """, System.currentTimeMillis()));
     }
 

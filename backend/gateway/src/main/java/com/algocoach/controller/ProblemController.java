@@ -9,6 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+
 /**
  * GET  /api/problems         — list problems (paginated, always upstream)
  * GET  /api/problems/{slug}  — get problem details by titleSlug (24h cache)
@@ -29,7 +31,7 @@ public class ProblemController {
     public Mono<ResponseEntity<JsonNode>> list(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(required = false) String difficulty,
-            @RequestParam(required = false) String tag
+            @RequestParam(required = false) List<String> tag
     ) {
         return problemService.list(page, difficulty, tag)
                 .map(ResponseEntity::ok);

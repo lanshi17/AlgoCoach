@@ -13,8 +13,8 @@ def test_normalize_problem_reads_translated_fields_and_strips_html():
             "translatedContent": "<p>给定一个整数数组 <code>nums</code>。</p><p>示例：…</p>",
             "difficulty": "easy",
             "topicTags": [
-                {"name": "Array", "nameTranslated": "数组"},
-                {"name": "Hash Table", "nameTranslated": "哈希表"},
+                {"name": "Array", "translatedName": "数组"},
+                {"name": "Hash Table", "translatedName": "哈希表"},
             ],
         }
     )
@@ -100,3 +100,60 @@ async def test_fetch_problem_normalises_a_successful_response(monkeypatch):
     assert problem["content"] == "Find the pair."
     assert problem["topics"] == ["Array"]
     assert problem["difficulty"] == "EASY"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("platform,path", [("ACWING", "acwing"), ("HDU", "hdu")])
+async def test_fetches_the_matching_platform_and_reads_content_html(monkeypatch, platform, path):
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"platformId": "1000", "title": "Example", "contentHtml": "<p>Platform statement</p>"}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def get(self, url):
+            assert url.endswith(f"/api/{path}/problems/1000")
+            return FakeResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+    problem = await fetch_problem("1000", platform)
+    assert problem["content"] == "Platform statement"
+    assert problem["title"] == "Example"
+    assert await fetch_problem("1000", "UNKNOWN") is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_rejects_a_gateway_response_without_statement(monkeypatch):
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"title": "Login", "contentHtml": ""}
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def get(self, url):
+            return Response()
+
+    monkeypatch.setattr(httpx, "AsyncClient", Client)
+    assert await fetch_problem("1", "ACWING") is None

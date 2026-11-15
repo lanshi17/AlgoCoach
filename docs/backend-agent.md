@@ -9,7 +9,7 @@
 > - **P2 `agent/self_improve.py` 已实现（人工分析型 MVP）**：新增 `recommendation_log` 表及可重跑迁移、`memory.get_mastery`、推荐日志、固定 7 天回测、月度策略汇总、`suggest_next_problem` tool 与两个 cron job。回测按 `[created_at, evaluation_due_at]` 内的事件从 `mastery_before` 重放 ELO 并保存 `mastery_after`，延迟调度不会读入窗口外练习。评估只做记录与人工可读建议，**不自动修改 Soul、prompt、推荐权重或配置**，也没有正式 UI/通知。
 > - **P3 prompt 集中管理与目标变体 API 已实现**：Soul 原文迁至 `agent/prompts.py`，`get_system_prompt(goal)` 支持 `interview_prep` / `contest` / `casual` 三种变体，未知值回退原版；`coach.chat()` 接收来自设置页的浏览器偏好目标；竞赛阶段显式覆盖该目标。目标保存在当前浏览器，不另建用户配置表。
 > - **contest 训练协议已接入 `/chat`**：`ChatRequest` 新增可选 `trainingPhase`（默认 `auto`，允许 `virtual_contest` / `topic_drill` / `attempt` / `hint` / `review` / `upsolve`，未知回退 `auto`）与 `timeRemainingSec`（可选非负整数）；显式阶段或剩余时间会启用 `contest` 目标与真实 OI/xCPC 训练协议，阶段/剩余时间同时写入 AgentScope 用户消息，ReMe 记忆可见。`ChatResponse`、FOCUS 静默、非 contest 行为与旧客户端均不变，未新增训练 SQLite（详见 §3.3）。
-> - **/chat Agent runtime 已迁移到 AgentScope 2.0.11 + 官方 ReMeMiddleware**：`AlgoCoach` 使用 `Agent`/`AgentState` 替代手写 Claude tool loop 与 `_sessions`；ReMe 进程内单实例，`mode="both"` 自动召回/写回，稳定 `session_id`，应用关闭时 `await coach.close()`。FOCUS 仍完全静默，`/chat` 请求/响应契约与工具 schema 不变。`requirements.txt` 已升级为可解依赖集（`agentscope[reme]==2.0.11` + `reme-ai==0.4.1.10`），通过独立 Python 3.12 venv 安装验证。
+> - **/chat Agent runtime 已迁移到 AgentScope 2.0.11 + 官方 ReMeMiddleware**：`AlgoCoach` 使用 `Agent`/`AgentState` 替代手写 Claude tool loop 与 `_sessions`；ReMe 进程内单实例，`mode="both"` 自动召回/写回；短期 AgentState 按页面会话与题目隔离，ReMe workspace 跨会话检索，应用关闭时 `await coach.close()`。FOCUS 仍完全静默。`ChatResponse` 与工具 schema 保持不变；请求新增可选 `conversationId` / `platform` 字段以隔离新客户端上下文，同时兼容旧客户端。
 
 ## 1. 模块职责与边界
 
@@ -101,8 +101,8 @@ backend/agent/
   └──────────┘             └──────────────────────┘              └─────────┘
 
   ┌──────────────────────────────────────────────────────────┐
-  │  Working 工作记忆 = AgentState.context（稳定 session_id） │
-  │  ReMe 长期对话记忆 = 进程内 ReMeMiddleware（自动召回/写回）│
+  │  Working 工作记忆 = AgentState.context（页面会话 + 题目）│
+  │  ReMe 长期对话记忆 = 本地 workspace（跨会话召回/分会话写回）│
   └──────────────────────────────────────────────────────────┘
 
   ┌──────────────────────────────────────────────────────────┐
@@ -333,7 +333,7 @@ class AlgoCoach:
     def __init__(self, *, chat_model=None, reme_middleware=None):
         self._chat_model = chat_model          # AnthropicChatModel（惰性创建）
         self._memory = reme_middleware         # ReMeMiddleware（进程内单实例）
-        self._agents: dict[str, Agent] = {}    # 每个稳定 session_id 一个 Agent/AgentState
+        self._agents: dict[str, Agent] = {}    # 每个页面会话/平台/题目一个 Agent/AgentState，训练阶段共享
         self._problem_meta: dict[str, dict] = {}
 
     async def chat(
@@ -355,7 +355,8 @@ class AlgoCoach:
 - 显式 `training_phase` 或 `time_remaining_sec` 会启用 contest 目标；`auto` 且无剩余时间时沿用默认 Soul，用户消息保持原样
 - 训练上下文以 `[竞赛训练上下文] …` 前置到 `UserMsg`，与系统提示中的阶段指导一起进入 AgentScope 状态和 ReMe 记忆
 - 每次 chat 前仍用 `memory.build_context_snapshot()` 渲染 Soul 的 `{memory_context}`（SQLite 领域记忆）
-- `Agent` 负责 reasoning/acting 循环；`AgentState(session_id=...)` 保存会话上下文，`POST /chat` 使用稳定 `ALGOCOACH_SESSION_ID`（默认 `default`）
+- `Agent` 负责 reasoning/acting 循环；`AgentState(session_id=...)` 保存短期上下文。前端为页面生命周期生成 `conversationId`，路由再与平台和题目标识一起派生 Agent session；`ALGOCOACH_SESSION_ID`（默认 `default`）只作为命名空间前缀。
+- 页面刷新会创建新的短期对话，与前端不持久化聊天历史一致；同一页面中切换题目会切换题目专属 AgentState。ReMe 写回携带该 session id，但搜索范围仍是共享 workspace，可跨题召回。
 - `ReMeMiddleware`（`mode="both"`）在回复后自动 `auto_memory` 写回，并在推理前自动 `search` 召回；`workspace_dir` 默认 `./data/reme`
 - 原 `TOOLS` JSON schema/描述保持不变，包装为 AgentScope `FunctionTool`，内部仍走 `_execute_tool`；`request_animation` 通过 ContextVar 回传 `animation_id`
 - `main.py` 的 lifespan 在关闭时 `await coach.close()`，停止 ReMe 的文件监听/索引任务
@@ -625,7 +626,7 @@ POST /chat {message, mode, problemId, trainingPhase?, timeRemainingSec?}
         │
         ▼
  UserMsg("[竞赛训练上下文] 训练阶段=…；剩余时间=… 秒\n" + message)
- AgentState(session_id=ALGOCOACH_SESSION_ID).agent.reply(UserMsg)
+ AgentState(session_id=ALGOCOACH_SESSION_ID + sha256(JSON([conversationId, platform, problemId]))).agent.reply(UserMsg)
         │
         ├─ ReMe on_reply: 后台 search（自动召回）
         ├─ ReMe on_reasoning: 将检索到的记忆以 HintBlock 注入下一次推理
@@ -658,7 +659,7 @@ middleware 生命周期，因此必须显式关闭进程内 ReMe app。
 | problem_id | str(64) | LeetCode titleSlug |
 | platform | str(16) | LEETCODE / LUOGU / CODEFORCES |
 | status | str(32) | ACCEPTED / WRONG_ANSWER / ... |
-| lang | str(16) | rust / cpp / python3 |
+| lang | str(16) | rust / cpp / python3 / typescript / golang / java |
 | duration_sec | int | FOCUS 模式耗时 |
 | topics | Text(JSON) | 涉及知识点列表 |
 | sticking_points | Text(JSON) | 复盘时 agent 填的卡点 |
@@ -830,13 +831,13 @@ Gateway 需要调 agent 写记忆：
 |------|------|------|
 | 单元 | pytest | memory_service 的 ELO 计算、weak_topics 查询、tool 执行 |
 | 集成 | pytest + httpx.AsyncClient | router 各端点，用 fake AgentScope 模型 |
-| Mock | `tests/conftest.py` 的 `FakeChatModel` / `RecordingReMe` | 不调用真实模型；断言工具调用、FOCUS、稳定 session、ReMe search/auto_memory 调用 |
+| Mock | `tests/conftest.py` 的 `FakeChatModel` / `RecordingReMe` | 不调用真实模型；断言工具调用、FOCUS、页面/题目 session 隔离、ReMe search/auto_memory 调用 |
 | 动画 | 手动/冒烟 | 跑通一次 BfsGraph 渲染，验证 mp4 产出 |
 | 生成代码沙箱 | pytest + 真实 bwrap/systemd/Chrome | 静态校验、token/容量、fail-closed、临时目录清理、真实 namespace/cgroup/超时/输出限制、沙箱内 ffprobe 与一次完整 MP4 渲染 |
 | 自我改进 | pytest + 隔离 SQLite + fake 向量库 | 迁移重跑与老数据保留、7 天窗口重建（延迟评估不读窗口外活动）、+1/0/-1/弃做/阈值边界、并发与重试幂等、topic-only/具体题推荐、月度样本分母、归档行参与重放、调度器注册 |
 | Prompt 变体 | pytest（纯单元） | 默认 Soul 逐字回归、三种目标内容差异、未知值回退、FOCUS 模式不调用模型或 tool |
 | 竞赛训练协议 | pytest（纯单元 + fake AgentScope/ReMe） | `trainingPhase` 默认值与六阶段、大小写归一化、未知回退 `auto`、`timeRemainingSec` 非负/布尔校验、router 透传、非 contest 不受影响、剩余时间分档、FOCUS 仍静默、phase 进入 fake 模型的用户消息与 ReMe 写回 |
-| AgentScope/ReMe | pytest + fake 模型 + 真实 ReMe 生命周期 | `/chat` 契约、FOCUS 静默、稳定 session、动画 tool、ReMe search/auto_memory 调用、真实 ReMe app start/close、真实写卡 + reindex + search、lifespan close |
+| AgentScope/ReMe | pytest + fake 模型 + 真实 ReMe 生命周期 | `/chat` 契约、FOCUS 静默、页面/题目 session 隔离、动画 tool、ReMe search/auto_memory 调用、真实 ReMe app start/close、真实写卡 + reindex + search、lifespan close |
 
 **关键测试用例：**
 

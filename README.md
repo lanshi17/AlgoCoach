@@ -23,8 +23,8 @@ data/              SQLite 数据库 + 渲染出的 MP4 动画
 
 ## 记忆与训练
 
-- **工作记忆** — AgentScope `AgentState` 保存会话上下文（稳定 `session_id`）
-- **长期对话记忆** — AgentScope `ReMeMiddleware` 在 Agent 进程内召回和写回，存于本地 `REME_WORKSPACE_DIR`（默认 `./data/reme`），不启动独立服务
+- **工作记忆** — AgentScope `AgentState` 按浏览器页面会话和题目隔离上下文；刷新页面会开启新的短期对话
+- **长期对话记忆** — AgentScope `ReMeMiddleware` 在 Agent 进程内写回各会话记录，并跨会话检索相关卡片；存于本地 `REME_WORKSPACE_DIR`（默认 `./data/reme`），不启动独立服务
 - **情节记忆** — 每题做题记录，存 SQLite `episodic` 表
 - **语义记忆** — 知识点掌握图谱，ELO 式 mastery 评分，SQLite `semantic` 表
 - **程序记忆** — 用户常见错误模式，SQLite `procedural` 表
@@ -33,6 +33,7 @@ data/              SQLite 数据库 + 渲染出的 MP4 动画
 - **Prompt 目标** — 提供 `interview_prep`、`contest`、`casual` 三种系统提示词目标；竞赛训练阶段通过 `/chat` 请求选择。
 - **OI / xCPC 训练协议** — `/chat` 支持 `virtual_contest`、`topic_drill`、`attempt`、`hint`、`review`、`upsolve` 阶段和剩余时间提醒，指导读题建模、约束推导、部分得分、逐级提示与赛后复盘。
 - **模型 Provider** — 设置页提供 OMP 风格的主流 Provider 预设与自定义 OpenAI/Anthropic-compatible 端点；API key 仅在当前浏览器会话中使用，不写入训练导出或 Git。
+- **题库与专项训练** — LeetCode 按专项（动态规划、图论、二分……）和难度筛选，列表与题面来自 GraphQL；AcWing 作为额外渠道，专项映射到其算法标签（走站内搜索），打开题目附六语言 starter 模板，需要配置 Cookie；杭电 HDU 提供题单浏览与题面，可匿名浏览。运行/提交仍只支持 LeetCode。
 
 Submit 后只把判题事实、用时和题目标签发给 Agent；提交源码发往 LeetCode，不会自动转发给模型。因此当前复盘不声称已检查用户代码。
 
@@ -81,7 +82,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-打开 http://localhost:5173，首次使用会引导粘贴 LeetCode Cookie。
+打开 http://localhost:5173 即可进入工作区。使用 LeetCode 或 AcWing 题库时再配置相应 Cookie；HDU 可以匿名浏览。
 
 ## 本地验证
 
@@ -103,7 +104,7 @@ docker compose config --quiet
 docker compose build
 ```
 
-实际启动前，请在 `.env` 中填写 `ANTHROPIC_API_KEY`；Cookie 只需在首次打开设置页时录入。
+实际启动前，请在 `.env` 中填写 `ANTHROPIC_API_KEY`；题库 Cookie 可在设置页按需录入。
 
 ## LeetCode Cookie 获取方式
 

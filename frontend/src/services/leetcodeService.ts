@@ -41,8 +41,15 @@ export const leetcodeService = {
     return data.authenticated
   },
 
-  async listProblems(params: { page?: number; difficulty?: string; tag?: string }) {
-    const { data } = await axios.get('/api/problems', { params })
+  async listProblems(params: { page?: number; difficulty?: string; topicSlugs?: string[] }) {
+    const { data } = await axios.get('/api/problems', {
+      params: {
+        page: params.page,
+        difficulty: params.difficulty || undefined,
+        // The gateway expands comma-separated slugs into a topic OR-filter.
+        tag: params.topicSlugs?.length ? params.topicSlugs.join(',') : undefined,
+      },
+    })
     const result = data?.data?.problemsetQuestionList ?? data?.problemsetQuestionList ?? data
     const problems = (result?.questions ?? []).map((item: Record<string, unknown>) => ({
       id: String(item.questionId ?? item.frontendQuestionId ?? item.titleSlug ?? ''),
@@ -59,7 +66,7 @@ export const leetcodeService = {
     })) as Problem[]
     const hasMore = result?.hasMore === true
     const fallbackTotal = hasMore ? Number(params.page ?? 1) * 50 + 1 : ((Number(params.page ?? 1) - 1) * 50 + problems.length)
-    return { problems, total: Number(result?.total ?? fallbackTotal) }
+    return { problems, total: Number(result?.totalLength ?? result?.total ?? fallbackTotal), pageSize: 50 }
   },
 
   async getProblem(titleSlug: string) {
@@ -76,8 +83,8 @@ export const leetcodeService = {
       contentHtml: String(data.translatedContent ?? data.content ?? ''),
       contentMd: undefined,
       topics: tags.map(tag => {
-        const value = tag as { name?: string; nameTranslated?: string }
-        return value.nameTranslated || value.name || ''
+        const value = tag as { name?: string; translatedName?: string; nameTranslated?: string }
+        return value.translatedName || value.nameTranslated || value.name || ''
       }).filter(Boolean),
       hints: Array.isArray(data.hints) ? data.hints.map(String) : [],
       codeSnippets: snippets.map(snippet => {

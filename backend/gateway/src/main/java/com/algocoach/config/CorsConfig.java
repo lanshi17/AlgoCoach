@@ -23,13 +23,20 @@ public class CorsConfig implements WebMvcConfigurer {
     /** Vite preview server. */
     public static final String VITE_PREVIEW_ORIGIN = "http://localhost:4173";
 
+    /** Loopback spelled as an IP: same dev server, different browser origin. */
+    public static final String VITE_DEV_LOOPBACK_ORIGIN = "http://127.0.0.1:5173";
+
+    /** Loopback preview origin. */
+    public static final String VITE_PREVIEW_LOOPBACK_ORIGIN = "http://127.0.0.1:4173";
+
     /** Preflight cache lifetime in seconds. */
     public static final long MAX_AGE_SECONDS = 3600L;
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping(API_MAPPING)
-                .allowedOrigins(VITE_DEV_ORIGIN, VITE_PREVIEW_ORIGIN)
+                .allowedOrigins(VITE_DEV_ORIGIN, VITE_PREVIEW_ORIGIN,
+                        VITE_DEV_LOOPBACK_ORIGIN, VITE_PREVIEW_LOOPBACK_ORIGIN)
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(false)

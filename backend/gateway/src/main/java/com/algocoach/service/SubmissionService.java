@@ -100,7 +100,10 @@ public class SubmissionService {
         JsonNode topicTags = problem.path("topicTags");
         if (topicTags.isArray()) {
             for (JsonNode tag : topicTags) {
-                String name = tag.path("nameTranslated").asText("").trim();
+                String name = tag.path("translatedName").asText("").trim();
+                if (name.isBlank()) {
+                    name = tag.path("nameTranslated").asText("").trim();
+                }
                 if (name.isBlank()) {
                     name = tag.path("name").asText("").trim();
                 }

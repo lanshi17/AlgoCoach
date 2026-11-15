@@ -73,6 +73,23 @@ class CorsConfigTest {
     }
 
     @Test
+    void preflightAllowsLoopbackOrigins() throws Exception {
+        mockMvc.perform(options("/api/platforms/ACWING/cookie")
+                        .header(HttpHeaders.ORIGIN, CorsConfig.VITE_DEV_LOOPBACK_ORIGIN)
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        CorsConfig.VITE_DEV_LOOPBACK_ORIGIN));
+
+        mockMvc.perform(options("/api/ping")
+                        .header(HttpHeaders.ORIGIN, CorsConfig.VITE_PREVIEW_LOOPBACK_ORIGIN)
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        CorsConfig.VITE_PREVIEW_LOOPBACK_ORIGIN));
+    }
+
+    @Test
     void preflightRejectsUnknownOrigin() throws Exception {
         mockMvc.perform(options("/api/ping")
                         .header(HttpHeaders.ORIGIN, "http://localhost:9999")

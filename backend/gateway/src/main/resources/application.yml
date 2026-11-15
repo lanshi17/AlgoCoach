@@ -16,6 +16,13 @@ leetcode:
   base-url: https://leetcode.cn
   graphql-path: /graphql
 
+
+# AcWing / HDU pages (cookies are stored per platform and attached by the clients).
+acwing:
+  base-url: https://www.acwing.com
+hdu:
+  base-url: https://acm.hdu.edu.cn
+
 # Agent backend (Python FastAPI)
 agent:
   base-url: http://localhost:8000

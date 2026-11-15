@@ -19,9 +19,9 @@ export default function Sidebar() {
 
   return (
     <aside
-      className="flex flex-col items-stretch border-r border-border dark:border-border-dark
-                 bg-surface-soft dark:bg-surface-dark-soft transition-all duration-200 flex-shrink-0"
-      style={{ width: sidebarExpanded ? 'var(--sidebar-expanded-w)' : 'var(--sidebar-w)' }}
+      className={`flex flex-col items-stretch border-r border-border dark:border-border-dark
+                 bg-surface-soft dark:bg-surface-dark-soft transition-all duration-200 flex-shrink-0 w-14
+                 ${sidebarExpanded ? 'md:w-[var(--sidebar-expanded-w)]' : ''}`}
     >
       {/* Logo / brand */}
       <div className="flex items-center gap-2 h-[48px] px-3 border-b border-border dark:border-border-dark">
@@ -29,7 +29,7 @@ export default function Sidebar() {
           <Sparkles size={18} />
         </div>
         {sidebarExpanded && (
-          <span className="font-semibold text-sm text-text-primary dark:text-text-dark-primary whitespace-nowrap">
+          <span className="hidden md:inline font-semibold text-sm text-text-primary dark:text-text-dark-primary whitespace-nowrap">
             AlgoCoach
           </span>
         )}
@@ -49,7 +49,7 @@ export default function Sidebar() {
             aria-label={label}
           >
             <Icon size={20} className="shrink-0" />
-            {sidebarExpanded && <span className="text-sm whitespace-nowrap">{label}</span>}
+            {sidebarExpanded && <span className="hidden md:inline text-sm whitespace-nowrap">{label}</span>}
           </NavLink>
         ))}
       </nav>
@@ -57,7 +57,7 @@ export default function Sidebar() {
       {/* Expand toggle pinned at bottom */}
       <button
         onClick={toggleSidebar}
-        className="sidebar-btn mx-auto mb-2"
+        className="sidebar-btn mx-auto mb-2 hidden md:flex"
         title={sidebarExpanded ? '收起' : '展开'}
       >
         {sidebarExpanded ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}

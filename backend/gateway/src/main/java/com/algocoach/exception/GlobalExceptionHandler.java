@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 
 import java.util.concurrent.TimeoutException;
 
@@ -41,8 +42,8 @@ public class GlobalExceptionHandler {
     static final String COOKIE_MISSING_MESSAGE = "LeetCode Cookie 未设置，请在设置页面粘贴 Cookie";
     static final String COOKIE_EXPIRED_MESSAGE = "LeetCode Cookie 已过期，请重新粘贴";
     static final String RATE_LIMITED_MESSAGE = "LeetCode 请求频率限制，请稍后再试";
-    static final String UPSTREAM_ERROR_MESSAGE = "LeetCode 服务暂时不可用，请稍后再试";
-    static final String UPSTREAM_TIMEOUT_MESSAGE = "LeetCode 响应超时，请稍后再试";
+    static final String UPSTREAM_ERROR_MESSAGE = "上游服务暂时不可用，请稍后重试";
+    static final String UPSTREAM_TIMEOUT_MESSAGE = "上游服务响应超时，请稍后重试";
     static final String SUBMISSION_TIMEOUT_MESSAGE = "提交结果获取超时，请到 LeetCode 官网查看";
     static final String VALIDATION_ERROR_MESSAGE = "请求参数校验失败，请检查后重试";
     static final String NOT_FOUND_MESSAGE = "请求的资源不存在";
@@ -52,6 +53,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleCookieMissing(CookieMissingException e) {
         log.warn("Rejecting request: no LeetCode cookie configured");
         return error(HttpStatus.UNAUTHORIZED, COOKIE_MISSING_CODE, COOKIE_MISSING_MESSAGE);
+    }
+
+    @ExceptionHandler(PlatformCookieMissingException.class)
+    public ResponseEntity<ErrorResponse> handlePlatformCookieMissing(PlatformCookieMissingException e) {
+        log.warn("Rejecting request: no {} cookie configured", e.platform());
+        return error(HttpStatus.UNAUTHORIZED, COOKIE_MISSING_CODE, e.getMessage());
+    }
+
+    @ExceptionHandler(ProblemStatementUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleProblemStatementUnavailable(ProblemStatementUnavailableException e) {
+        log.warn("Upstream problem page did not contain a recognizable statement");
+        return error(HttpStatus.BAD_GATEWAY, UPSTREAM_ERROR_CODE,
+                "无法读取题面，请检查题目是否存在、平台登录状态或稍后重试");
     }
 
     @ExceptionHandler(WebClientResponseException.class)
@@ -71,16 +85,22 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(WebClientRequestException.class)
     public ResponseEntity<ErrorResponse> handleUpstreamRequest(WebClientRequestException e) {
         if (isTimeout(e)) {
-            log.warn("LeetCode request timed out");
+            log.warn("Upstream request timed out");
             return timeout();
         }
-        log.warn("LeetCode request failed before receiving a response: {}", e.getClass().getSimpleName());
+        log.warn("Upstream request failed before receiving a response: {}", e.getClass().getSimpleName());
         return error(HttpStatus.BAD_GATEWAY, UPSTREAM_ERROR_CODE, UPSTREAM_ERROR_MESSAGE);
     }
 
     @ExceptionHandler(TimeoutException.class)
     public ResponseEntity<ErrorResponse> handleTimeout(TimeoutException e) {
-        log.warn("LeetCode request timed out");
+        log.warn("Upstream request timed out");
+        return timeout();
+    }
+
+    @ExceptionHandler(AsyncRequestTimeoutException.class)
+    public ResponseEntity<ErrorResponse> handleAsyncTimeout(AsyncRequestTimeoutException e) {
+        log.warn("Gateway async request timed out");
         return timeout();
     }
 

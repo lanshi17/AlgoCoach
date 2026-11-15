@@ -371,7 +371,7 @@ class SubmissionServiceTest {
         when(problemCacheService.getBySlug(SLUG))
                 .thenReturn(Mono.just(mapper.readTree(
                         "{\"questionId\":\"" + questionId + "\",\"title\":\"Two Sum\","
-                                + "\"topicTags\":[{\"name\":\"Array\",\"nameTranslated\":\"数组\"}]}")));
+                                + "\"topicTags\":[{\"name\":\"Array\",\"translatedName\":\"数组\"}]}")));
     }
 
     private static void assertAccepted(SubmissionResultDto result, int durationSec) {

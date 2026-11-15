@@ -104,7 +104,36 @@ backend/gateway/
 三个端点全部是 `Mono<ResponseEntity<JsonNode>>`，响应式返回，直接透传 LeetCode GraphQL 响应的相关字段。
 
 ### `ProblemService.java`
-封装三条 GraphQL query 字符串（`questionData`、`questionOfToday`、`questionList`），调用 `LeetCodeClient.graphql()`，解析 Jackson `JsonNode`。
+封装三条 GraphQL query 字符串（`questionData`、`questionOfToday`、`problemsetQuestionListV2`），调用 `LeetCodeClient.graphql()`，解析 Jackson `JsonNode`。
+
+题目列表的 `filters` 变量类型是 `QuestionFilterInput`（不是同名的
+`QuestionListFilterInputV2`）。空过滤返回全库；`difficulty` 映射到
+`difficultyFilter.difficulties`（只接受 `EASY` / `MEDIUM` / `HARD`，其他值忽略），
+`tag` 映射到 `topicFilter.topicSlugs`。同一 `topicFilter` 内的多个 slug 是 OR
+关系（一个专项可覆盖多个官方标签），而 topic 与 difficulty 两个过滤对象之间是
+AND。`totalLength` 一并返回，供前端计算真实页数。
+
+### `AcWingService.java` / `AcWingController.java`
+AcWing 题单与题面（匿名请求会被 302 到 `/403/` 或 `/login`，必须使用设置页保存的 Cookie）。
+
+- 列表：`GET /api/acwing/problems?page&tag`。无 `tag` 时读 `/problem/{page}/`；有 `tag` 时走站点的
+  标签搜索 `/problem/search/{page}/?search_content=<tag>`（专项即算法标签，如 `模拟`、`二分`、`动态规划`）。
+  搜索命中的标签可能带 `<span class='es-search-highlight'>`，解析时会剥掉。
+- 详情：`GET /api/acwing/problems/{id}` 提取 `div[data-field-name="content"]` 题面、`输入样例` 与
+  `时/空限制`，并附带 `CodeTemplates.snippets()` 生成的六语言 starter 模板（AcWing 页面不含模板数据）。
+- 难度：简单/中等/困难 → EASY/MEDIUM/HARD。
+
+### `HduService.java` / `HduController.java`
+杭电题单与题面。列表 `listproblem.php?vol=N` 的表格由内嵌 `p(color,pid,solved,title,ac,sub)` 调用生成，
+每卷 100 题；详情 `showproblem.php?pid=` 为 GB18030 编码，解析
+`Problem Description / Input / Output / Sample Input / Sample Output` 面板与 `Time Limit / Memory Limit`。
+HDU 没有标签与难度，`topics` 为空、难度按 `MEDIUM`；详情同样附带六语言 starter 模板。
+
+`PlatformCookieController.java` 提供 `GET /api/platforms`（三平台登录态汇总）、
+`POST /api/platforms/{platform}/cookie` 与 `GET /api/platforms/{platform}/status`，支持 `ACWING` / `HDU`；
+保存时由 `util/CookieHeader` 从原始 Cookie 头或整段 cURL 中提取并去除控制字符（否则 Netty 会因
+`0xa` 等非法头字符回 502），读取时再做一次同样的规范化以兼容历史脏数据；Cookie 只写入本机 SQLite，
+不回显、不写日志、不进入导出文件。
 
 ### `ProblemCacheService.java`
 题目详情缓存层。`getBySlug(slug)` 先查 SQLite：命中且未过期（24h）直接返回
@@ -212,7 +241,7 @@ public class SubmissionRecord {
     private String status;             // ACCEPTED / WRONG_ANSWER / ...
 
     @Column(nullable = false)
-    private String lang;               // rust / cpp / python3
+    private String lang;               // rust / cpp / python3 / typescript / golang / java
 
     @Column(columnDefinition = "TEXT")
     private String code;               // 提交的代码
@@ -245,14 +274,14 @@ DTO 实现位于 `dto/SubmitRequest.java`、`dto/RunRequest.java` 与
 public record SubmitRequest(
     @NotBlank String titleSlug,
     @NotBlank String code,
-    @NotBlank String lang,       // "rust" | "cpp" | "python3"
+    @NotBlank String lang,       // "rust" | "cpp" | "python3" | "typescript" | "golang" | "java"
     int durationSec              // FOCUS 模式耗时，前端计算
 ) {}
 
 public record RunRequest(
     @NotBlank String titleSlug,
     @NotBlank String code,
-    @NotBlank String lang,       // "rust" | "cpp" | "python3"
+    @NotBlank String lang,       // "rust" | "cpp" | "python3" | "typescript" | "golang" | "java"
     String testInput             // 可选；为空时回退到缓存的 sampleTestCase
 ) {}
 
@@ -323,7 +352,7 @@ public class SubmissionController {
 1. **取 questionId**：`ProblemCacheService.getBySlug(titleSlug)` 读取（或刷新）题目详情，
    取其中的 `questionId`；缓存行缺少该字段时快速失败，不会提交。
 2. **提交**：`POST /problems/{titleSlug}/submit/`，body 为
-   `{typed_code, lang, question_id}`；`lang` 做 `cpp` / `python3` / `rust` 映射，
+   `{typed_code, lang, question_id}`；`lang` 做语言映射（`rust` / `cpp` / `python3` / `typescript` / `golang` / `java`，未知值原样转发），
    `question_id` 来自第 1 步。响应里的 `submission_id` 作为后续轮询 id，也会放进结果 DTO。
 3. **轮询**：最多 `POLL_MAX_ATTEMPTS = 20` 次，每次先 `delay(1500ms)` 再
    `GET /submissions/detail/{submissionId}/check/`；`state` 为 `SUCCESS` /
@@ -517,6 +546,7 @@ public class GlobalExceptionHandler {
 | `GET /api/agent/animate/{jobId}` | `GET /animate/{jobId}` |
 
 FastAPI 已注册 `/memory/profile` 和 `/memory/export`，网关通过固定上游代理进度与数据导出接口。
+
 
 **转发语义**：
 
@@ -786,9 +816,16 @@ CREATE INDEX idx_submission_created ON submission_record(created_at);
 
 | Method | Path | Params | Response |
 |--------|------|--------|----------|
-| `GET` | `/api/problems` | `page, difficulty?, tag?` | `{problems[], total}` |
+| `GET` | `/api/problems` | `page, difficulty?, tag?`（`tag` 为逗号分隔的 LeetCode topic slug，如 `dynamic-programming,memoization`） | LeetCode v2 列表节点（`hasMore`, `totalLength`, `questions[]`） |
 | `GET` | `/api/problems/{slug}` | — | Problem JSON |
 | `GET` | `/api/problems/daily` | — | Problem JSON |
+| `GET` | `/api/acwing/problems` | `page, tag?`（AcWing 算法标签，如 `模拟`、`动态规划`，走标签搜索） | `{platform, page, pageSize, total, problems[]}` |
+| `GET` | `/api/acwing/problems/{id}` | — | Problem JSON（含六语言 starter 模板） |
+| `GET` | `/api/hdu/problems` | `volume` | `{platform, page, pageSize, total, problems[]}` |
+| `GET` | `/api/hdu/problems/{pid}` | — | Problem JSON（含六语言 starter 模板） |
+| `GET` | `/api/platforms` | — | `{LEETCODE, ACWING, HDU}` |
+| `POST` | `/api/platforms/{platform}/cookie` | `{cookie}` | `200` |
+| `GET` | `/api/platforms/{platform}/status` | — | `{configured}` |
 
 ### 运行与提交
 
@@ -858,7 +895,7 @@ CREATE INDEX idx_submission_created ON submission_record(created_at);
 | `NOT_FOUND` | 404 | 静态动画文件不存在，或路径越出配置的 `animations.location` |
 | `RATE_LIMITED` | 429 | LeetCode 返回 429 |
 | `INTERNAL_ERROR` | 500 | 服务内部未预期错误 |
-| `UPSTREAM_ERROR` | 502 | LeetCode 其他错误响应，或非超时的网络错误 |
+| `UPSTREAM_ERROR` | 502 | 上游服务错误响应，或非超时的网络错误 |
 | `SUBMISSION_TIMEOUT` | 503 | 提交或运行轮询 20 次仍未有终态（P1 已实现） |
 | `UPSTREAM_TIMEOUT` | 504 | 连接/响应超时 |
 
@@ -872,7 +909,7 @@ CREATE INDEX idx_submission_created ON submission_record(created_at);
 ### Cookie 缺失 / 过期检测
 `LeetCodeClient` 在本地没有 Cookie 时抛出 `CookieMissingException`，`GlobalExceptionHandler`
 返回 401 `COOKIE_MISSING`；上游返回 401 时抛出 `WebClientResponseException`，返回 401
-`COOKIE_EXPIRED`。前端收到 401 后自动弹出 Cookie 重新输入面板（`CookieSetupPage`）。
+`COOKIE_EXPIRED`。错误随题目请求返回，由题目面板显示；用户可从面板的“题库登录”入口更新 Cookie。应用启动和浏览其他平台不会因 LeetCode Cookie 缺失而阻断。
 
 ### 频率限制（429）
 LeetCode 对频繁请求有限流。处理方式：
@@ -880,7 +917,9 @@ LeetCode 对频繁请求有限流。处理方式：
 2. 后续可加 Redis 本地限速（每分钟最多 20 次 GraphQL 请求），题目命中缓存则不计入
 
 ### 网络超时
-`WebClient` 连接超时 5s，响应超时 15s。超时（cause 链含 `TimeoutException`）由
+LeetCode 和常规网关请求的 `WebClient` 连接超时 5s、响应超时 15s；Agent 聊天代理单独使用
+120s WebClient 响应超时和 125s Spring MVC 异步请求超时，以容纳模型生成，并确保请求期限
+长于上游网络期限。超时（cause 链含 `TimeoutException`）由
 `GlobalExceptionHandler` 返回 504 `UPSTREAM_TIMEOUT`；非超时的网络错误返回 502
 `UPSTREAM_ERROR`。
 

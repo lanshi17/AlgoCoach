@@ -22,10 +22,9 @@ DEFAULT_CHROMA_PATH = "../../data/chroma"
 
 # ── /chat agent runtime (AgentScope + ReMe) ────────────────────
 #
-# The coach is a single-user application: ``POST /chat`` has no session field,
-# so one stable AgentScope session id is reused across requests. Keeping it
-# stable is what lets the AgentState keep its conversation and what scopes
-# ReMe write-back cards to one session.
+# Prefix used to namespace AgentScope sessions. The router derives per-page,
+# per-problem session ids from this prefix and the browser conversation id.
+# This remains configurable for isolated local deployments.
 DEFAULT_SESSION_ID = "default"
 DEFAULT_CLAUDE_MODEL = "claude-opus-5-5"
 # Embedded ReMe workspace (memory cards + keyword/vector indexes). Like the
@@ -61,7 +60,7 @@ def chroma_path() -> str:
 
 
 def chat_session_id() -> str:
-    """Stable AgentScope session id used by ``POST /chat`` (``ALGOCOACH_SESSION_ID``)."""
+    """Session namespace prefix for ``POST /chat`` (``ALGOCOACH_SESSION_ID``)."""
     return (
         os.getenv("ALGOCOACH_SESSION_ID", DEFAULT_SESSION_ID).strip()
         or DEFAULT_SESSION_ID

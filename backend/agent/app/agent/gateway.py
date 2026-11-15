@@ -49,7 +49,7 @@ def _topic_names(raw: Any) -> list[str]:
     names: list[str] = []
     for tag in raw if isinstance(raw, list) else []:
         if isinstance(tag, dict):
-            name = tag.get("nameTranslated") or tag.get("name")
+            name = tag.get("translatedName") or tag.get("nameTranslated") or tag.get("name")
         else:
             name = tag
         if isinstance(name, str) and name.strip():
@@ -78,7 +78,7 @@ def normalize_problem(payload: Any, slug: str | None = None) -> dict | None:
 
     title = _first_text(payload, ("translatedTitle", "title", "name")) or problem_id
     content = _plain_text(
-        _first_text(payload, ("translatedContent", "content", "description"))
+        _first_text(payload, ("translatedContent", "content", "contentHtml", "description"))
     )
     difficulty = _first_text(payload, ("difficulty", "level")).upper()
     topics = _topic_names(payload.get("topicTags") or payload.get("topics"))
@@ -92,8 +92,8 @@ def normalize_problem(payload: Any, slug: str | None = None) -> dict | None:
     }
 
 
-async def fetch_problem(slug: str) -> dict | None:
-    """GET ``/api/problems/{slug}`` and return normalised metadata.
+async def fetch_problem(slug: str, platform: str = "LEETCODE") -> dict | None:
+    """Fetch problem details from the platform's gateway route and normalise them.
 
     Network, timeout, non-2xx and malformed-JSON failures are logged and
     return ``None``; the coach reports a tool error instead of caching a
@@ -103,7 +103,12 @@ async def fetch_problem(slug: str) -> dict | None:
     if not problem_id:
         return None
 
-    url = f"{gateway_base_url()}/api/problems/{quote(problem_id, safe='')}"
+    paths = {"LEETCODE": "/api/problems", "ACWING": "/api/acwing/problems", "HDU": "/api/hdu/problems"}
+    path = paths.get(platform)
+    if path is None:
+        logger.warning("Unsupported problem platform %r", platform)
+        return None
+    url = f"{gateway_base_url()}{path}/{quote(problem_id, safe='')}"
     try:
         async with httpx.AsyncClient(timeout=gateway_timeout_seconds()) as client:
             response = await client.get(url)
@@ -114,6 +119,7 @@ async def fetch_problem(slug: str) -> dict | None:
         return None
 
     problem = normalize_problem(payload, problem_id)
-    if problem is None:
+    if problem is None or not problem["content"]:
         logger.warning("Problem response for %r was not usable", problem_id)
+        return None
     return problem

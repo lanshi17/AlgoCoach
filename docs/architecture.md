@@ -77,7 +77,7 @@
 ### 2.2 Python Agent（:8000）— 只做 AI 逻辑和记忆
 
 **能做**：
-- 管理 AgentScope agent 会话（reasoning/acting loop；稳定 `session_id`）
+- 管理 AgentScope agent 会话（reasoning/acting loop；按页面会话、平台和题目隔离短期上下文，IDLE/PREP/REVIEW 阶段连续共享）
 - 四类记忆读写（episodic/semantic/procedural + ReMe 对话记忆）
 - 触发 Remotion 渲染任务
 - 决定推题策略
@@ -187,8 +187,8 @@ AgentScope Agent (AnthropicChatModel, claude-opus-5-5)
   └─ 无 tool_call → 提取最终文本
         │
         ▼
-AgentState 保存会话上下文（稳定 session_id）
-ReMeMiddleware 自动 search 召回 + auto_memory 写回
+AgentState 保存当前页面和题目的会话上下文（session_id 由 conversationId / platform / problemId 派生；当前模式每轮更新到系统提示）
+ReMeMiddleware 在共享本地 workspace 自动 search 召回 + 按 session_id auto_memory 写回
         │
         ▼
 返回 { content, animation_id? } → Gateway → 前端
@@ -299,7 +299,7 @@ cursor.execute(f"SELECT * FROM semantic WHERE topic = '{topic}'")
 app.add_middleware(CORSMiddleware,
     allow_origins=["http://localhost:5173"],  # 生产改为实际域名
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "X-Session-Id"],
+    allow_headers=["Content-Type"],  # conversationId / platform 位于 JSON body
 )
 ```
 

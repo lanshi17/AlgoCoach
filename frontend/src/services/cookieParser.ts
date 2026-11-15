@@ -9,6 +9,7 @@ export interface ParsedLeetCodeCookie {
  */
 export function parseLeetCodeCurl(input: string): ParsedLeetCodeCookie | null {
   const cookieHeader = findCookieArgument(input) ?? findCookieHeader(input)
+    ?? (/^\s*[^\s=;]+\s*=/.test(input) ? input : null)
   if (!cookieHeader) return null
 
   const cookies = new Map<string, string>()
@@ -23,6 +24,23 @@ export function parseLeetCodeCurl(input: string): ParsedLeetCodeCookie | null {
   const session = cookies.get('LEETCODE_SESSION')
   const csrf = cookies.get('csrftoken')
   return session && csrf ? { session, csrf } : null
+}
+
+/**
+ * Normalise a pasted Cookie header or "Copy as cURL" command into a single
+ * header line. Non-LeetCode platforms accept either form.
+ */
+export function parseCookieHeader(input: string): string | null {
+  const raw = findCookieArgument(input) ?? findCookieHeader(input) ?? input
+  const cleaned = raw
+    // Reject ASCII control characters before forwarding a Cookie header.
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .replace(/\s*;\s*/g, '; ')
+    .replace(/\s+/g, ' ')
+    .replace(/;+$/, '')
+    .trim()
+  return cleaned.includes('=') ? cleaned : null
 }
 
 function findCookieArgument(input: string): string | null {

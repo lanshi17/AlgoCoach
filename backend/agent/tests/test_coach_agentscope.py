@@ -86,6 +86,74 @@ async def test_focus_route_returns_before_model_memory_and_tools(
     assert coach._agents == {}
 
 
+@pytest.mark.parametrize(
+    ("mode", "problem_id", "expected"),
+    [
+        ("IDLE", None, "模式=IDLE；尚未选择题目。用户尚未开始做题"),
+        ("PREP", "two-sum", "模式=PREP；已选择题目。用户尚未开始做题"),
+        ("REVIEW", "two-sum", "模式=REVIEW；已选择题目。只有用户提供的提交或代码事实"),
+    ],
+)
+async def test_current_interface_mode_is_supplied_to_the_model(tmp_path, mode, problem_id, expected):
+    coach, model, _reme = _make_coach(tmp_path)
+
+    await coach.chat("mode-session", "hi", mode, problem_id)
+
+    system = model.calls[0]["messages"][0].get_text_content()
+    assert expected in system
+    assert "高于历史对话和记忆" in system
+    assert "如果用户只是问候或闲聊，先自然回应这条消息" in system
+
+
+async def test_greeting_does_not_trigger_unsolicited_training_prompt(tmp_path):
+    coach, model, _reme = _make_coach(tmp_path)
+
+    await coach.chat("greeting-session", "hi", "PREP", "two-sum")
+
+    system = model.calls[0]["messages"][0].get_text_content()
+    assert "如果用户只是问候或闲聊，先自然回应这条消息" in system
+    assert "不要擅自转成训练、代码复盘或换题引导" in system
+
+
+async def test_non_leetcode_problem_uses_its_own_platform(tmp_path, monkeypatch):
+    coach, model, _reme = _make_coach(tmp_path, responses=[
+        _tool_call("fetch_problem_meta", {"slug": "1000"}),
+    ])
+
+    calls = []
+
+    async def fetch(slug, platform):
+        calls.append((slug, platform))
+        return {"ok": True, "title": "HDU problem", "content": "statement"}
+
+    monkeypatch.setattr(coach, "_fetch_problem_meta", fetch)
+    await coach.chat("hdu-session", "讲讲这道题", "PREP", "1000", platform="HDU")
+    system = model.calls[0]["messages"][0].get_text_content()
+    assert "当前题目平台=HDU；题目标识=1000" in system
+    assert calls == [("1000", "HDU")]
+
+
+async def test_problem_metadata_cache_is_separate_per_platform(tmp_path, monkeypatch):
+    from app.agent import coach as coach_module
+
+    instance, _model, _reme = _make_coach(tmp_path)
+    calls = []
+
+    async def fetch(slug, platform="LEETCODE"):
+        calls.append((slug, platform))
+        return {"problem_id": slug, "title": platform, "content": "statement", "topics": []}
+
+    async def no_index(_problem):
+        pass
+
+    monkeypatch.setattr(coach_module, "fetch_problem", fetch)
+    monkeypatch.setattr(instance, "_index_problem_best_effort", no_index)
+    assert (await instance._fetch_problem_meta("1000"))["title"] == "LEETCODE"
+    assert (await instance._fetch_problem_meta("1000", "HDU"))["title"] == "HDU"
+    assert (await instance._fetch_problem_meta("1000", "HDU"))["title"] == "HDU"
+    assert calls == [("1000", "LEETCODE"), ("1000", "HDU")]
+
+
 async def test_chat_executes_animation_tool_and_returns_job_id(tmp_path, monkeypatch):
     coach, model, _reme = _make_coach(
         tmp_path,
@@ -207,8 +275,10 @@ async def test_same_session_reuses_agent_and_keeps_context(tmp_path):
     coach, model, _ = _make_coach(tmp_path)
 
     await coach.chat("s1", "第一轮", "PREP")
-    await coach.chat("s1", "第二轮", "PREP")
+    silent = await coach.chat("s1", "FOCUS 中的消息不应进入上下文", "FOCUS")
+    await coach.chat("s1", "第二轮", "REVIEW")
 
+    assert silent == {"content": "", "animation_id": None}
     assert set(coach._agents) == {"s1"}
     assert len(model.calls) == 2
     # The second model call sees the first user turn from AgentState.
@@ -217,6 +287,8 @@ async def test_same_session_reuses_agent_and_keeps_context(tmp_path):
         for message in model.calls[1]["messages"]
     ]
     assert any("第一轮" in text for text in second_texts)
+    assert not any("FOCUS 中的消息不应进入上下文" in text for text in second_texts)
+    assert any("模式=REVIEW" in text for text in second_texts)
 
 
 async def test_distinct_sessions_get_distinct_agents_and_write_scopes(tmp_path):

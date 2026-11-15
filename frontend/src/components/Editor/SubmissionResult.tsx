@@ -7,7 +7,7 @@ export default function SubmissionResult() {
 
   if (!lastSubmission) return (
     <div className="flex items-center justify-center h-full text-xs text-text-muted dark:text-text-dark-muted">
-      暂无提交结果
+      本次练习没有提交结果，可以在教练面板自主复盘。
     </div>
   )
 

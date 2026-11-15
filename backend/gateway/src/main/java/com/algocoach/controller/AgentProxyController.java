@@ -1,10 +1,12 @@
 package com.algocoach.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.context.request.async.DeferredResult;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -12,11 +14,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
+import reactor.netty.http.client.HttpClient;
 
 import java.net.URI;
+import java.time.Duration;
 import java.util.List;
 import java.util.Set;
+import io.netty.channel.ChannelOption;
 
 /**
  * Transparent HTTP proxy from {@code /api/agent/**} to the Python FastAPI agent.
@@ -46,6 +52,12 @@ import java.util.Set;
 @RequestMapping(AgentProxyController.BASE_PATH)
 public class AgentProxyController {
 
+    /** Model generation can exceed the gateway's short I/O timeout. */
+    static final Duration CHAT_RESPONSE_TIMEOUT = Duration.ofSeconds(120);
+    /** Spring MVC's default async timeout is shorter; leave room beyond the HTTP timeout. */
+    static final Duration CHAT_ASYNC_TIMEOUT = Duration.ofSeconds(125);
+    static final int CONNECT_TIMEOUT_MILLIS = 5_000;
+
     /** Public gateway prefix; the FastAPI service does not use it. */
     public static final String BASE_PATH = "/api/agent";
 
@@ -67,6 +79,7 @@ public class AgentProxyController {
             HttpHeaders.WWW_AUTHENTICATE);
 
     private final WebClient agentClient;
+    private final WebClient agentChatClient;
     private final String agentBaseUrl;
 
     public AgentProxyController(
@@ -76,13 +89,28 @@ public class AgentProxyController {
         // Clone the shared builder so this client never mutates the LeetCode client's
         // builder, and build the WebClient once instead of per request.
         this.agentClient = webClientBuilder.clone().build();
+        this.agentChatClient = webClientBuilder.clone()
+                .clientConnector(new ReactorClientHttpConnector(createChatHttpClient()))
+                .build();
+    }
+
+    static HttpClient createChatHttpClient() {
+        return HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, CONNECT_TIMEOUT_MILLIS)
+                .responseTimeout(CHAT_RESPONSE_TIMEOUT);
     }
 
     @PostMapping("/chat")
-    public Mono<ResponseEntity<byte[]>> chat(
+    public DeferredResult<ResponseEntity<byte[]>> chat(
             HttpServletRequest request,
             @RequestBody(required = false) byte[] body) {
-        return forward(HttpMethod.POST, CHAT_PATH, request, body);
+        DeferredResult<ResponseEntity<byte[]>> result =
+                new DeferredResult<>(CHAT_ASYNC_TIMEOUT.toMillis());
+        Disposable upstream = forward(HttpMethod.POST, CHAT_PATH, request, body)
+                .subscribe(result::setResult, result::setErrorResult);
+        result.onTimeout(upstream::dispose);
+        result.onCompletion(upstream::dispose);
+        return result;
     }
 
     @PostMapping("/memory/record")
@@ -128,7 +156,8 @@ public class AgentProxyController {
             String upstreamPath,
             HttpServletRequest request,
             byte[] body) {
-        WebClient.RequestBodySpec preparedRequest = agentClient.method(method)
+        WebClient client = CHAT_PATH.equals(upstreamPath) ? agentChatClient : agentClient;
+        WebClient.RequestBodySpec preparedRequest = client.method(method)
                 .uri(upstreamUri(upstreamPath, request.getQueryString()))
                 .headers(headers -> copyRequestHeaders(request, headers));
 

@@ -1,0 +1,187 @@
+import React, { act } from 'react'
+import { createRoot } from 'react-dom/client'
+import { afterEach, expect, it, vi } from 'vitest'
+import { leetcodeService } from '@/services/leetcodeService'
+import { agentService } from '@/services/agentService'
+import { useAppStore } from '@/stores/useAppStore'
+import type { RunResult } from '@/types'
+import Header, { formatDuration } from './Header'
+
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
+
+it('formats focus duration compactly, including long sessions', () => {
+  expect(formatDuration(0)).toBe('00:00')
+  expect(formatDuration(62)).toBe('01:02')
+  expect(formatDuration(3_661)).toBe('1:01:01')
+  expect(formatDuration(-3)).toBe('00:00')
+})
+
+it('keeps a labelled theme control in the compact title row', () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+  act(() => root.render(<Header />))
+
+  const titleRow = element.querySelector('h1')?.parentElement
+  expect(titleRow?.querySelector('button[aria-label="切换主题"]')).not.toBeNull()
+  act(() => root.unmount())
+  element.remove()
+})
+
+it('explains unsupported in-app judging for AcWing and HDU without relying on hover', () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.getState().setActiveProblem({
+    id: 'acwing-1', platform: 'ACWING', platformId: '1', title: 'A + B', difficulty: 'EASY',
+    contentHtml: '', topics: [], sampleTestCases: '', codeSnippets: [],
+  })
+  useAppStore.getState().enterFocus()
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+  act(() => root.render(<Header />))
+
+  const note = element.querySelector<HTMLElement>('#judge-capability-note')
+  expect(note?.textContent).toContain('AcWing')
+  expect(note?.textContent).toContain('回对应平台完成判题')
+  expect(note?.className).toContain('text-[11px]')
+  expect(element.querySelector('button[aria-label="运行"]')?.getAttribute('aria-describedby')).toBe('judge-capability-note')
+  expect(element.querySelector('button[aria-label="提交"]')?.getAttribute('aria-describedby')).toBe('judge-capability-note')
+
+  act(() => root.unmount())
+  element.remove()
+})
+
+it('does not show the unsupported-platform judging note for LeetCode', () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.getState().setActiveProblem({
+    id: 'lc-1', platform: 'LEETCODE', platformId: 'two-sum', title: 'Two Sum', difficulty: 'EASY',
+    contentHtml: '', topics: [], sampleTestCases: '', codeSnippets: [],
+  })
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+  act(() => root.render(<Header />))
+
+  expect(element.querySelector('#judge-capability-note')).toBeNull()
+
+  act(() => root.unmount())
+  element.remove()
+})
+
+it('shows a live focus timer and keeps accumulated time after resuming', () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-11-15T00:00:00.000Z'))
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.getState().setActiveProblem({
+    id: '1', platform: 'ACWING', platformId: '1', title: 'A + B', difficulty: 'EASY',
+    contentHtml: '', topics: [], sampleTestCases: '', codeSnippets: [],
+  })
+  useAppStore.getState().setProblemTimeLimitMinutes('10')
+  useAppStore.getState().enterFocus()
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+  act(() => root.render(<Header />))
+  expect(element.querySelector('[role="timer"]')?.textContent).toBe('00:00· 剩余 10:00')
+  act(() => vi.advanceTimersByTime(2_000))
+  expect(element.querySelector('[role="timer"]')?.textContent).toBe('00:02· 剩余 09:58')
+  act(() => useAppStore.getState().exitFocus())
+  expect(element.querySelector('[role="timer"]')).toBeNull()
+  act(() => useAppStore.getState().enterFocus())
+  expect(element.querySelector('[role="timer"]')?.textContent).toBe('00:02· 剩余 09:58')
+  act(() => root.unmount())
+  element.remove()
+})
+
+it('does not show a run result for code edited while the request was pending', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.getState().setActiveProblem({
+    id: '1', platform: 'LEETCODE', platformId: 'one', title: 'One', difficulty: 'EASY',
+    contentHtml: '', topics: [], sampleTestCases: '', codeSnippets: [],
+  })
+  useAppStore.getState().enterFocus()
+  useAppStore.getState().setCode('old code')
+  let resolveRun!: (result: RunResult) => void
+  vi.spyOn(leetcodeService, 'runTests').mockReturnValue(new Promise(resolve => { resolveRun = resolve }))
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+  act(() => root.render(<Header />))
+  act(() => Array.from(element.querySelectorAll('button')).find(button => button.textContent === '运行')!.click())
+  act(() => useAppStore.getState().setCode('new code'))
+  await act(async () => resolveRun({ status_msg: 'Accepted' }))
+  expect(useAppStore.getState().runResult).toBeNull()
+  expect(element.textContent).toContain('代码或测试输入已更改，请重新运行')
+  act(() => root.unmount())
+  element.remove()
+})
+
+it('keeps a submission pending across navigation and shows a later failure', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.getState().setActiveProblem({
+    id: '1', platform: 'LEETCODE', platformId: 'one', title: 'One', difficulty: 'EASY',
+    contentHtml: '', topics: [], sampleTestCases: '', codeSnippets: [],
+  })
+  useAppStore.getState().enterFocus()
+  let rejectSubmit!: (error: Error) => void
+  const submit = vi.spyOn(leetcodeService, 'submit').mockReturnValue(new Promise((_resolve, reject) => { rejectSubmit = reject }))
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  let root = createRoot(element)
+  act(() => root.render(<Header />))
+  act(() => Array.from(element.querySelectorAll('button')).find(button => button.textContent === '提交')!.click())
+  act(() => root.unmount())
+  root = createRoot(element)
+  act(() => root.render(<Header />))
+  const button = Array.from(element.querySelectorAll('button')).find(item => item.textContent === '提交中')!
+  expect(button.disabled).toBe(true)
+  act(() => button.click())
+  expect(submit).toHaveBeenCalledTimes(1)
+  await act(async () => rejectSubmit(new Error('连接失败')))
+  expect(element.querySelector('[role="alert"]')?.textContent).toContain('连接失败')
+  expect(useAppStore.getState().submitLoading).toBe(false)
+  act(() => root.unmount())
+  element.remove()
+})
+
+it('sends the post-submit review after leaving focus mode', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.getState().setActiveProblem({
+    id: '1', platform: 'LEETCODE', platformId: 'one', title: 'One', difficulty: 'EASY',
+    contentHtml: '', topics: ['Array'], sampleTestCases: '', codeSnippets: [],
+  })
+  useAppStore.getState().enterFocus()
+  vi.spyOn(leetcodeService, 'submit').mockResolvedValue({
+    id: 'submission-1', status: 'ACCEPTED', runtimeMs: 2, memoryMb: 3,
+    passedTests: 1, totalTests: 1, errorMessage: null, durationSec: 1,
+  })
+  const chat = vi.spyOn(agentService, 'chat').mockResolvedValue({ content: '赛后复盘已完成。' })
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+  act(() => root.render(<Header />))
+  await act(async () => {
+    Array.from(element.querySelectorAll('button')).find(button => button.textContent === '提交')!.click()
+    await Promise.resolve()
+  })
+  expect(useAppStore.getState().mode).toBe('REVIEW')
+  expect(chat).toHaveBeenCalledTimes(1)
+  expect(chat.mock.calls[0][1]).toMatchObject({
+    mode: 'REVIEW', problemId: 'one', platform: 'LEETCODE', trainingPhase: 'review',
+  })
+  await act(async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+  expect(useAppStore.getState().messages.some(message => message.content === '赛后复盘已完成。')).toBe(true)
+  act(() => root.unmount())
+  element.remove()
+})

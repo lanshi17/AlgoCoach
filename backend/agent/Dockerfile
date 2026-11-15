@@ -11,11 +11,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       chromium ffmpeg fonts-liberation ca-certificates \
+      bubblewrap systemd \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=node-runtime /usr/local/bin/node /usr/local/bin/node
 COPY --from=node-runtime /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
 RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+# The sandbox launcher uses this canonical interpreter path inside bwrap.
+RUN ln -sf /usr/local/bin/python3 /usr/bin/python3
 
 WORKDIR /app
 COPY backend/agent/requirements.txt ./requirements.txt

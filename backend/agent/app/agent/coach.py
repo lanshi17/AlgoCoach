@@ -32,6 +32,8 @@ import logging
 import os
 from contextvars import ContextVar
 from typing import Any
+from urllib.parse import urlparse
+from uuid import uuid4
 
 from agentscope.agent import Agent
 from agentscope.credential import (
@@ -48,13 +50,13 @@ from agentscope.message import UserMsg
 from agentscope.middleware import ReMeMiddleware
 from agentscope.model import (
     AnthropicChatModel,
+    ChatModelBase,
     DashScopeChatModel,
     DeepSeekChatModel,
     MiniMaxChatModel,
     MoonshotChatModel,
     OpenAIChatModel,
     OpenAIResponseModel,
-    ChatModelBase,
     VolcengineChatModel,
     XAIChatModel,
 )
@@ -100,6 +102,20 @@ MAX_SIMILAR_RESULTS = 5
 MAX_PROBLEM_CACHE = 100
 # ReMe retrieves at most this many memory cards per turn.
 REME_TOP_K = 5
+# OpenCode Go rejects requests without a stable session header before it even
+# checks the API key (HTTP 400 MissingSessionID). The header only steers
+# routing and prompt-cache reuse, and the chat model is shared by every agent
+# session and by ReMe, so one process-wide value is the honest scope.
+OPENCODE_SESSION_HEADER = "x-opencode-session"
+OPENCODE_SESSION_ID = f"ses_{uuid4().hex}"
+
+
+class ProviderConfigurationError(RuntimeError):
+    """A safe, typed error that helps the client repair local model settings."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
 
 # The tool surface advertised to the model. These schemas/descriptions are the
 # pre-migration contract; AgentScope wraps the same JSON schema so the model
@@ -230,6 +246,9 @@ TOOLS: list[dict[str, Any]] = [
 _active_problem_id: ContextVar[str | None] = ContextVar(
     "algocoach_active_problem_id", default=None
 )
+_active_platform: ContextVar[str | None] = ContextVar(
+    "algocoach_active_platform", default=None
+)
 _animation_sink: ContextVar[dict | None] = ContextVar(
     "algocoach_animation_sink", default=None
 )
@@ -330,6 +349,22 @@ class AlgoCoach:
         payload = json.dumps(provider or {"protocol": "env"}, sort_keys=True)
         return hashlib.sha256(payload.encode()).hexdigest()
 
+    @staticmethod
+    def _client_kwargs(base_url: str | None) -> dict[str, Any] | None:
+        """Return ``openai.AsyncClient`` kwargs an endpoint requires.
+
+        Only OpenCode Go needs extra plumbing so far: it answers
+        ``400 MissingSessionID`` unless ``x-opencode-session`` is present.
+        Keying on the host (not the preset id) also covers custom
+        OpenAI-compatible configs pointed at the same gateway.
+        """
+        host = (urlparse(base_url).hostname or "") if base_url else ""
+        if host == "opencode.ai" or host.endswith(".opencode.ai"):
+            return {
+                "default_headers": {OPENCODE_SESSION_HEADER: OPENCODE_SESSION_ID},
+            }
+        return None
+
     def _build_chat_model(self, provider: dict[str, Any] | None = None) -> ChatModelBase:
         """Build the Anthropic chat model from the existing environment.
 
@@ -349,9 +384,15 @@ class AlgoCoach:
         api_key = str(cfg.get("apiKey", "")).strip()
         base_url = str(cfg.get("baseUrl", "")).strip() or None
         if protocol != "ollama" and not api_key:
-            raise RuntimeError("当前 Provider 需要 API key，请在设置页配置")
+            raise ProviderConfigurationError(
+                "provider_api_key_required",
+                "当前 Provider 需要 API key，请在设置页配置",
+            )
         if not model:
-            raise RuntimeError("当前 Provider 没有配置模型名")
+            raise ProviderConfigurationError(
+                "provider_model_required",
+                "当前 Provider 没有配置模型名",
+            )
         # Ollama's OpenAI-compatible endpoint ignores the key, but the OpenAI
         # SDK still requires a non-empty credential object.
         secret = SecretStr(api_key or ("ollama" if protocol == "ollama" else ""))
@@ -370,11 +411,13 @@ class AlgoCoach:
             return OpenAIChatModel(
                 credential=OpenAICredential(api_key=secret, base_url=compatible_url),
                 model=model, parameters=OpenAIChatModel.Parameters(**params),
+                client_kwargs=self._client_kwargs(compatible_url),
             )
         if protocol == "openai-response":
             return OpenAIResponseModel(
                 credential=OpenAICredential(api_key=secret, base_url=base_url),
                 model=model, parameters=OpenAIResponseModel.Parameters(max_tokens=1024),
+                client_kwargs=self._client_kwargs(base_url),
             )
         if protocol == "deepseek":
             return DeepSeekChatModel(
@@ -457,6 +500,7 @@ class AlgoCoach:
         training_phase: str | TrainingPhase | None = DEFAULT_TRAINING_PHASE,
         time_remaining_sec: int | None = None,
         provider: dict[str, Any] | None = None,
+        platform: str | None = None,
     ) -> dict:
         """Main entry point. Returns {"content": str, "animation_id": str | None}.
 
@@ -498,17 +542,33 @@ class AlgoCoach:
                 resolved_goal,
                 training_phase=phase,
                 time_remaining_sec=time_remaining_sec,
-            ).format(memory_context=json.dumps(ctx, ensure_ascii=False, indent=2))
+            ).format(memory_context=json.dumps(ctx, ensure_ascii=False, indent=2)) + (
+                "\n\n当前界面状态（以本轮为准，高于历史对话和记忆）："
+                "如果用户只是问候或闲聊，先自然回应这条消息，不要擅自转成训练、代码复盘或换题引导。"
+                f"模式={mode}；" + (
+                    "已选择题目。" if problem_id else "尚未选择题目。"
+                ) + (
+                    f"当前题目平台={platform}；题目标识={problem_id}。" if problem_id and platform else ""
+                ) + (
+                    "用户尚未开始做题；正常回答，不要声称处于 FOCUS、催用户贴代码或要求复盘。"
+                    if mode in ("IDLE", "PREP") else
+                    "只有用户提供的提交或代码事实才可用于复盘；不要假定已查看代码。"
+                    if mode == "REVIEW" else
+                    "不要推测用户是否开始做题或提交。"
+                )
+            )
 
             sink: dict = {}
             animation_token = _animation_sink.set(sink)
             problem_token = _active_problem_id.set(problem_id)
+            platform_token = _active_platform.set(platform)
             try:
                 reply = await agent.reply(
                     UserMsg(name="user", content=user_content)
                 )
             finally:
                 _active_problem_id.reset(problem_token)
+                _active_platform.reset(platform_token)
                 _animation_sink.reset(animation_token)
 
         content = reply.get_text_content() or ""
@@ -555,6 +615,9 @@ class AlgoCoach:
             return {"ok": True}
 
         if name == "fetch_problem_meta":
+            platform = _active_platform.get()
+            if platform and platform != "LEETCODE":
+                return await self._fetch_problem_meta(inputs.get("slug") or problem_id or "", platform)
             return await self._fetch_problem_meta(
                 inputs.get("slug") or problem_id or ""
             )
@@ -581,20 +644,20 @@ class AlgoCoach:
 
     # ── Vector-memory tools ───────────────────────────────────
 
-    async def _fetch_problem_meta(self, slug: str) -> dict:
+    async def _fetch_problem_meta(self, slug: str, platform: str = "LEETCODE") -> dict:
         """Return problem metadata, caching it and indexing it on first success.
 
-        The gateway is contacted only when this process has no cached copy for
-        the slug, so an agentic loop that mentions the same problem every turn
-        does not refetch it each time.
+        Cache entries are keyed by platform and slug. Only LeetCode entries are
+        indexed because the existing vector index uses unqualified slugs.
         """
         slug = str(slug or "").strip()
         if not slug:
             return {"ok": False, "error": "slug is required"}
 
-        cached = self._problem_meta.get(slug)
+        cache_key = f"{platform}:{slug}"
+        cached = self._problem_meta.get(cache_key)
         if cached is None:
-            cached = await fetch_problem(slug)
+            cached = await fetch_problem(slug) if platform == "LEETCODE" else await fetch_problem(slug, platform)
             if cached is None:
                 return {
                     "ok": False,
@@ -602,8 +665,9 @@ class AlgoCoach:
                 }
             while len(self._problem_meta) >= MAX_PROBLEM_CACHE:
                 self._problem_meta.pop(next(iter(self._problem_meta)))
-            self._problem_meta[slug] = cached
-            await self._index_problem_best_effort(cached)
+            self._problem_meta[cache_key] = cached
+            if platform == "LEETCODE":
+                await self._index_problem_best_effort(cached)
         return {"ok": True, **cached}
 
     async def _similar_problems(self, inputs: dict) -> dict:

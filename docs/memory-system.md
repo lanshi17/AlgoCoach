@@ -8,8 +8,8 @@
 
 | 模块 | 存储 / 职责 |
 |---|---|
-| 工作记忆 | AgentScope `AgentState`，稳定 session id |
-| 长期对话记忆 | AgentScope ReMeMiddleware，本地 workspace |
+| 工作记忆 | AgentScope `AgentState`，按页面会话 + 平台 + 题目隔离，训练阶段连续共享 |
+| 长期对话记忆 | AgentScope ReMeMiddleware，本地 workspace；各会话写回，跨会话检索 |
 | 情节 / 语义 / 程序记忆 | Agent SQLite |
 | 向量记忆 | 本地 ChromaDB |
 | 定时任务 | Agent APScheduler |
@@ -21,25 +21,27 @@
 
 ### 2.1 工作记忆（Working Memory）
 
-**存储位置**：AgentScope `AgentState`（Python 进程内存），按稳定 `session_id` 隔离。
+**存储位置**：AgentScope `AgentState`（Python 进程内存），按浏览器页面会话、平台和题目隔离；IDLE/PREP/REVIEW 阶段共享上下文。
 
 ```python
 # app/agent/coach.py
 Agent(state=AgentState(session_id=session_id))
-# MVP 固定 session_id = "default"（可由 ALGOCOACH_SESSION_ID 覆盖）
+# router.py 用 ALGOCOACH_SESSION_ID 作为命名空间前缀，并对 conversationId、平台、题目生成独立 session_id
 # 对话上下文由 AgentState.context 持有，AgentScope 按模型上下文窗口压缩
 ```
 
 **长期对话记忆**：官方 `ReMeMiddleware` 进程内嵌入 ReMe，`mode="both"`：
 - 回复开始时后台 `search`，在后续推理前把相关记忆以 `HintBlock` 注入；
 - 回复结束后通过 `auto_memory` 按 `session_id` 自动写回；
-- 记忆卡片存 `REME_WORKSPACE_DIR`（默认 `./data/reme`），跨会话可召回。
+- 记忆卡片存 `REME_WORKSPACE_DIR`（默认 `./data/reme`）；写回按 AgentScope session_id 标记，检索在 workspace 范围内跨会话进行。
 
 **用户目标**：设置页将 `contest` / `interview_prep` / `casual` 偏好写入浏览器本地存储，每次 `/chat` 通过 `goal` 字段发送；Agent 不建立额外用户配置表。
 
 **session_id 管理**：
-- MVP：单用户固定 `"default"`；`POST /chat` 没有 session 字段。
-- 多用户扩展：前端每次打开新题目时生成 `nanoid()`，作为 `X-Session-Id` header 传入，agent 以此隔离会话（需同步扩展 `/chat` 契约）。
+- 前端模块每个页面生命周期生成一个 `conversationId`，不持久化；刷新后可见聊天历史与短期 AgentState 同时从新会话开始。
+- 每个页面/题目的 AgentState session id 由 `ALGOCOACH_SESSION_ID` 前缀和 `[conversationId, platform, problemId]` 的 SHA-256 派生；IDLE/PREP/REVIEW 共享同一训练对话，当前模式每轮更新到系统提示。FOCUS 在模型和记忆调用前直接返回，不污染对话状态。
+- `ALGOCOACH_SESSION_ID` 仅作为本地部署的命名空间前缀。ReMe 仍共享本地 workspace，自动检索可跨题召回长期记忆。
+- 兼容旧客户端：没有 `conversationId`，但同时提供 `platform` 与 `problemId` 时按题目派生 session；否则沿用配置前缀。同一题目的不同训练阶段仍保持连续上下文。
 
 ---
 

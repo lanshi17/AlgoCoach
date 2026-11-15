@@ -35,7 +35,7 @@ export default function ChatMessage({ message }: { message: Msg }) {
           <ReactMarkdown
             className="prose prose-sm max-w-none dark:prose-invert"
             components={{
-              code({ node, className, children, ...props }) {
+              code({ className, children, ...props }) {
                 const match = /language-(\w+)/.exec(className || '')
                 return match ? (
                   <Suspense fallback={<pre className="overflow-x-auto text-xs">{String(children).replace(/\n$/, '')}</pre>}>

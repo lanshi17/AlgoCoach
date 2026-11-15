@@ -43,6 +43,11 @@ frontend/
     │   └── useAppStore.ts          # Zustand 全局状态（mode, code, messages, animations...）
     ├── services/
     │   ├── leetcodeService.ts      # axios → /api/* (Java 网关)
+    │   ├── trainingTopics.ts       # 专项定义（LeetCode topic slug）
+    │   ├── acwingService.ts        # axios → /api/acwing/*（需 Cookie，专项=标签搜索）
+    │   ├── hduService.ts           # axios → /api/hdu/*（按卷分页）
+    │   ├── platformCookieService.ts # /api/platforms/* Cookie 状态与保存
+    │   ├── languages.ts            # 语言键、下拉标签、Monaco 映射
     │   └── agentService.ts         # axios → /api/agent/* (Gateway → Python agent)
     ├── hooks/
     │   └── usePollAnimation.ts     # 轮询动画渲染状态
@@ -65,7 +70,7 @@ frontend/
     │   └── Common/
     │       └── Badge.tsx           # 难度徽章
     └── pages/
-        ├── CookieSetupPage.tsx     # 首次使用 Cookie 引导
+        ├── CookieSetupPage.tsx     # LeetCode Cookie 配置页
         ├── SettingsPage.tsx        # 语言/目标/主题/Provider/导出设置
         ├── ProgressPage.tsx        # 训练进度
         ├── KnowledgeGraphPage.tsx  # 掌握关系图
@@ -111,8 +116,8 @@ frontend/
 **已实现**：
 - `NAV_ITEMS` 使用 `/workspace`、`/progress`、`/knowledge`、`/settings` 路径；`NavLink` 负责切换和当前项高亮。
 - `/` 默认重定向至 `/workspace`，未知路径也回到工作区。
-- `/progress` 与 `/knowledge` 使用 Agent 本地 profile 数据；`/settings` 提供 LeetCode Cookie 设置。
-- AppShell 启动时检查 Java Gateway 与 Cookie 配置；网关不可用时显示重试入口，未配置 Cookie 时进入设置页。
+- `/progress` 与 `/knowledge` 使用 Agent 本地 profile 数据；`/settings` 提供偏好设置，`/settings/platforms` 是 LeetCode / AcWing / 杭电 HDU 三平台登录态的统一入口。
+- AppShell 启动时只检查 Java Gateway；网关不可用时显示重试入口。LeetCode 未登录不会阻挡工作区，题库请求失败时在题目面板内显示平台错误并提供登录设置入口。
 
 ### 3.3 Header.tsx
 
@@ -121,7 +126,7 @@ frontend/
 **Props**：无
 
 **内部逻辑**：
-- 语言选择器 `select`，值 `rust` / `cpp` / `python3`，写入 store 的 `lang`
+- 语言选择器 `select`，值 `rust` / `cpp` / `python3` / `typescript` / `golang` / `java`，写入 store 的 `lang`
 - `onRun` 调用 `leetcodeService.runTests()`，提交当前题目、代码、语言和测试输入；运行结果或失败信息显示在测试区。
 - `onSubmit` 调用 `leetcodeService.submit()`，提交累计 FOCUS 用时；返回终态后保存结果并切换 REVIEW。
 - `mode === 'FOCUS'` 时 mode 徽章显示红色 `Lock` 图标
@@ -137,7 +142,7 @@ frontend/
 **Props**：无
 
 **关键逻辑**：
-- `LANG_MAP`：前端 lang → Monaco language id（`rust→rust`, `cpp→cpp`, `python3→python`）
+- `MONACO_LANGUAGES`（`services/languages.ts`）：前端 lang → Monaco language id（`rust→rust`, `cpp→cpp`, `python3→python`, `typescript→typescript`, `golang→go`, `java→java`）
 - `isEditable = mode === 'FOCUS' || mode === 'REVIEW'`：PREP/IDLE 下编辑器只读
 - PREP 模式下显示半透明蒙层 + "开始做题" 按钮，点击调用 `enterFocus()`
 - Monaco `options.quickSuggestions` 绑定到 `isEditable`：FOCUS 下只启用 Monaco 本地语言建议，不接入 AI 补全
@@ -205,6 +210,9 @@ frontend/
 
 **关键逻辑**：
 - 尚未选题时从 Gateway 拉取 LeetCode 题目列表；选择题目后加载详情、题干、标签、样例与 starter code。FOCUS 期间锁定题目切换。
+- 题库按专项训练组织：`services/trainingTopics.ts` 的 `TRAINING_TOPICS` 把每个 LeetCode 专项定义为一组官方 topic slug（专项内 OR），选专项后把 slug 以逗号拼进 `tag` 参数、难度作为 `difficulty` 参数，由 Gateway 在 LeetCode v2 `filters` 里生效；`共 N 题` 来自上游 `totalLength`。
+- 平台选择：LeetCode / AcWing / 杭电 HDU。LeetCode 保留专项+难度筛选；AcWing 专项走站点的标签搜索（`ACWING_TOPICS`，如 `模拟`、`二分`、`动态规划`），打开题目时附六语言 starter 模板；HDU 无标签/难度，仅浏览题面。运行/提交仍只对 LeetCode 可用。
+- 题名/slug 搜索只在当前页内过滤，不改变服务端筛选。
 - 无题目时显示空状态占位（Play 图标 + 引导文字）
 - 有题目时：难度徽章 + 每日一题标签 + topic 标签 + HTML 内容（`dangerouslySetInnerHTML`）
 - PREP 模式底部显示"开始做题"CTA，点击 `enterFocus()`
@@ -226,7 +234,7 @@ frontend/
 
 ### 3.9 CookieSetupPage.tsx
 
-**职责**：首次使用时引导用户粘贴 LeetCode Cookie。
+**职责**：用户访问 `/settings/cookie` 时配置 LeetCode Cookie；工作区启动不依赖该 Cookie。
 
 **Props**：`{ onDone: () => void }`
 
@@ -262,7 +270,7 @@ interface AppState {
   // ─── 代码编辑器 ───
   code: string                       // 当前编辑器内容
   setCode: (c: string) => void
-  lang: 'rust' | 'cpp' | 'python3'
+  lang: CodeLanguage                 // rust | cpp | python3 | typescript | golang | java
   setLang: (l) => void
 
   // ─── 对话（FOCUS 下锁定）───
@@ -306,14 +314,15 @@ interface AppState {
        │                 ▼                     ▼                  ▼
        │            可随时返回 IDLE       退出即进 REVIEW      推荐下一题→PREP
        │
-       └──→ CookieSetupPage（首次未认证）
+       └──→ 可在预习中使用 AI；登录态仅在实际调用对应题库时检查
 ```
 
 **转换触发点**：
 - `IDLE → PREP`：`setActiveProblem()` 且 `setMode('PREP')`
 - `PREP → FOCUS`：用户点击"开始做题" → `enterFocus()`
-- `FOCUS → REVIEW`：用户点击"提交" → 成功后 `exitFocus()` + `setLastSubmission()`
-- `REVIEW → PREP`：用户选择下一题 → `setActiveProblem(next)` + `setMode('PREP')` + `clearMessages()`（可选）
+- `FOCUS → REVIEW`：用户提交 LeetCode 并收到判题结果，或手动点击“结束专注”；手动结束时不伪造提交结果
+- `REVIEW → FOCUS`：点击“继续做题”回到当前题的编辑器
+- 选择其他题目：由题目面板加载成功后 `setActiveProblem(next)`，进入 `PREP`
 - 任意 → `IDLE`：关闭题目 → `setActiveProblem(null)` + `setMode('IDLE')`
 
 ### 4.3 FOCUS 模式约束执行点
@@ -321,7 +330,7 @@ interface AppState {
 | 组件 | 约束 |
 |------|------|
 | ChatPanel | 输入框替换为锁定条，`send()` 开头判断 `isFocus` 直接 return |
-| Header | 运行/提交按钮正常可用（提交是用户行为，非 AI 干预） |
+| Header | LeetCode 运行/提交可用；其他平台暂不支持站内判题，按钮禁用并说明原因 |
 | EditorPanel | `readOnly=false`，`quickSuggestions=true`（Monaco 本地建议；无 AI 补全） |
 | ProblemPanel | 题目描述仍可滚动查看 |
 | AnimationCard | 不主动推送新动画（agent 在 FOCUS 不发消息） |
@@ -346,12 +355,13 @@ interface AppState {
   <Route path="/progress" element={<ProgressPage />} />
   <Route path="/knowledge" element={<KnowledgeGraphPage />} />
   <Route path="/settings" element={<SettingsPage />} />
+  <Route path="/settings/platforms" element={<PlatformLoginPage />} />
   <Route path="/settings/cookie" element={<CookieSetupPage />} />
   <Route path="*" element={<Navigate to="/workspace" replace />} />
 </Routes>
 ```
 
-**登录态控制**：`AppShell` 启动时请求 Gateway `/api/auth/status`，未登录时显示 `CookieSetupPage`；服务返回失效 Cookie 事件后重新显示连接页。认证后页面由左侧导航和 React Router 切换。
+**登录态控制**：`AppShell` 启动时请求 Gateway `/api/auth/status` 仅确认网关可用；未登录仍进入工作区。LeetCode、AcWing 的 Cookie 在相应题库请求时校验，错误展示在题目面板；HDU 可匿名浏览。Cookie 统一由 `/settings/platforms` 管理，`/settings/cookie` 保留为直接进入的 LeetCode 配置页。
 
 ---
 
@@ -374,7 +384,7 @@ interface AppState {
 **API 调用**：`leetcodeService.listProblems({ page, difficulty, tag })`
 
 **当前实现**：
-- 题目列表内嵌于工作区 ProblemPanel，首屏加载第一页题目；选择后拉取详情并填入当前工作区。
+- 题目列表内嵌于工作区 ProblemPanel，首屏加载第一页题目；选择后拉取详情并填入当前工作区。刷新页面恢复的题目会先显示 sessionStorage 缓存，同时后台确认最新题面；更新只替换题目数据，不重置代码草稿、聊天、专注计时或当前模式。后台请求失败时保留缓存并显示重试入口，切题后迟到的旧响应会丢弃。
 - 当前网关题库每页固定 50 条，尚无标签目录或关键词搜索端点；前端没有引入额外分页/缓存依赖。
 
 ### 6.2 Workspace（工作区主视图）
@@ -420,15 +430,21 @@ interface AppState {
 - 35 天 CSS 热力格、知识点掌握进度条、最近 8 条题目/提交结果；所有数据由 Agent 返回的完整历史统计生成。
 - 暂无难度分布、题目下钻或分页历史视图；不增加图表依赖。
 
-### 6.5 Cookie 设置
+### 6.5 题库登录（统一入口）
 
-**路由**：`/settings`；首次启动未配置 Cookie 时由 `AppShell` 显示连接页，已登录用户通过 `/settings/cookie` 更新登录态。
+**路由**：`/settings/platforms`（`PlatformLoginPage`）。三平台登录态集中在同一页，避免入口分散：
+- **LeetCode**：粘贴 Cookie 或 Copy as cURL 的完整请求，前端提取 `LEETCODE_SESSION` / `csrftoken` 后 `POST /api/auth/cookie`，再用 `/api/auth/validate` 做真实校验；完整 curl 不写入持久化存储。
+- **AcWing / 杭电 HDU**：粘贴 Cookie 请求头或整段 cURL；原文发送给本机 Gateway，由 `CookieHeader.normalize` 提取并规范成单行 `name=value; …` 后写入 SQLite。AcWing 需要 Cookie，HDU 可匿名浏览。
+- AcWing 题单与题面需要有效 Cookie；HDU 不填 Cookie 也可浏览题单与题面。
+- 状态栏通过 `GET /api/platforms` 一次取回三平台配置状态（LeetCode 以 `/api/auth/validate` 结果为准）；保存成功显示 3 秒确认，失败保留输入并提示。
 
-**当前实现**：粘贴浏览器 Copy as cURL (bash) 的完整请求，前端仅提取 `LEETCODE_SESSION` 和 `csrftoken` 再提交 Gateway；完整 curl 不写入前端持久化存储，保存后返回 `/workspace`。
+首次启动无需先配置 Cookie；设置页和题目选择面板都提供统一的题库登录入口。
 
 ### 3.10 Provider 设置
 
-`SettingsPage` 提供 OMP 风格的 Provider 预设（Anthropic、OpenAI、DeepSeek、Qwen/DashScope、Moonshot/Kimi、MiniMax、Gemini、OpenRouter、Ollama、Volcengine、xAI）和自定义端点。用户可编辑协议、Base URL、模型名和 API key；API key 只放在当前浏览器 `sessionStorage`，每次聊天按请求传给本机 Agent，不进入 SQLite、ReMe、导出文件或 Git。未配置页面 Provider 时，Agent 继续使用服务端 `.env` 的默认 Anthropic 配置。
+`SettingsPage` 提供 OMP 风格的 Provider 预设（Anthropic、OpenAI、OpenAI Responses、OpenCode Go、Command Code GOAT、DeepSeek、Qwen/DashScope、Moonshot/Kimi、MiniMax、Gemini、OpenRouter、Ollama、Volcengine、xAI）和自定义端点。用户可编辑协议、Base URL、模型名和 API key；API key 只放在当前浏览器 `sessionStorage`，每次聊天按请求传给本机 Agent，不进入 SQLite、ReMe、导出文件或 Git。OpenCode Go 预设指向 `https://opencode.ai/inference/go/openai/v1`（Chat Completions），Command Code GOAT 预设指向 `https://api.commandcode.ai/provider/v1`（Responses）；Agent 对 `opencode.ai` 端点自动附加 `x-opencode-session` 请求头，否则 OpenCode Go 在鉴权前就返回 `400 MissingSessionID`。未配置页面 Provider 时，Agent 继续使用服务端 `.env` 的默认 Anthropic 配置。
+
+设置页的“题库平台 Cookie”管理 AcWing 与可选的 HDU Cookie：通过 `POST /api/platforms/{platform}/cookie` 写入本机网关 SQLite，只显示“已配置/未配置”，不回显内容。
 
 语言偏好、训练目标和主题保存在当前浏览器；数据导出下载 Agent 训练记忆 ZIP 与 Gateway 提交历史 JSON。提交历史导出包含用户提交代码，LeetCode Cookie 不导出。
 
@@ -649,7 +665,7 @@ const SettingsPage = React.lazy(() => import('@/pages/SettingsPage'))
 
 ### 10.5 请求缓存
 
-当前使用 Gateway 的题目缓存和组件级请求状态，没有引入 `@tanstack/react-query`。题目详情由 Java Gateway 按 24 小时 TTL 缓存，列表请求按页实时获取。
+当前使用 Gateway 的题目缓存和组件级请求状态，没有引入 `@tanstack/react-query`。题目详情由 Java Gateway 按 24 小时 TTL 缓存，列表请求按页实时获取；浏览器刷新恢复时采用缓存优先、后台校验策略，离线仍可继续阅读缓存题面。
 - 提交结果不缓存（每次都要最新）
 
 ### 10.6 编辑器内容防抖
@@ -764,7 +780,7 @@ describe('主题切换', () => {
 
 ### 11.3 浏览器闭环验证
 
-Playwright 浏览器冒烟脚本位于 `e2e/training_flow.py`，通过 route mock 验证首次设置、题目搜索、题干净化、语言切换、FOCUS 静默、Run、Submit、不包含代码的 REVIEW，以及设置偏好持久化。运行方式：先启动 `bun run dev -- --port 5174`，安装 `python -m pip install -r e2e/requirements.txt` 和 Chromium，再执行 `ALGOCOACH_FRONTEND_URL=http://localhost:5174 python e2e/training_flow.py`。可用 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 指向本机 Chrome。脚本 mock LeetCode 与 Agent API，不使用真实账号或提交。
+Playwright 浏览器冒烟脚本位于 `e2e/training_flow.py`，通过 route mock 验证免登录进入工作区、题目搜索、题干净化与公式排版、语言切换、FOCUS 静默与计时、Run、Submit、不包含代码的 REVIEW，以及设置偏好持久化。运行方式：先启动 `bun run dev -- --port 5174`，安装 `python -m pip install -r e2e/requirements.txt` 和 Chromium，再执行 `ALGOCOACH_FRONTEND_URL=http://localhost:5174 python e2e/training_flow.py`。可用 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 指向本机 Chrome。脚本 mock LeetCode 与 Agent API，不使用真实账号或提交。
 
 ---
 

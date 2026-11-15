@@ -250,7 +250,7 @@ def build_daily_guide(problem: dict) -> str:
     raw_tags = problem.get("topicTags")
     for tag in raw_tags if isinstance(raw_tags, list) else []:
         if isinstance(tag, dict):
-            name = tag.get("nameTranslated") or tag.get("name")
+            name = tag.get("translatedName") or tag.get("nameTranslated") or tag.get("name")
         else:
             name = tag
         if isinstance(name, str) and name.strip():

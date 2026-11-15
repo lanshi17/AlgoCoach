@@ -7,6 +7,9 @@ import oneLight from 'react-syntax-highlighter/dist/esm/styles/prism/one-light'
 const LANGUAGE_LOADERS: Record<string, () => Promise<{ default: unknown }>> = {
   bash: () => import('react-syntax-highlighter/dist/esm/languages/prism/bash'),
   cpp: () => import('react-syntax-highlighter/dist/esm/languages/prism/cpp'),
+  go: () => import('react-syntax-highlighter/dist/esm/languages/prism/go'),
+  golang: () => import('react-syntax-highlighter/dist/esm/languages/prism/go'),
+  java: () => import('react-syntax-highlighter/dist/esm/languages/prism/java'),
   json: () => import('react-syntax-highlighter/dist/esm/languages/prism/json'),
   python: () => import('react-syntax-highlighter/dist/esm/languages/prism/python'),
   python3: () => import('react-syntax-highlighter/dist/esm/languages/prism/python'),
@@ -36,6 +39,7 @@ export default function CodeBlock({ children, theme, language }: { children: str
     loader().then(module => {
       SyntaxHighlighter.registerLanguage(normalized, module.default as never)
       if (normalized === 'python3') SyntaxHighlighter.registerLanguage('python', module.default as never)
+      if (normalized === 'golang') SyntaxHighlighter.registerLanguage('go', module.default as never)
       if (normalized === 'ts') SyntaxHighlighter.registerLanguage('typescript', module.default as never)
       registeredLanguages.add(normalized)
       if (active) setReadyLanguage(normalized)

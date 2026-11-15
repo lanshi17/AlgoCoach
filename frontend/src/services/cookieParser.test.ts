@@ -1,17 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { parseLeetCodeCurl } from './cookieParser'
+import { parseCookieHeader } from './cookieParser'
 
-describe('parseLeetCodeCurl', () => {
-  it('extracts cookies from Chrome Copy as cURL output', () => {
-    expect(parseLeetCodeCurl(
-      "curl --url 'https://leetcode.cn/' \\\n+       -H 'Accept: text/html' \\\n+       -b 'foo=bar; LEETCODE_SESSION=session-value; csrftoken=csrf-value'",
-    )).toEqual({ session: 'session-value', csrf: 'csrf-value' })
+describe('parseCookieHeader', () => {
+  it('extracts the cookie from a pasted cURL command', () => {
+    const curl = `curl 'https://www.acwing.com/problem/search/1/?page=1' \\
+  -H 'cookie: csrftoken=abc; sessionid=def' \\
+  -H 'user-agent: Mozilla/5.0'`
+    expect(parseCookieHeader(curl)).toBe('csrftoken=abc; sessionid=def')
   })
 
-  it('accepts a Cookie header and rejects incomplete input', () => {
-    expect(parseLeetCodeCurl("curl -H 'Cookie: LEETCODE_SESSION=s; csrftoken=c'"))
-      .toEqual({ session: 's', csrf: 'c' })
-    expect(parseLeetCodeCurl("curl -b 'LEETCODE_SESSION=only'"))
-      .toBeNull()
+  it('accepts -b shorthand and strips line breaks', () => {
+    expect(parseCookieHeader("curl 'https://x.test' -b 'a=b; c=d'")).toBe('a=b; c=d')
+    expect(parseCookieHeader('PHPSESSID=abc;\r\n  exesubmitlang=0')).toBe('PHPSESSID=abc; exesubmitlang=0')
+  })
+
+  it('rejects input without a cookie pair', () => {
+    expect(parseCookieHeader('curl https://x.test')).toBeNull()
+    expect(parseCookieHeader('   ')).toBeNull()
   })
 })

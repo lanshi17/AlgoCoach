@@ -22,6 +22,7 @@ import org.springframework.web.reactive.function.client.WebClientRequestExceptio
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 import reactor.core.publisher.Mono;
 
 import java.net.URI;
@@ -137,6 +138,14 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void servletAsyncTimeoutReturns504InsteadOfInternalServerError() throws Exception {
+        performAsync(get("/api/probe/async-timeout"))
+                .andExpect(status().isGatewayTimeout())
+                .andExpect(jsonPath("$.status").value(504))
+                .andExpect(jsonPath("$.code").value(GlobalExceptionHandler.UPSTREAM_TIMEOUT_CODE));
+    }
+
+    @Test
     void validationFailureReturns400ValidationError() throws Exception {
         mockMvc.perform(post("/api/auth/cookie")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -215,6 +224,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/api/probe/submission-timeout")
         Mono<Void> fail() {
             return Mono.error(new SubmissionTimeoutException());
+        }
+
+        @GetMapping("/api/probe/async-timeout")
+        Mono<Void> asyncTimeout() {
+            return Mono.error(new AsyncRequestTimeoutException());
         }
     }
 }

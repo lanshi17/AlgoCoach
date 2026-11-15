@@ -268,6 +268,15 @@ class AgentProxyControllerTest {
         assertThat(captured.get()).isNull();
     }
 
+    @Test
+    void chatProxyAllowsLongerModelGenerationThanGeneralGatewayRequests() {
+        assertThat(AgentProxyController.createChatHttpClient().configuration().responseTimeout())
+                .isEqualTo(AgentProxyController.CHAT_RESPONSE_TIMEOUT)
+                .isGreaterThan(java.time.Duration.ofSeconds(15));
+        assertThat(AgentProxyController.CHAT_ASYNC_TIMEOUT)
+                .isGreaterThan(AgentProxyController.CHAT_RESPONSE_TIMEOUT);
+    }
+
     private ResultActions performAsync(MockHttpServletRequestBuilder requestBuilder) throws Exception {
         MvcResult asyncResult = mockMvc.perform(requestBuilder)
                 .andExpect(request().asyncStarted())

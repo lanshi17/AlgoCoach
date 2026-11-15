@@ -12,13 +12,22 @@ export default function TestCasePanel() {
 
   const samples = useMemo(() => activeProblem?.sampleTestCases
     ? activeProblem.sampleTestCases.split('\n---\n')
-    : [], [activeProblem?.id, activeProblem?.sampleTestCases])
+    : [], [activeProblem?.sampleTestCases])
 
   useEffect(() => {
-    setCustomCases([])
-    setActiveCase(0)
-    setTestInput(samples[0] ?? '')
-  }, [activeProblem?.id, samples, setTestInput])
+    const savedInput = useAppStore.getState().testInput
+    const sampleIndex = samples.indexOf(savedInput)
+    if (sampleIndex >= 0) {
+      setCustomCases([])
+      setActiveCase(sampleIndex)
+    } else if (savedInput) {
+      setCustomCases([savedInput])
+      setActiveCase(samples.length)
+    } else {
+      setCustomCases([])
+      setActiveCase(0)
+    }
+  }, [activeProblem?.platform, activeProblem?.platformId, samples])
 
   const selectCase = (index: number) => {
     setActiveCase(index)

@@ -14,6 +14,7 @@ const problem: Problem = {
 describe('training preferences and focus state', () => {
   beforeEach(() => {
     localStorage.clear()
+    sessionStorage.clear()
     useAppStore.setState(useAppStore.getInitialState(), true)
   })
 
@@ -41,13 +42,138 @@ describe('training preferences and focus state', () => {
     expect(useAppStore.getState().testInput).toBe('2\n7 2\n9')
   })
 
-  it('does not replace an edited solution when the language changes', () => {
+  it('keeps independent solutions for each language when switching', () => {
     useAppStore.getState().setActiveProblem(problem)
-    useAppStore.getState().setCode('my attempt')
+    useAppStore.getState().setLang('rust')
+    useAppStore.getState().setCode('rust attempt')
     useAppStore.getState().setLang('python3')
-
-    expect(useAppStore.getState().code).toBe('my attempt')
+    expect(useAppStore.getState().code).toContain('def two_sum')
+    useAppStore.getState().setCode('python attempt')
+    useAppStore.getState().setLang('rust')
+    expect(useAppStore.getState().code).toBe('rust attempt')
     expect(useAppStore.getState().codeEdited).toBe(true)
+    useAppStore.getState().setLang('python3')
+    expect(useAppStore.getState().code).toBe('python attempt')
+  })
+
+  it('does not change the active language or solution during focus', () => {
+    useAppStore.getState().setActiveProblem(problem)
+    useAppStore.getState().setLang('rust')
+    useAppStore.getState().enterFocus()
+    useAppStore.getState().setCode('rust attempt')
+    useAppStore.getState().setLang('python3')
+    expect(useAppStore.getState()).toMatchObject({ lang: 'rust', code: 'rust attempt' })
+    expect(localStorage.getItem('algocoach.language')).toBe('rust')
+  })
+
+  it('clears old run results when the code or test input changes', () => {
+    useAppStore.getState().setRunResult({ status_msg: 'Accepted' })
+    useAppStore.getState().setCode('new code')
+    expect(useAppStore.getState().runResult).toBeNull()
+    useAppStore.getState().setRunResult({ status_msg: 'Accepted' })
+    useAppStore.getState().setTestInput('new input')
+    expect(useAppStore.getState().runResult).toBeNull()
+  })
+
+  it('restores language-specific drafts after reloading', async () => {
+    useAppStore.getState().setActiveProblem(problem)
+    useAppStore.getState().setLang('rust')
+    useAppStore.getState().setCode('rust draft')
+    useAppStore.getState().setLang('python3')
+    useAppStore.getState().setCode('python draft')
+    vi.resetModules()
+    const { useAppStore: restored } = await import('./useAppStore')
+    restored.getState().setActiveProblem(problem)
+    expect(restored.getState().code).toBe('python draft')
+    restored.getState().setLang('rust')
+    expect(restored.getState().code).toBe('rust draft')
+  })
+
+  it('restores the code, language and test input after changing problems', () => {
+    useAppStore.getState().setActiveProblem(problem)
+    useAppStore.getState().setLang('python3')
+    useAppStore.getState().setCode('my solution')
+    useAppStore.getState().setTestInput('custom test')
+    useAppStore.getState().setActiveProblem({ ...problem, id: '2', platformId: 'other' })
+    useAppStore.getState().setLang('rust')
+    useAppStore.getState().setActiveProblem(problem)
+
+    expect(useAppStore.getState()).toMatchObject({
+      code: 'my solution', codeEdited: true, testInput: 'custom test', lang: 'python3', mode: 'PREP',
+    })
+  })
+
+  it('keeps total time limits scoped to a problem and restores them after reload', async () => {
+    useAppStore.getState().setActiveProblem(problem)
+    useAppStore.getState().setProblemTimeLimitMinutes('45')
+    useAppStore.getState().setActiveProblem({ ...problem, platform: 'HDU', platformId: '1' })
+    useAppStore.getState().setProblemTimeLimitMinutes('30')
+    useAppStore.getState().setActiveProblem(problem)
+    expect(useAppStore.getState().problemTimeLimits).toMatchObject({
+      'LEETCODE:two-sum': 2700, 'HDU:1': 1800,
+    })
+    vi.resetModules()
+    const { useAppStore: restored } = await import('./useAppStore')
+    restored.getState().setActiveProblem(problem)
+    expect(restored.getState().problemTimeLimits['LEETCODE:two-sum']).toBe(2700)
+    restored.getState().setProblemTimeLimitMinutes('')
+    expect(restored.getState().problemTimeLimits['LEETCODE:two-sum']).toBeUndefined()
+  })
+
+  it('stores a global chat time limit separately when no problem is selected', () => {
+    useAppStore.getState().setProblemTimeLimitMinutes('25')
+    expect(useAppStore.getState().problemTimeLimits).toEqual({ __global__: 1500 })
+    useAppStore.getState().setActiveProblem(problem)
+    useAppStore.getState().setProblemTimeLimitMinutes('10')
+    expect(useAppStore.getState().problemTimeLimits).toEqual({
+      __global__: 1500,
+      'LEETCODE:two-sum': 600,
+    })
+  })
+
+  it('keeps drafts separate for identical problem ids on different platforms', () => {
+    useAppStore.getState().setActiveProblem(problem)
+    useAppStore.getState().setCode('leetcode solution')
+    useAppStore.getState().setActiveProblem({ ...problem, platform: 'CODEFORCES' })
+    expect(useAppStore.getState().code).not.toBe('leetcode solution')
+    useAppStore.getState().setActiveProblem(problem)
+    expect(useAppStore.getState().code).toBe('leetcode solution')
+  })
+
+  it('restores the active draft after a page reload', async () => {
+    useAppStore.getState().setActiveProblem(problem)
+    useAppStore.getState().setLang('python3')
+    useAppStore.getState().setCode('solution before refresh')
+    useAppStore.getState().setTestInput('input before refresh')
+    vi.resetModules()
+    const { useAppStore: restoredStore } = await import('./useAppStore')
+    restoredStore.getState().setActiveProblem(problem)
+
+    expect(restoredStore.getState()).toMatchObject({
+      code: 'solution before refresh', codeEdited: true,
+      testInput: 'input before refresh', lang: 'python3',
+    })
+    expect(localStorage.getItem('algocoach.problemDrafts')).toBeNull()
+  })
+
+  it('restores the selected problem detail after a page reload', async () => {
+    useAppStore.getState().setActiveProblem(problem)
+    vi.resetModules()
+    const { useAppStore: restoredStore } = await import('./useAppStore')
+
+    expect(restoredStore.getState().activeProblem).toMatchObject({
+      platform: 'LEETCODE', platformId: 'two-sum', title: 'Two Sum',
+    })
+    expect(restoredStore.getState().mode).toBe('PREP')
+    expect(restoredStore.getState().code).toContain('fn two_sum')
+  })
+
+  it('ignores corrupted stored drafts', async () => {
+    sessionStorage.setItem('algocoach.problemDrafts', '{broken')
+    vi.resetModules()
+    const { useAppStore: restoredStore } = await import('./useAppStore')
+    restoredStore.getState().setActiveProblem(problem)
+    expect(restoredStore.getState().code).toBeTruthy()
   })
 
   it('keeps chat history separated by problem and clears only the active problem', () => {
@@ -60,7 +186,51 @@ describe('training preferences and focus state', () => {
     useAppStore.getState().setActiveProblem(problem)
 
     expect(useAppStore.getState().messages.map(message => message.content)).toEqual(['first'])
-    expect(useAppStore.getState().messagesByProblem['another-problem']).toEqual([])
+    expect(useAppStore.getState().messagesByProblem['LEETCODE:another-problem']).toEqual([])
+  })
+
+  it('keeps unsent coach drafts separate per problem and restores them after reload', async () => {
+    const secondProblem = { ...problem, id: '2', platformId: 'other' }
+    useAppStore.getState().setActiveProblem(problem)
+    useAppStore.getState().setChatDraft('请帮我检查思路')
+    useAppStore.getState().setActiveProblem(secondProblem)
+    useAppStore.getState().setChatDraft('为什么会超时？')
+    useAppStore.getState().setActiveProblem(problem)
+
+    expect(useAppStore.getState().chatDrafts['LEETCODE:two-sum']).toBe('请帮我检查思路')
+    expect(useAppStore.getState().chatDrafts['LEETCODE:other']).toBe('为什么会超时？')
+
+    vi.resetModules()
+    const { useAppStore: restoredStore } = await import('./useAppStore')
+    restoredStore.getState().setActiveProblem(problem)
+    expect(restoredStore.getState().chatDrafts['LEETCODE:two-sum']).toBe('请帮我检查思路')
+  })
+
+  it('keeps OI/xCPC training phases per problem and restores them after reload', async () => {
+    const secondProblem = { ...problem, id: '2', platformId: 'other' }
+    useAppStore.getState().setActiveProblem(problem)
+    useAppStore.getState().setChatPhase('hint')
+    useAppStore.getState().setActiveProblem(secondProblem)
+    useAppStore.getState().setChatPhase('attempt')
+    useAppStore.getState().setActiveProblem(problem)
+
+    expect(useAppStore.getState().chatPhases['LEETCODE:two-sum']).toBe('hint')
+    expect(useAppStore.getState().chatPhases['LEETCODE:other']).toBe('attempt')
+
+    vi.resetModules()
+    const { useAppStore: restoredStore } = await import('./useAppStore')
+    restoredStore.getState().setActiveProblem(problem)
+    expect(restoredStore.getState().chatPhases['LEETCODE:two-sum']).toBe('hint')
+  })
+
+  it('keeps chat histories separate when platforms share a problem id', () => {
+    useAppStore.getState().setActiveProblem(problem)
+    useAppStore.getState().addMessage({ id: 'lc', role: 'user', content: 'leetcode', timestamp: 'now' })
+    useAppStore.getState().setActiveProblem({ ...problem, platform: 'CODEFORCES' })
+    expect(useAppStore.getState().messages).toEqual([])
+    useAppStore.getState().addMessage({ id: 'cf', role: 'user', content: 'codeforces', timestamp: 'now' })
+    useAppStore.getState().setActiveProblem(problem)
+    expect(useAppStore.getState().messages.map(message => message.content)).toEqual(['leetcode'])
   })
 
   it('updates animation, sidebar, and run state through their public actions', () => {
@@ -111,6 +281,24 @@ describe('training preferences and focus state', () => {
     expect(restoredStore.getState().theme).toBe('dark')
   })
 
+  it('migrates an existing Command Code GOAT Responses preset to Chat Completions', async () => {
+    localStorage.setItem('algocoach.provider', JSON.stringify({
+      id: 'commandcode-goat',
+      name: 'Command Code GOAT',
+      protocol: 'openai-response',
+      baseUrl: 'https://api.commandcode.ai/provider/v1',
+      model: 'deepseek/deepseek-v4.1-flash',
+    }))
+    sessionStorage.setItem('algocoach.provider.apiKey', 'session-only-key')
+    vi.resetModules()
+    const { useAppStore: restoredStore } = await import('./useAppStore')
+
+    expect(restoredStore.getState().provider.protocol).toBe('openai')
+    expect(restoredStore.getState().provider.apiKey).toBe('session-only-key')
+    expect(JSON.parse(localStorage.getItem('algocoach.provider')!).protocol).toBe('openai')
+    expect(localStorage.getItem('algocoach.provider.apiKey')).toBeNull()
+  })
+
   it('keeps working when browser storage is unavailable', async () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('storage disabled') })
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('storage disabled') })
@@ -136,5 +324,60 @@ describe('training preferences and focus state', () => {
     vi.advanceTimersByTime(2_000)
     expect(useAppStore.getState().getFocusDurationSec()).toBe(7)
     vi.useRealTimers()
+  })
+
+  it('keeps elapsed focus time isolated per problem and restores it after reload', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-13T00:00:00.000Z'))
+    const secondProblem = { ...problem, platform: 'HDU' as const, platformId: '1000' }
+    useAppStore.getState().setActiveProblem(problem)
+    useAppStore.getState().enterFocus()
+    vi.advanceTimersByTime(5_000)
+    useAppStore.getState().exitFocus()
+    useAppStore.getState().setActiveProblem(secondProblem)
+    expect(useAppStore.getState().getFocusDurationSec()).toBe(0)
+    useAppStore.getState().enterFocus()
+    vi.advanceTimersByTime(3_000)
+    useAppStore.getState().exitFocus()
+    useAppStore.getState().setActiveProblem(problem)
+    expect(useAppStore.getState().getFocusDurationSec()).toBe(5)
+    expect(useAppStore.getState().problemFocusElapsed).toEqual({
+      'LEETCODE:two-sum': 5,
+      'HDU:1000': 3,
+    })
+
+    vi.resetModules()
+    const { useAppStore: restored } = await import('./useAppStore')
+    restored.getState().setActiveProblem(problem)
+    expect(restored.getState().getFocusDurationSec()).toBe(5)
+    vi.useRealTimers()
+  })
+
+  it('restores the focused problem and accumulated time on first store initialization after reload', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-15T00:00:00.000Z'))
+    useAppStore.getState().setActiveProblem(problem)
+    useAppStore.getState().enterFocus()
+    const start = useAppStore.getState().focusStartTs!
+    useAppStore.getState().checkpointFocusDuration(start + 12_000)
+    expect(useAppStore.getState().problemFocusElapsed['LEETCODE:two-sum']).toBe(12)
+    vi.resetModules()
+    const { useAppStore: restored } = await import('./useAppStore')
+    expect(restored.getState()).toMatchObject({
+      activeProblem: problem,
+      mode: 'PREP',
+      focusStartTs: null,
+      focusElapsedSec: 12,
+    })
+    expect(restored.getState().getFocusDurationSec()).toBe(12)
+    vi.useRealTimers()
+  })
+
+  it('calculates live focus duration against an explicit clock value', () => {
+    useAppStore.getState().enterFocus()
+    const startedAt = useAppStore.getState().focusStartTs!
+    expect(useAppStore.getState().getFocusDurationSec(startedAt - 1_000)).toBe(0)
+    expect(useAppStore.getState().getFocusDurationSec(startedAt + 4_999)).toBe(4)
+    expect(useAppStore.getState().getFocusDurationSec(startedAt + 5_000)).toBe(5)
   })
 })

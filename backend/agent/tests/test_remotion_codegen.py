@@ -71,17 +71,89 @@ def _enable(monkeypatch, tmp_path: Path) -> Path:
     return scratch
 
 
-def _real_prerequisites() -> bool:
-    if not (shutil.which("bwrap") and shutil.which("node") and shutil.which("systemd-run")):
-        return False
+def _run_host_probe(command: list[str], *, env: dict[str, str] | None = None) -> str | None:
+    """Return a useful reason when a host capability probe cannot run."""
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+            env=env,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return str(exc)
+    if completed.returncode == 0:
+        return None
+    detail = (completed.stderr or completed.stdout).strip().splitlines()
+    return detail[-1] if detail else f"exited with status {completed.returncode}"
+
+
+def _real_sandbox_skip_reason() -> str | None:
+    missing = [
+        name
+        for name in ("bwrap", "node", "systemd-run")
+        if shutil.which(name) is None
+    ]
     if not (shutil.which("google-chrome") or shutil.which("chromium")):
-        return False
-    return (codegen._REMOTION_ROOT / "node_modules" / "@remotion" / "cli").is_dir()
+        missing.append("chrome")
+    if not (codegen._REMOTION_ROOT / "node_modules" / "@remotion" / "cli").is_dir():
+        missing.append("remotion-compositions")
+    if missing:
+        return f"real sandbox prerequisites missing: {', '.join(missing)}"
+
+    unshare = shutil.which("unshare")
+    if unshare is None:
+        return "real sandbox unavailable: the host has no unshare utility to probe namespaces"
+    namespace_error = _run_host_probe(
+        [
+            unshare,
+            "--mount",
+            "--user",
+            "--map-root-user",
+            "--pid",
+            "--net",
+            "--ipc",
+            "--uts",
+            "--fork",
+            "/usr/bin/true",
+        ]
+    )
+    if namespace_error:
+        return f"real sandbox unavailable: required Linux namespaces are blocked ({namespace_error})"
+
+    systemd_run = shutil.which("systemd-run")
+    assert systemd_run is not None
+    cgroup_error = _run_host_probe(
+        [
+            systemd_run,
+            "--user",
+            "--scope",
+            "--quiet",
+            "--collect",
+            "-p",
+            "MemoryMax=134217728",
+            "-p",
+            "MemorySwapMax=0",
+            "-p",
+            "TasksMax=64",
+            "-p",
+            "CPUQuota=100%",
+            "--",
+            "/usr/bin/true",
+        ],
+        env=codegen._systemd_env(),
+    )
+    if cgroup_error:
+        return f"real sandbox unavailable: systemd user scope/cgroup limits are unavailable ({cgroup_error})"
+    return None
 
 
+_REAL_SANDBOX_SKIP_REASON = _real_sandbox_skip_reason()
 requires_real_sandbox = pytest.mark.skipif(
-    not _real_prerequisites(),
-    reason="bwrap/systemd-run/node/chrome/remotion-compositions not available",
+    _REAL_SANDBOX_SKIP_REASON is not None,
+    reason=_REAL_SANDBOX_SKIP_REASON or "real sandbox host capabilities are available",
 )
 
 

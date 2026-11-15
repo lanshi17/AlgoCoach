@@ -1,5 +1,8 @@
 """HTTP routes for the agent service."""
+import hashlib
+import json
 import logging
+from typing import Any
 
 import anthropic
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -7,7 +10,7 @@ from openai import APIConnectionError as OpenAIAPIConnectionError
 from openai import APIStatusError as OpenAIAPIStatusError
 from pydantic import ValidationError
 
-from app.agent.coach import coach
+from app.agent.coach import ProviderConfigurationError, coach
 from app.config import chat_session_id, remotion_codegen_enabled, remotion_codegen_token
 from app.memory.memory_service import memory
 from app.models.schemas import (
@@ -56,10 +59,20 @@ def _provider_error_detail(status_code: int, protocol: str) -> str:
 @router.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
     """Main agent conversation endpoint."""
-    # The public contract has no session field; use one stable process-wide
-    # session so AgentScope keeps conversation and ReMe writes scoped to it.
     session_id = chat_session_id()
+    # PREP, IDLE and REVIEW are phases of the same coaching conversation, so
+    # keep their AgentState continuous. The current mode is supplied to the
+    # system prompt on every turn. FOCUS returns before model/memory access in
+    # AlgoCoach.chat and therefore never contributes stale turns to this state.
+    if req.conversationId or (req.problemId and req.platform):
+        identity = json.dumps(
+            [req.conversationId, req.platform, req.problemId],
+            ensure_ascii=False,
+            separators=(',', ':'),
+        )
+        session_id += '-' + hashlib.sha256(identity.encode()).hexdigest()[:24]
     provider = req.provider
+    platform_kwargs: dict[str, Any] = {"platform": req.platform} if req.platform else {}
     try:
         if provider is None:
             result = await coach.chat(
@@ -70,6 +83,7 @@ async def chat(req: ChatRequest):
                 goal=req.goal,
                 training_phase=req.trainingPhase,
                 time_remaining_sec=req.timeRemainingSec,
+                **platform_kwargs,
             )
         else:
             result = await coach.chat(
@@ -81,6 +95,7 @@ async def chat(req: ChatRequest):
                 training_phase=req.trainingPhase,
                 time_remaining_sec=req.timeRemainingSec,
                 provider=provider.model_dump(),
+                **platform_kwargs,
             )
     except (OpenAIAPIStatusError, anthropic.APIStatusError) as exc:
         protocol = provider.protocol if provider is not None else ""
@@ -92,6 +107,12 @@ async def chat(req: ChatRequest):
         raise HTTPException(
             status_code=502,
             detail=_provider_error_detail(exc.status_code, protocol),
+        ) from None
+    except ProviderConfigurationError as exc:
+        logger.warning("Model provider configuration rejected: %s", exc.code)
+        raise HTTPException(
+            status_code=400,
+            detail={"code": exc.code, "message": str(exc)},
         ) from None
     except (PermissionError, RuntimeError) as exc:
         # Configuration failures are raised before the SDK request is made.
