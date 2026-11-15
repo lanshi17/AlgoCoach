@@ -47,6 +47,23 @@ def test_default_prompt_is_the_legacy_soul_verbatim():
     assert '{"weak": []}' in rendered
 
 
+def test_disabled_animations_remove_only_the_animation_guidance():
+    prompt = get_system_prompt(animations=False)
+    assert "request_animation" not in prompt
+    assert "动画可视化" not in prompt
+    # Everything else is untouched: mode rules, other tools, memory slot.
+    assert "fetch_problem_meta" in prompt
+    assert "绝对不主动发言" in prompt
+    assert "record_sticking_points" in prompt
+    assert "{memory_context}" in prompt
+    # Opting in restores the legacy Soul verbatim.
+    assert get_system_prompt(animations=True) == LEGACY_SOUL
+    # Goal variants inherit the same stripping.
+    assert "request_animation" not in get_system_prompt(
+        UserGoal.CONTEST, animations=False
+    )
+
+
 def test_default_prompt_keeps_mode_and_style_rules():
     prompt = get_system_prompt()
     assert "PREP" in prompt and "request_animation" in prompt

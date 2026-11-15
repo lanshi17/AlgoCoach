@@ -257,11 +257,22 @@ def build_training_context(
     return f"{TRAINING_CONTEXT_MARKER} " + "；".join(parts)
 
 
+# Removed from the Soul when the Remotion animation feature is disabled, so the
+# model is never told to call a tool that is not registered.
+ANIMATION_PREP_CLAUSE = "，调用 request_animation 生成可视化动画"
+ANIMATION_STYLE_LINE = "\n当介绍新知识点时，优先通过动画可视化而不只是文字描述。"
+
+
+def _without_animation_guidance(prompt: str) -> str:
+    return prompt.replace(ANIMATION_PREP_CLAUSE, "").removesuffix(ANIMATION_STYLE_LINE)
+
+
 def get_system_prompt(
     goal: str | UserGoal | None = DEFAULT_GOAL,
     *,
     training_phase: str | TrainingPhase | None = DEFAULT_TRAINING_PHASE,
     time_remaining_sec: int | None = None,
+    animations: bool = True,
 ) -> str:
     """Build the Soul template for ``goal`` and the contest ``training_phase``.
 
@@ -273,9 +284,9 @@ def get_system_prompt(
     """
     resolved = resolve_goal(goal)
     if resolved is None:
-        return SOUL
+        return SOUL if animations else _without_animation_guidance(SOUL)
 
-    parts = [SOUL, GOAL_GUIDANCE[resolved]]
+    parts = [SOUL if animations else _without_animation_guidance(SOUL), GOAL_GUIDANCE[resolved]]
     if resolved is UserGoal.CONTEST:
         phase = resolve_training_phase(training_phase)
         if phase is not TrainingPhase.AUTO:

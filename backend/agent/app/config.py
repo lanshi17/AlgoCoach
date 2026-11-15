@@ -104,6 +104,18 @@ DEFAULT_REMOTION_CODEGEN_TIMEOUT_SECONDS = 90.0
 DEFAULT_REMOTION_CODEGEN_MAX_ACTIVE_JOBS = 1
 
 
+# Prebuilt Remotion animations (the coach's ``request_animation`` tool and
+# ``POST /animate``). Disabled by default: the tool schema is sent with every
+# /chat request, so an unused animation surface costs model tokens on every
+# turn. ``REMOTION_ENABLED=true`` opts back in.
+DEFAULT_REMOTION_ENABLED = False
+
+
+def remotion_enabled() -> bool:
+    """Whether prebuilt Remotion animations are opted in (exact "true")."""
+    return os.getenv("REMOTION_ENABLED", "").strip().lower() == "true"
+
+
 def remotion_codegen_enabled() -> bool:
     """Whether generated-code rendering is opted in (exact "true")."""
     return os.getenv("REMOTION_CODEGEN_ENABLED", "").strip().lower() == "true"

@@ -19,7 +19,7 @@ the memory and every tool are touched.
 
 Tools:
   - get_weakness_topics     : query memory for user weak points
-  - request_animation       : trigger Remotion render job
+  - request_animation       : trigger Remotion render job (only with REMOTION_ENABLED=true)
   - record_sticking_points  : write post-review learnings to episodic memory
   - fetch_problem_meta      : fetch a problem statement from the gateway, index it
   - get_similar_problems    : search local vector memory for similar problems
@@ -83,6 +83,7 @@ from app.config import (
     anthropic_base_url,
     claude_model,
     reme_workspace_dir,
+    remotion_enabled,
 )
 from app.memory.memory_service import memory
 from app.memory.vector_store import (
@@ -317,7 +318,9 @@ class AlgoCoach:
 
             agent = Agent(
                 name="AlgoCoach",
-                system_prompt=get_system_prompt(DEFAULT_GOAL),
+                system_prompt=get_system_prompt(
+                    DEFAULT_GOAL, animations=remotion_enabled()
+                ),
                 model=self._chat_model,
                 toolkit=Toolkit(tools=tools),
                 middlewares=[self._memory],
@@ -457,6 +460,8 @@ class AlgoCoach:
         The model-facing schema is exactly :data:`TOOLS`; only the execution
         adapter changed. Every coach tool is an internal capability and is
         auto-allowed rather than prompting for user confirmation.
+        ``request_animation`` is only advertised when ``REMOTION_ENABLED`` is
+        on: an unused tool schema still costs tokens on every model call.
         """
         permission = PermissionDecision(
             behavior=PermissionBehavior.ALLOW,
@@ -473,9 +478,12 @@ class AlgoCoach:
 
             return _call
 
+        animations = remotion_enabled()
         tools: list[FunctionTool] = []
         for spec in TOOLS:
             name = str(spec["name"])
+            if name == "request_animation" and not animations:
+                continue
             tools.append(
                 FunctionTool(
                     _make_call(name),
@@ -542,6 +550,7 @@ class AlgoCoach:
                 resolved_goal,
                 training_phase=phase,
                 time_remaining_sec=time_remaining_sec,
+                animations=remotion_enabled(),
             ).format(memory_context=json.dumps(ctx, ensure_ascii=False, indent=2)) + (
                 "\n\n当前界面状态（以本轮为准，高于历史对话和记忆）："
                 "如果用户只是问候或闲聊，先自然回应这条消息，不要擅自转成训练、代码复盘或换题引导。"
@@ -582,6 +591,8 @@ class AlgoCoach:
             return await memory.weak_topics(threshold=threshold)
 
         if name == "request_animation":
+            if not remotion_enabled():
+                return {"error": "动画功能未启用（REMOTION_ENABLED=false）"}
             job = await animation_service.enqueue(
                 kind=inputs["type"],
                 topic=inputs["topic"],

@@ -39,6 +39,8 @@ Submit 后只把判题事实、用时和题目标签发给 Agent；提交源码�
 
 ## Remotion 动画组件
 
+可选功能，默认关闭（`REMOTION_ENABLED=true` 启用）。关闭时 coach 不注册 `request_animation` tool、Soul 去掉动画指引、`POST /animate` 返回 503 `AnimationDisabled`——每次 `/chat` 因此少一份工具 schema 与提示词 token。
+
 Agent 通过 `request_animation` tool 主动触发，渲染后嵌入聊天面板。
 
 | 组件 | 用途 |

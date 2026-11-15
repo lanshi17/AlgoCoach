@@ -154,6 +154,28 @@ async def test_problem_metadata_cache_is_separate_per_platform(tmp_path, monkeyp
     assert calls == [("1000", "LEETCODE"), ("1000", "HDU")]
 
 
+async def test_animation_tool_and_guidance_are_withheld_unless_opted_in(tmp_path, monkeypatch):
+    instance, model, _reme = _make_coach(tmp_path)
+
+    monkeypatch.delenv("REMOTION_ENABLED", raising=False)
+    names = [tool.name for tool in instance._build_tools()]
+    assert "request_animation" not in names
+
+    refused = await instance._execute_tool(
+        "request_animation",
+        {"type": "PRE_EXPLAIN", "topic": "BFS", "title": "BFS 入门"},
+        None,
+    )
+    assert "error" in refused
+
+    await instance.chat("no-anim", "讲讲 BFS", "PREP", "bfs-1")
+    assert "request_animation" not in model.calls[0]["messages"][0].get_text_content()
+
+    monkeypatch.setenv("REMOTION_ENABLED", "true")
+    names = [tool.name for tool in instance._build_tools()]
+    assert "request_animation" in names
+
+
 async def test_chat_executes_animation_tool_and_returns_job_id(tmp_path, monkeypatch):
     coach, model, _reme = _make_coach(
         tmp_path,
@@ -372,6 +394,11 @@ class ReMeWriteModel(FakeChatModel):
                                 "description": "用户住在杭州，并偏好简洁的中文回答。",
                                 "session_id": "reme-e2e",
                                 "content": "- 用户住在杭州。\n- 用户偏好简洁的中文回答。",
+                                # ReMe resolves the conversation day from the
+                                # prompt; pass it through to daily_write instead
+                                # of letting that step default to the machine's
+                                # local date (which may cross midnight first).
+                                "date": "2026-11-15",
                             },
                             ensure_ascii=False,
                         ),
@@ -396,7 +423,11 @@ async def test_real_reme_auto_memory_write_and_search(tmp_path):
     )
     try:
         await middleware._ensure_started()
-        user = UserMsg(name="user", content="我住在杭州，以后回答简洁点")
+        user = UserMsg(
+            name="user",
+            content="我住在杭州，以后回答简洁点",
+            created_at="2026-11-15T10:00:00+08:00",
+        )
         write = await middleware._run_job(
             "auto_memory",
             messages=[user.model_dump(mode="json")],

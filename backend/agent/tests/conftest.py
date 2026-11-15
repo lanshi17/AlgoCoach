@@ -31,6 +31,10 @@ os.environ.setdefault("GATEWAY_BASE_URL", "http://gateway.invalid")
 # The ASGI test transport does not run lifespan, but disabling crons keeps any
 # future lifespan-based test from starting real scheduled work.
 os.environ.setdefault("ALGOCOACH_CRONS_ENABLED", "false")
+# Animations are opt-in in production (REMOTION_ENABLED defaults to false); the
+# suite enables them so the existing animation tests keep covering the feature.
+# The disabled path is covered explicitly in test_router_compat/test_prompts.
+os.environ.setdefault("REMOTION_ENABLED", "true")
 atexit.register(shutil.rmtree, _TEST_DIR, ignore_errors=True)
 
 import httpx  # noqa: E402

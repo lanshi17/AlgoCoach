@@ -1,5 +1,7 @@
 # Remotion 动画模块详细计划
 
+> 运行时可选项：`REMOTION_ENABLED`（默认 `false`）。关闭时 coach 不暴露 `request_animation`、prompt 不含动画指引、`POST /animate` 返回 503，仅省 token 不影响其余模块；本文件描述的是启用后的完整能力。
+
 ## 1. 设计目标
 
 ### 为什么用程序化视频而非录屏/GIF
@@ -269,6 +271,8 @@ job.status = "READY", job.video_url = "/animations/{id}.mp4"
 ```
 
 P1 同时补齐了渲染所需依赖：`react-dom@^18.3.1`（Remotion peer 依赖）与 `remotion@4.0.543` + devDependency `@remotion/cli@4.0.543`（提供 `npx remotion` 可执行文件，两者版本必须一致）。缺少 CLI 时 `npx remotion render` 会报 “could not determine executable to run”。
+
+**中文字体**：渲染发生在无界面 Chromium 中，可用字体只来自宿主（Docker 渲染器即 `backend/agent/Dockerfile` 镜像）。镜像里除了 `fonts-liberation` 还必须安装 `fonts-noto-cjk`，否则中文标题、节点标签、周报正文会整段渲染成空白（数字和英文仍然正常，很容易被误判成布局问题）。Dockerfile 在安装后用 `test -n "$(fc-list :lang=zh)"` 做构建期断言；组件里的 `fontFamily` 统一取 `src/fonts.ts` 的 `MONO_FONT_STACK`（`monospace` 在前保证拉丁字符外观不变，CJK 家族在后做逐字兜底），不要在组件里再写裸 `monospace`。在宿主机直接跑 Remotion 时需自行安装 Noto Sans CJK；macOS 自带 PingFang，无需额外处理。
 
 **`remotion-compositions/src/index.ts`**（P1 已创建；Root 保持导出 `RemotionRoot`）：
 

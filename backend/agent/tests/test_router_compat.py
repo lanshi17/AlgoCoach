@@ -148,6 +148,26 @@ async def test_animate_route_keeps_request_and_response_fields(client, monkeypat
     }
 
 
+async def test_animate_fails_closed_unless_opted_in(client, monkeypatch):
+    monkeypatch.delenv("REMOTION_ENABLED", raising=False)
+
+    async def must_not_enqueue(**kwargs):
+        raise AssertionError("disabled feature must not queue a job")
+
+    monkeypatch.setattr(animation_service, "enqueue", must_not_enqueue)
+
+    resp = await client.post(
+        "/animate",
+        json={"type": "PRE_EXPLAIN", "topic": "BFS", "title": "BFS 入门"},
+    )
+
+    assert resp.status_code == 503
+    assert resp.json()["detail"] == {
+        "code": "AnimationDisabled",
+        "reason": "remotion_disabled",
+    }
+
+
 async def test_poll_animate_keeps_response_fields(client, monkeypatch):
     async def fake_get(job_id):
         assert job_id == "job-1"

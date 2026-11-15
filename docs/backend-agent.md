@@ -716,6 +716,8 @@ attempts += 1
 
 ## 9. Remotion 渲染流水线
 
+> **可选功能，默认关闭（`REMOTION_ENABLED`）**：关闭时 `_build_tools` 不注册 `request_animation`，`get_system_prompt` 去掉 PREP 动画指引与结尾的动画偏好句，`POST /animate` 返回 503 `AnimationDisabled`；渲染流水线本身不启动。这样每次 `/chat` 少一份工具 schema 与提示词 token。设为 `true` 恢复本节全部行为（`REMOTION_CODEGEN_ENABLED` 仍独立控制生成代码沙箱）。
+
 ```
   enqueue(kind, topic, title)
          │
