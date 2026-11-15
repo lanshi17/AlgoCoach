@@ -38,7 +38,7 @@ export function parseCookieHeader(input: string): string | null {
     .replace(/[\u0000-\u001F\u007F]/g, '')
     .replace(/\s*;\s*/g, '; ')
     .replace(/\s+/g, ' ')
-    .replace(/;+$/, '')
+    .replace(/(?:;\s*)+$/, '')
     .trim()
   // Only a well-formed header may be stored: a pasted command that we could not
   // parse would otherwise be forwarded upstream as the Cookie value.
@@ -56,6 +56,6 @@ function findCookieArgument(input: string): string | null {
 }
 
 function findCookieHeader(input: string): string | null {
-  const match = input.match(/(?<![\w-])[Cc]ookie\s*:\s*([^'"\r\n]+)/)
+  const match = input.match(/(?<![\w-])cookie\s*:\s*([^'"\r\n]+)/i)
   return match?.[1]?.trim() ?? null
 }

@@ -178,24 +178,25 @@ function initialProvider(): ModelProviderConfig {
   try {
     const saved = window.localStorage.getItem('algocoach.provider')
     const apiKey = window.sessionStorage.getItem('algocoach.provider.apiKey') ?? ''
-    if (!saved) return DEFAULT_PROVIDER
-
-    const provider = { ...DEFAULT_PROVIDER, ...JSON.parse(saved), apiKey } as ModelProviderConfig
-    const commandCodeMigrated = window.localStorage.getItem('algocoach.provider.commandcode-protocol-migrated')
-    if (commandCodeMigrated !== 'true') {
-      // One-time migration for selections stored before the Chat Completions
-      // default. Mark it first so a later explicit Responses choice survives.
+    // One-time migration for selections stored before the Chat Completions
+    // default. Mark it before any early return so a later explicit Responses
+    // choice survives, including on a fresh profile that saves after this load.
+    const needsMigration = window.localStorage.getItem('algocoach.provider.commandcode-protocol-migrated') !== 'true'
+    if (needsMigration) {
       try {
         window.localStorage.setItem('algocoach.provider.commandcode-protocol-migrated', 'true')
       } catch { /* keep the migrated provider usable when storage is unavailable */ }
-      if (provider.id === 'commandcode-goat' && provider.protocol === 'openai-response') {
-        provider.protocol = 'openai'
-        try {
-          const { apiKey, ...metadata } = provider
-          window.localStorage.setItem('algocoach.provider', JSON.stringify(metadata))
-          if (apiKey) window.sessionStorage.setItem('algocoach.provider.apiKey', apiKey)
-        } catch { /* keep the migrated provider usable when storage is unavailable */ }
-      }
+    }
+    if (!saved) return DEFAULT_PROVIDER
+
+    const provider = { ...DEFAULT_PROVIDER, ...JSON.parse(saved), apiKey } as ModelProviderConfig
+    if (needsMigration && provider.id === 'commandcode-goat' && provider.protocol === 'openai-response') {
+      provider.protocol = 'openai'
+      try {
+        const { apiKey, ...metadata } = provider
+        window.localStorage.setItem('algocoach.provider', JSON.stringify(metadata))
+        if (apiKey) window.sessionStorage.setItem('algocoach.provider.apiKey', apiKey)
+      } catch { /* keep the migrated provider usable when storage is unavailable */ }
     }
     return provider
   } catch { return DEFAULT_PROVIDER }

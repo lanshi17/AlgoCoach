@@ -29,6 +29,12 @@ class CookieHeaderTest {
     }
 
     @Test
+    void stripsTrailingSemicolon() {
+        assertThat(CookieHeader.normalize("PHPSESSID=abc;")).isEqualTo("PHPSESSID=abc");
+        assertThat(CookieHeader.normalize("-b 'csrftoken=a; sessionid=b; '")).isEqualTo("csrftoken=a; sessionid=b");
+    }
+
+    @Test
     void rejectsACommandWhoseCookieHeaderWasNotLocated() {
         assertThat(CookieHeader.normalize(
                 "curl 'https://www.acwing.com/problem/search/1/?page=1' -H 'user-agent: Mozilla/5.0'"))

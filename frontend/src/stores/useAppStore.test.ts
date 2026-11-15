@@ -299,6 +299,25 @@ describe('training preferences and focus state', () => {
     expect(localStorage.getItem('algocoach.provider.apiKey')).toBeNull()
   })
 
+  it('marks the migration on a fresh profile so a later Responses choice survives', async () => {
+    vi.resetModules()
+    await import('./useAppStore')
+    expect(localStorage.getItem('algocoach.provider.commandcode-protocol-migrated')).toBe('true')
+
+    localStorage.setItem('algocoach.provider', JSON.stringify({
+      id: 'commandcode-goat',
+      name: 'Command Code GOAT',
+      protocol: 'openai-response',
+      baseUrl: 'https://api.commandcode.ai/provider/v1',
+      model: 'deepseek/deepseek-v4.1-flash',
+    }))
+    vi.resetModules()
+    const { useAppStore: restoredStore } = await import('./useAppStore')
+
+    expect(restoredStore.getState().provider.protocol).toBe('openai-response')
+    expect(JSON.parse(localStorage.getItem('algocoach.provider')!).protocol).toBe('openai-response')
+  })
+
   it('keeps working when browser storage is unavailable', async () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('storage disabled') })
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('storage disabled') })

@@ -45,7 +45,7 @@ public final class CookieHeader {
         String cleaned = CONTROL.matcher(header).replaceAll("");
         cleaned = cleaned.replaceAll("\\s*;\\s*", "; ")
                 .replaceAll("\\s+", " ")
-                .replaceAll(";+$", "")
+                .replaceAll("(?:;\\s*)+$", "")
                 .strip();
         return COOKIE_HEADER.matcher(cleaned).matches() ? cleaned : null;
     }

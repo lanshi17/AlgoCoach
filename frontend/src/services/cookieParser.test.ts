@@ -14,6 +14,11 @@ describe('parseCookieHeader', () => {
     expect(parseCookieHeader('PHPSESSID=abc;\r\n  exesubmitlang=0')).toBe('PHPSESSID=abc; exesubmitlang=0')
   })
 
+  it('strips a trailing semicolon and accepts an uppercase header', () => {
+    expect(parseCookieHeader('PHPSESSID=abc;')).toBe('PHPSESSID=abc')
+    expect(parseCookieHeader("-H 'COOKIE: a=b; c=d'")).toBe('a=b; c=d')
+  })
+
   it('rejects input without a cookie pair', () => {
     expect(parseCookieHeader('curl https://x.test')).toBeNull()
     expect(parseCookieHeader("curl 'https://x.test/?page=1' -H 'user-agent: Mozilla/5.0'")).toBeNull()
