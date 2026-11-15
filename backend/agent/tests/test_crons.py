@@ -451,6 +451,26 @@ async def test_weekly_report_persists_once_and_enqueues_prebuilt_component(monke
 
 
 @pytest.mark.asyncio
+async def test_weekly_report_keeps_text_but_skips_animation_when_disabled(monkeypatch):
+    monkeypatch.delenv("REMOTION_ENABLED", raising=False)
+
+    async def fake_summary(stats):
+        return "仅文本周报"
+
+    async def must_not_enqueue(**kwargs):
+        raise AssertionError("animations are disabled")
+
+    monkeypatch.setattr(crons, "generate_weekly_summary", fake_summary)
+    monkeypatch.setattr(crons.animation_service, "enqueue", must_not_enqueue)
+
+    # A different ISO week so the earlier weekly-report test cannot dedupe this.
+    notification = await crons.weekly_report(now=NOW - timedelta(days=70))
+
+    assert notification is not None
+    assert notification.content == "仅文本周报"
+
+
+@pytest.mark.asyncio
 async def test_weekly_report_monday_retry_dedupes_against_sunday(monkeypatch):
     async def fake_summary(stats):
         return "周报"

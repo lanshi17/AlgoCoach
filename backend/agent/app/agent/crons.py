@@ -42,7 +42,7 @@ from app.agent.self_improve import (
     evaluate_due_recommendations,
     monthly_strategy_review,
 )
-from app.config import gateway_base_url, gateway_timeout_seconds
+from app.config import gateway_base_url, gateway_timeout_seconds, remotion_enabled
 from app.memory.memory_service import memory, utcnow
 from app.remotion.animation_service import animation_service
 
@@ -408,6 +408,10 @@ def weekly_report_props(stats: dict) -> dict:
 
 
 async def _enqueue_weekly_animation(stats: dict, local: date) -> None:
+    # The text report is always kept; the video is part of the opt-in
+    # Remotion surface (REMOTION_ENABLED).
+    if not remotion_enabled():
+        return
     try:
         await animation_service.enqueue(
             kind="WEEKLY_REPORT",
