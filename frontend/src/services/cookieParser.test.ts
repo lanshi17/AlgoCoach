@@ -16,6 +16,8 @@ describe('parseCookieHeader', () => {
 
   it('rejects input without a cookie pair', () => {
     expect(parseCookieHeader('curl https://x.test')).toBeNull()
+    expect(parseCookieHeader("curl 'https://x.test/?page=1' -H 'user-agent: Mozilla/5.0'")).toBeNull()
+    expect(parseCookieHeader("-H 'set-cookie: PHPSESSID=evil; Path=/'")).toBeNull()
     expect(parseCookieHeader('   ')).toBeNull()
   })
 })

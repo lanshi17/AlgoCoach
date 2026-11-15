@@ -25,8 +25,11 @@ class HduServiceTest {
             <h1 style='color:#1A5CC8'>A + B Problem</h1>
             <span>Time Limit: 2000/1000 MS (Java/Others)    Memory Limit: 65536/32768 K (Java/Others)</span>
             <div class=panel_title align=left>Problem Description</div> <div class=panel_content>Calculate <i>A + B</i>.<br></div>
-            <div class=panel_title align=left>Sample Input</div><div class=panel_content><pre>1 1
-            </pre></div>
+            <div class=panel_bottom>&nbsp;</div>
+            <div class=panel_title align=left>Sample Input</div><div class=panel_content><pre><div style="font-family:Courier New,Courier,monospace">1 1</div></pre></div>
+            <div class=panel_bottom>&nbsp;</div>
+            <div class=panel_title align=left>Sample Output</div><div class=panel_content><pre>2</pre></div>
+            <div class=panel_bottom>&nbsp;</div>
             """;
 
     @Test
@@ -46,7 +49,20 @@ class HduServiceTest {
         assertThat(out.path("contentHtml").asText())
                 .contains("<h4>Problem Description</h4>").contains("Sample Input").contains("2000 ms");
         assertThat(out.path("sampleTestCases").asText()).isEqualTo("1 1");
+        // The sample panel wraps its payload in a nested <div>; the panel must still
+        // close at its footer or the following panels are swallowed.
+        String content = out.path("contentHtml").asText();
+        assertThat(count(content, "<pre>")).isEqualTo(count(content, "</pre>"));
+        assertThat(content).contains("Sample Output");
         assertThat(out.path("codeSnippets")).hasSize(6);
+    }
+
+    private static int count(String haystack, String needle) {
+        int total = 0;
+        for (int i = haystack.indexOf(needle); i >= 0; i = haystack.indexOf(needle, i + needle.length())) {
+            total++;
+        }
+        return total;
     }
 
     @Test

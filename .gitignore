@@ -41,6 +41,7 @@ target/flycheck0/stderr
 # AlgoCoach additions
 data/
 .env
+.env.local
 frontend/node_modules/
 remotion-compositions/node_modules/
 backend/gateway/target/

@@ -32,7 +32,8 @@ public class HduService {
     private static final Pattern VOLUME_LINK = Pattern.compile("listproblem\\.php\\?vol=(\\d+)");
     private static final Pattern TITLE = Pattern.compile("<h1[^>]*>([\\s\\S]*?)</h1>");
     private static final Pattern PANEL = Pattern.compile(
-            "<div class=panel_title align=left>(.*?)</div>\\s*<div class=panel_content>(.*?)</div>",
+            "<div class=panel_title align=left>(.*?)</div>\\s*<div class=panel_content>(.*?)</div>"
+                    + "\\s*(?=<div class=panel_bottom)",
             Pattern.DOTALL);
     private static final Pattern TIME_LIMIT = Pattern.compile("Time Limit:\\s*(\\d+)");
     private static final Pattern MEMORY_LIMIT = Pattern.compile("Memory Limit:\\s*(\\d+)");

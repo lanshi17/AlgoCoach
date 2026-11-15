@@ -182,16 +182,20 @@ function initialProvider(): ModelProviderConfig {
 
     const provider = { ...DEFAULT_PROVIDER, ...JSON.parse(saved), apiKey } as ModelProviderConfig
     const commandCodeMigrated = window.localStorage.getItem('algocoach.provider.commandcode-protocol-migrated')
-    if (provider.id === 'commandcode-goat' && commandCodeMigrated !== 'true') {
-      // Keep existing Command Code GOAT selections on its broadly compatible
-      // Chat Completions route. Users can still explicitly switch to Responses.
-      if (provider.protocol === 'openai-response') provider.protocol = 'openai'
+    if (commandCodeMigrated !== 'true') {
+      // One-time migration for selections stored before the Chat Completions
+      // default. Mark it first so a later explicit Responses choice survives.
       try {
         window.localStorage.setItem('algocoach.provider.commandcode-protocol-migrated', 'true')
-        const { apiKey, ...metadata } = provider
-        window.localStorage.setItem('algocoach.provider', JSON.stringify(metadata))
-        if (apiKey) window.sessionStorage.setItem('algocoach.provider.apiKey', apiKey)
       } catch { /* keep the migrated provider usable when storage is unavailable */ }
+      if (provider.id === 'commandcode-goat' && provider.protocol === 'openai-response') {
+        provider.protocol = 'openai'
+        try {
+          const { apiKey, ...metadata } = provider
+          window.localStorage.setItem('algocoach.provider', JSON.stringify(metadata))
+          if (apiKey) window.sessionStorage.setItem('algocoach.provider.apiKey', apiKey)
+        } catch { /* keep the migrated provider usable when storage is unavailable */ }
+      }
     }
     return provider
   } catch { return DEFAULT_PROVIDER }

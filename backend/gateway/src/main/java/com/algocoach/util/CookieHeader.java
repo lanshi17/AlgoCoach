@@ -19,10 +19,14 @@ public final class CookieHeader {
 
     /** A {@code cookie: ...} header line, e.g. inside {@code -H 'cookie: ...'}. */
     private static final Pattern CURL_COOKIE_LINE =
-            Pattern.compile("(?:-H\\s*)?['\"]?cookie\\s*:\\s*([^'\"\\r\\n]+)",
+            Pattern.compile("(?:-H\\s*)?['\"]?(?<![\\w-])cookie\\s*:\\s*([^'\"\\r\\n]+)",
                     Pattern.CASE_INSENSITIVE);
 
     private static final Pattern CONTROL = Pattern.compile("\\p{Cntrl}");
+
+    /** {@code name=value; name=value} — anything else is not a Cookie header. */
+    private static final Pattern COOKIE_HEADER =
+            Pattern.compile("^[A-Za-z0-9_.\\-]+=[^;]*(?:; *[A-Za-z0-9_.\\-]+=[^;]*)*$");
 
     private CookieHeader() {}
 
@@ -43,7 +47,7 @@ public final class CookieHeader {
                 .replaceAll("\\s+", " ")
                 .replaceAll(";+$", "")
                 .strip();
-        return cleaned.isEmpty() || cleaned.indexOf('=') < 0 ? null : cleaned;
+        return COOKIE_HEADER.matcher(cleaned).matches() ? cleaned : null;
     }
 
     private static String extract(String raw) {

@@ -29,6 +29,18 @@ class CookieHeaderTest {
     }
 
     @Test
+    void rejectsACommandWhoseCookieHeaderWasNotLocated() {
+        assertThat(CookieHeader.normalize(
+                "curl 'https://www.acwing.com/problem/search/1/?page=1' -H 'user-agent: Mozilla/5.0'"))
+                .isNull();
+    }
+
+    @Test
+    void ignoresSetCookieHeader() {
+        assertThat(CookieHeader.normalize("-H 'set-cookie: PHPSESSID=evil; Path=/'")).isNull();
+    }
+
+    @Test
     void rejectsValuesWithoutCookiePair() {
         assertThat(CookieHeader.normalize("curl 'https://x.test' -H 'user-agent: x'")).isNull();
         assertThat(CookieHeader.normalize("   ")).isNull();

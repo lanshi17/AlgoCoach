@@ -5,7 +5,8 @@ import EditorWorker from '../../../node_modules/monaco-editor/esm/vs/editor/edit
 // Register only the languages AlgoCoach exposes. The package root imports every
 // Monaco language (and its optional language services); these granular
 // definition entries keep the offline editor small while retaining local
-// tokenization and suggestions for all six supported languages.
+// tokenization and suggestions for all six supported languages. TypeScript is
+// intentionally syntax-only here; it does not need a language-service worker.
 import 'monaco-editor/languages/definitions/cpp/register'
 import 'monaco-editor/languages/definitions/go/register'
 import 'monaco-editor/languages/definitions/java/register'

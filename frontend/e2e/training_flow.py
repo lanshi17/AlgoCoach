@@ -138,6 +138,9 @@ with sync_playwright() as p:
     page.get_by_label('编程语言').select_option('python3')
     assert not any(('ts.worker-' in asset or 'json.worker-' in asset or 'html.worker-' in asset or 'css.worker-' in asset)
                    for asset in monaco_asset_requests), monaco_asset_requests
+    if os.environ.get('ALGOCOACH_EXPECT_BUNDLED_MONACO') == '1':
+        assert any('monaco-' in asset for asset in monaco_asset_requests), monaco_asset_requests
+        assert all(url.startswith('http://localhost:4173/') for url in monaco_asset_requests), monaco_asset_requests
     page.screenshot(path='/tmp/algocoach-editor.png', full_page=True)
     print('workspace text:', page.locator('body').inner_text()[:1600])
     print('page errors so far:', page_errors)
