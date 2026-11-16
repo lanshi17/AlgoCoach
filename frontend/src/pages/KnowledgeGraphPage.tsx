@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, BarChart3, Loader2, RefreshCw } from 'lucide-react'
 import { agentService } from '@/services/agentService'
+import Button from '@/components/Common/Button'
+import PageHeader from '@/components/Common/PageHeader'
 import { makeGraph } from './graphLayout'
 import type { AgentProfile } from '@/types'
 
@@ -49,26 +51,19 @@ export default function KnowledgeGraphPage() {
   return (
     <main className="flex-1 min-h-0 overflow-y-auto bg-surface px-6 py-7 dark:bg-surface-dark">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex items-center gap-3">
-          <BarChart3 size={21} className="text-accent" />
-          <div>
-            <h1 className="text-xl font-semibold text-text-primary dark:text-text-dark-primary">知识图谱</h1>
-            <p className="text-xs text-text-muted dark:text-text-dark-muted">节点来自实际训练记录，连线表示共同出现的知识点</p>
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <button onClick={() => setListView(value => !value)}
-              type="button"
-              aria-pressed={listView}
-              aria-label={listView ? '切换到图谱视图' : '切换到列表视图'}
-              className="rounded-md border border-border px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-muted
-                         dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">
+        <PageHeader
+          title="知识图谱"
+          icon={<BarChart3 size={18} />}
+          actions={<>
+            <Button size="sm" onClick={() => setListView(value => !value)} aria-pressed={listView}
+              aria-label={listView ? '切换到图谱视图' : '切换到列表视图'}>
               {listView ? '图谱视图' : '列表视图'}
-            </button>
-            <button onClick={() => void load()} disabled={loading} aria-busy={loading} title="刷新" aria-label="刷新知识图谱" className="sidebar-btn !h-8 !w-8 disabled:cursor-not-allowed disabled:opacity-40">
-              <RefreshCw size={15} />
-            </button>
-          </div>
-        </div>
+            </Button>
+            <Button size="sm" onClick={() => void load()} disabled={loading} aria-busy={loading} aria-label="刷新知识图谱">
+              <RefreshCw size={14} />刷新
+            </Button>
+          </>}
+        />
 
         {loading ? <Loading /> : error ? <ErrorState message={error} onRetry={() => void load()} /> : !profile?.topics.length ? (
           <div className="flex min-h-72 flex-col items-center justify-center gap-3 rounded-lg border border-border text-center dark:border-border-dark">

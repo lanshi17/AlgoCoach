@@ -16,7 +16,7 @@ it('formats focus duration compactly, including long sessions', () => {
   expect(formatDuration(-3)).toBe('00:00')
 })
 
-it('keeps a labelled theme control in the compact title row', () => {
+it('leaves the theme control to the shell sidebar', () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   useAppStore.setState(useAppStore.getInitialState(), true)
   const element = document.createElement('div')
@@ -24,13 +24,7 @@ it('keeps a labelled theme control in the compact title row', () => {
   const root = createRoot(element)
   act(() => root.render(<Header />))
 
-  const titleRow = element.querySelector('h1')?.parentElement
-  const compactTheme = titleRow?.querySelector<HTMLButtonElement>('button[aria-label="切换主题"]')
-  expect(compactTheme).not.toBeNull()
-  expect(compactTheme?.className).toContain('xl:hidden')
-  const desktopTheme = Array.from(element.querySelectorAll<HTMLButtonElement>('button[aria-label="切换主题"]'))
-    .find(button => button.parentElement !== titleRow)
-  expect(desktopTheme?.className).toContain('xl:flex')
+  expect(element.querySelector('button[aria-label="切换主题"]')).toBeNull()
   act(() => root.unmount())
   element.remove()
 })
@@ -53,8 +47,9 @@ it('makes unavailable judging actions visibly neutral and explains why', () => {
   const submit = element.querySelector<HTMLButtonElement>('button[aria-label="提交"]')!
   const run = element.querySelector<HTMLButtonElement>('button[aria-label="运行"]')!
   expect(submit.disabled).toBe(true)
-  expect(submit.title).toBe('点击“开始做题”后才能运行或提交')
-  expect(run.title).toBe('点击“开始做题”后才能运行或提交')
+  expect(run.disabled).toBe(true)
+  // The visible note (not a hover title) is the only explanation.
+  expect(element.querySelector('#judge-capability-note')).toBeNull()
   expect(submit.className).toContain('disabled:bg-surface-muted')
 
   act(() => root.unmount())

@@ -69,13 +69,7 @@ export default function TestCasePanel() {
   const expectedOutput = runResult?.expected_code_answer?.join('\n')
   const runStatus = runResult?.status_msg ?? runResult?.state
 
-  if (!activeProblem) {
-    return (
-      <div role="status" className="flex h-full items-center justify-center px-4 text-center text-xs text-text-muted dark:text-text-dark-muted">
-        选择题目后可编辑测试用例
-      </div>
-    )
-  }
+  if (!activeProblem) return null
 
   return (
     <div className="flex flex-col h-full text-xs font-mono">

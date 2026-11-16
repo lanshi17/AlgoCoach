@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/stores/useAppStore'
 import { Badge } from '@/components/Common/Badge'
@@ -236,7 +235,6 @@ export default function ProblemPanel() {
           <div className="flex items-center justify-between gap-2">
             <div>
               <h2 className="text-base font-semibold text-text-primary dark:text-text-dark-primary">选择一道题目</h2>
-              <p className="mt-1 text-xs text-text-muted dark:text-text-dark-muted">按专项训练，或检索题库</p>
             </div>
             {activeProblem && <button onClick={() => { detailSeq.current += 1; setLoadingSlug(null); setError(''); setShowPicker(false) }} className="text-xs text-accent hover:underline">返回当前题</button>}
           </div>
@@ -275,11 +273,6 @@ export default function ProblemPanel() {
             <input value={search} onChange={event => setSearch(event.target.value)}
               aria-label="搜索当前页题目" placeholder="搜索当前页题名或题号"
               className="w-full rounded-md border border-border bg-surface-soft px-2 py-1.5 text-xs outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft" />
-            <p className="text-[11px] leading-relaxed text-text-muted dark:text-text-dark-muted">
-              平台登录态在
-              <Link to="/settings/platforms" className="mx-1 text-accent hover:underline">题库登录</Link>
-              页统一管理（AcWing 需要 Cookie，HDU 可匿名浏览）。
-            </p>
           </div>
         </div>
         {error && visibleProblems.length > 0 && <div role="alert" className="mx-4 mt-3 rounded-md bg-red-50 p-3 text-xs text-danger dark:bg-red-900/10">{error}</div>}
@@ -420,11 +413,8 @@ export default function ProblemPanel() {
                        bg-accent hover:bg-accent-hover text-white text-sm font-medium
                        transition-colors"
           >
-            <Play size={14} /> 开始做题（AI 将静默）
+            <Play size={14} /> 开始做题
           </button>
-          <p className="text-xs text-text-muted dark:text-text-dark-muted mt-2 text-center">
-            做题期间 AI 完全禁言，编辑器只保留本地语法辅助
-          </p>
         </div>
       )}
     </div>

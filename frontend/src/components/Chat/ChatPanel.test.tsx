@@ -166,8 +166,8 @@ describe('chat when changing training context', () => {
       useAppStore.getState().exitFocus()
       renderChatPanel(root)
     })
-    expect(element.textContent).toContain('复盘思路')
     expect(element.textContent).not.toContain('提交完成')
+    expect(element.querySelectorAll('[role="article"], [data-message]')).toHaveLength(0)
   })
 
   it('keeps an unsent message with its original problem', () => {

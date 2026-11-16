@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { Play, Send, Lock, Sun, Moon, Loader2 } from 'lucide-react'
+import { Play, Send, Lock, Loader2 } from 'lucide-react'
 import { useAppStore } from '@/stores/useAppStore'
 import { Badge } from '@/components/Common/Badge'
 import { leetcodeService } from '@/services/leetcodeService'
@@ -15,7 +15,7 @@ const MODE_LABEL: Record<string, string> = {
 
 export default function Header() {
   const {
-    activeProblem, mode, lang, setLang, goal, theme, toggleTheme, focusStartTs,
+    activeProblem, mode, lang, setLang, goal, focusStartTs,
     problemTimeLimits,
     code, testInput, enterFocus, exitFocus,
     getFocusDurationSec, setRunResult, setRunError, setRunLoading, runLoading, provider,
@@ -26,8 +26,6 @@ export default function Header() {
     lang: state.lang,
     setLang: state.setLang,
     goal: state.goal,
-    theme: state.theme,
-    toggleTheme: state.toggleTheme,
     focusStartTs: state.focusStartTs,
     problemTimeLimits: state.problemTimeLimits,
     code: state.code,
@@ -194,15 +192,6 @@ export default function Header() {
   }
 
   const isBusy = runLoading || submitLoading
-  const judgeDisabledReason = isBusy
-    ? '正在处理上一项请求'
-    : !activeProblem
-      ? '请先选择一道题目'
-      : !judgeRunnable
-        ? '该平台暂不支持站内运行和提交'
-        : mode !== 'FOCUS'
-          ? '点击“开始做题”后才能运行或提交'
-          : undefined
   const focusDurationSec = mode === 'FOCUS' ? getFocusDurationSec(focusNow) : 0
   const problemTimeLimitSec = activeProblem
     ? problemTimeLimits[`${activeProblem.platform}:${activeProblem.platformId}`]
@@ -218,15 +207,11 @@ export default function Header() {
     <header className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 min-h-[48px] border-b border-border
                        dark:border-border-dark bg-surface dark:bg-surface-dark flex-shrink-0
                        xl:h-[48px] xl:flex-nowrap xl:gap-3 xl:px-4 xl:py-0">
-      <div className="flex basis-full items-center gap-3 min-w-0 xl:basis-auto xl:min-w-[120px] xl:flex-1">
+      <div className="flex min-w-0 flex-1 items-center gap-3 xl:min-w-[120px]">
         <h1 className="text-sm font-medium truncate text-text-primary dark:text-text-dark-primary">
-          {activeProblem ? activeProblem.title : 'AlgoCoach — 选择一道题目开始'}
+          {activeProblem ? activeProblem.title : '工作区'}
         </h1>
         {activeProblem && <Badge difficulty={activeProblem.difficulty} />}
-        <button onClick={toggleTheme} aria-label="切换主题" title="切换主题"
-          className="sidebar-btn ml-auto !w-8 !h-8 shrink-0 flex xl:hidden">
-          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
       </div>
 
       <select
@@ -282,7 +267,6 @@ export default function Header() {
           aria-label="运行"
           aria-busy={runLoading}
           aria-describedby={judgeCapabilityNote ? 'judge-capability-note' : undefined}
-          title={judgeDisabledReason}
           className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium
                      border border-border dark:border-border-dark text-text-secondary
                      dark:text-text-dark-secondary hover:bg-surface-muted
@@ -294,7 +278,6 @@ export default function Header() {
           aria-label="提交"
           aria-busy={submitLoading}
           aria-describedby={judgeCapabilityNote ? 'judge-capability-note' : undefined}
-          title={judgeDisabledReason}
           className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium
                      bg-accent hover:bg-accent-hover text-white
                      disabled:bg-surface-muted disabled:text-text-muted
@@ -311,9 +294,6 @@ export default function Header() {
         {judgeCapabilityNote}
       </span>}
 
-      <button onClick={toggleTheme} aria-label="切换主题" className="sidebar-btn !w-8 !h-8 hidden xl:flex" title="切换主题">
-        {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-      </button>
       {(submitError || actionError) && <span role="alert" title={submitError || actionError}
         className="max-w-40 truncate text-[11px] text-danger">{submitError || actionError}</span>}
     </header>

@@ -13,7 +13,7 @@ const first: Problem = {
   contentHtml: '', topics: [], sampleTestCases: '', codeSnippets: [],
 }
 
-it('shows one platform-login link in the problem picker guidance', async () => {
+it('leaves platform login to Settings instead of repeating the entry in the picker', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   vi.spyOn(leetcodeService, 'listProblems').mockResolvedValue({ problems: [], total: 0, pageSize: 50 })
   const element = document.createElement('div')
@@ -22,7 +22,7 @@ it('shows one platform-login link in the problem picker guidance', async () => {
   await act(async () => root.render(
     <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><ProblemPanel /></MemoryRouter>,
   ))
-  expect(element.querySelectorAll('a[href="/settings/platforms"]')).toHaveLength(1)
+  expect(element.querySelectorAll('a[href="/settings/platforms"]')).toHaveLength(0)
   act(() => root.unmount())
   element.remove()
 })

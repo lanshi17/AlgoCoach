@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { AlertCircle, Loader2, RefreshCw, Trophy } from 'lucide-react'
+import Button from '@/components/Common/Button'
+import PageHeader from '@/components/Common/PageHeader'
 import { agentService } from '@/services/agentService'
 import type { AgentProfile } from '@/types'
 
@@ -33,16 +35,13 @@ export default function ProgressPage() {
   return (
     <main className="flex-1 min-h-0 overflow-y-auto bg-surface px-6 py-7 dark:bg-surface-dark">
       <div className="mx-auto max-w-5xl">
-        <div className="mb-6 flex items-center gap-3">
-          <Trophy size={21} className="text-accent" />
-          <div>
-            <h1 className="text-xl font-semibold text-text-primary dark:text-text-dark-primary">刷题进度</h1>
-            <p className="text-xs text-text-muted dark:text-text-dark-muted">来自本地提交与训练记忆</p>
-          </div>
-          <button onClick={() => void load()} disabled={loading} aria-busy={loading} title="刷新" aria-label="刷新进度" className="sidebar-btn ml-auto !h-8 !w-8 disabled:cursor-not-allowed disabled:opacity-40">
-            <RefreshCw size={15} />
-          </button>
-        </div>
+        <PageHeader
+          title="刷题进度"
+          icon={<Trophy size={18} />}
+          actions={<Button size="sm" onClick={() => void load()} disabled={loading} aria-busy={loading} aria-label="刷新进度">
+            <RefreshCw size={14} />刷新
+          </Button>}
+        />
 
         {loading ? <Loading /> : error ? <ErrorState message={error} onRetry={() => void load()} /> : profile && (
           <div className="space-y-6">
@@ -62,9 +61,6 @@ export default function ProgressPage() {
                     day.count >= 3 ? 'bg-accent/80' : day.count === 2 ? 'bg-accent/55' : day.count === 1 ? 'bg-accent/30' : 'bg-surface-soft dark:bg-surface-dark-soft'
                   }`} />)}
               </div>
-              <p className="mt-3 text-[11px] text-text-muted dark:text-text-dark-muted">
-                每格按当天提交次数着色。
-              </p>
             </section>
 
             <section className="grid gap-6 lg:grid-cols-2">

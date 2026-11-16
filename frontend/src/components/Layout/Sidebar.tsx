@@ -1,6 +1,6 @@
 import React from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { BookOpen, Trophy, BarChart3, Settings, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
+import { BookOpen, Trophy, BarChart3, Settings, ChevronLeft, ChevronRight, Sparkles, Sun, Moon } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { useAppStore } from '@/stores/useAppStore'
 
@@ -11,22 +11,16 @@ const NAV_ITEMS = [
   { to: '/settings', icon: Settings, label: '设置' },
 ] as const
 
-const MODE_LABEL: Record<string, string> = {
-  IDLE: '空闲',
-  PREP: '预习',
-  FOCUS: '专注解题',
-  REVIEW: '复盘',
-}
-
 /**
  * Qwen-style collapsible left sidebar.
  * Collapsed: 56px icon rail. Expanded: 220px with labels.
  */
 export default function Sidebar() {
-  const { sidebarExpanded, toggleSidebar, mode } = useAppStore(useShallow(state => ({
+  const { sidebarExpanded, toggleSidebar, theme, toggleTheme } = useAppStore(useShallow(state => ({
     sidebarExpanded: state.sidebarExpanded,
     toggleSidebar: state.toggleSidebar,
-    mode: state.mode,
+    theme: state.theme,
+    toggleTheme: state.toggleTheme,
   })))
 
   return (
@@ -66,30 +60,20 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Expand toggle pinned at bottom */}
-      <button
-        onClick={toggleSidebar}
-        type="button"
-        aria-label={sidebarExpanded ? '收起侧边栏' : '展开侧边栏'}
-        aria-expanded={sidebarExpanded}
-        className="sidebar-btn mx-auto mb-2 hidden md:flex"
-        title={sidebarExpanded ? '收起' : '展开'}
-      >
-        {sidebarExpanded ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
-      </button>
-
-      {/* Mode indicator dot — color-coded by AgentMode */}
-      <div className="flex justify-center pb-3">
-        <div
-          role="status"
-          aria-label={`当前训练模式：${MODE_LABEL[mode] ?? mode}`}
-          className={`w-2 h-2 rounded-full ${
-            mode === 'FOCUS' ? 'bg-focus animate-pulse' :
-            mode === 'REVIEW' ? 'bg-success' :
-            mode === 'PREP' ? 'bg-accent' : 'bg-text-muted'
-          }`}
-          title={`当前训练模式：${MODE_LABEL[mode] ?? mode}`}
-        />
+      {/* Shell controls: theme (all routes) and collapse (desktop) */}
+      <div className="mb-2 flex flex-col items-center gap-1">
+        <button onClick={toggleTheme} type="button" aria-label="切换主题" className="sidebar-btn">
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+        <button
+          onClick={toggleSidebar}
+          type="button"
+          aria-label={sidebarExpanded ? '收起侧边栏' : '展开侧边栏'}
+          aria-expanded={sidebarExpanded}
+          className="sidebar-btn hidden md:flex"
+        >
+          {sidebarExpanded ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+        </button>
       </div>
     </aside>
   )

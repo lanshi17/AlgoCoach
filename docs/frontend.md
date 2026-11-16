@@ -68,10 +68,11 @@ frontend/
     │   ├── Animation/
     │   │   └── AnimationCard.tsx   # Remotion 动画卡片（轮询 + 播放）
     │   └── Common/
-    │       └── Badge.tsx           # 难度徽章
+    │       ├── Badge.tsx           # 难度徽章
+    │       ├── Button.tsx          # 唯一按钮原语（primary/secondary/ghost）
+    │       └── PageHeader.tsx      # 唯一页面标题（图标 + 标题 + 右侧操作）
     └── pages/
-        ├── CookieSetupPage.tsx     # LeetCode Cookie 配置页
-        ├── SettingsPage.tsx        # 语言/目标/主题/Provider/导出设置
+        ├── SettingsPage.tsx        # 目标/Provider/题库登录/导出
         ├── ProgressPage.tsx        # 训练进度
         ├── KnowledgeGraphPage.tsx  # 掌握关系图
         └── graphLayout.ts          # 图布局算法
@@ -233,21 +234,9 @@ frontend/
 
 轮询由 `usePollAnimation` hook 按 1.5 秒间隔执行；卸载或切换题目时清理定时器。
 
-### 3.9 CookieSetupPage.tsx
+### 3.9 题库登录只有一个页面
 
-**职责**：用户访问 `/settings/cookie` 时配置 LeetCode Cookie；工作区启动不依赖该 Cookie。
-
-**Props**：`{ onDone: () => void }`
-
-**内部状态**：
-- `session: string` / `csrf: string` / `loading: boolean` / `error: string`
-
-**关键逻辑**：
-- 4 步引导（打开 leetcode.cn → F12 → 找 Cookie → 粘贴）
-- 两个字段输入，校验非空后调用 `leetcodeService.setCookie(session, csrf)`
-- 成功后调用 `onDone()` 回调，父组件切换到工作区
-
-保存后调用需要用户身份的 Gateway 题目端点验证 Cookie；LeetCode 返回 401 时，前端自动重新打开 Cookie 设置页。
+`/settings/cookie` 已删除（原 `CookieSetupPage`）：它只是 `/settings/platforms` 的 LeetCode 子集。旧链接经路由重定向到 `/settings/platforms`，LeetCode 的 Cookie / cURL 粘贴与校验都在该页的 LeetCode 卡片里完成。
 
 ---
 
@@ -357,12 +346,12 @@ interface AppState {
   <Route path="/knowledge" element={<KnowledgeGraphPage />} />
   <Route path="/settings" element={<SettingsPage />} />
   <Route path="/settings/platforms" element={<PlatformLoginPage />} />
-  <Route path="/settings/cookie" element={<CookieSetupPage />} />
+  <Route path="/settings/cookie" element={<Navigate to="/settings/platforms" replace />} />
   <Route path="*" element={<Navigate to="/workspace" replace />} />
 </Routes>
 ```
 
-**登录态控制**：`AppShell` 启动时请求 Gateway `/api/auth/status` 仅确认网关可用；未登录仍进入工作区。LeetCode、AcWing 的 Cookie 在相应题库请求时校验，错误展示在题目面板；HDU 可匿名浏览。Cookie 统一由 `/settings/platforms` 管理，`/settings/cookie` 保留为直接进入的 LeetCode 配置页。
+**登录态控制**：`AppShell` 启动时请求 Gateway `/api/auth/status` 仅确认网关可用；未登录仍进入工作区。LeetCode、AcWing 的 Cookie 在相应题库请求时校验，错误展示在题目面板；HDU 可匿名浏览。Cookie 统一由 `/settings/platforms` 管理，`/settings/cookie` 只做重定向，不再有第二个配置页。
 
 ---
 
@@ -439,7 +428,7 @@ interface AppState {
 - AcWing 题单与题面需要有效 Cookie；HDU 不填 Cookie 也可浏览题单与题面。
 - 状态栏通过 `GET /api/platforms` 一次取回三平台配置状态（LeetCode 以 `/api/auth/validate` 结果为准）；保存成功显示 3 秒确认，失败保留输入并提示。
 
-首次启动无需先配置 Cookie；设置页和题目选择面板都提供统一的题库登录入口。
+首次启动无需先配置 Cookie；题库登录只保留设置页一个入口，题目选择面板不再重复该链接。
 
 ### 3.10 Provider 设置
 
@@ -644,7 +633,6 @@ theme={theme === 'dark' ? 'vs-dark' : 'vs'}
 
 ```typescript
 // 路由级懒加载
-const CookieSetupPage = React.lazy(() => import('@/pages/CookieSetupPage'))
 const ProgressPage = React.lazy(() => import('@/pages/ProgressPage'))
 const KnowledgeGraphPage = React.lazy(() => import('@/pages/KnowledgeGraphPage'))
 const SettingsPage = React.lazy(() => import('@/pages/SettingsPage'))

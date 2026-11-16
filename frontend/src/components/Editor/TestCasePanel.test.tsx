@@ -14,7 +14,8 @@ it('shows an empty state instead of an editable test input before selection', ()
   const root = createRoot(element)
   act(() => root.render(<TestCasePanel />))
 
-  expect(element.querySelector('[role="status"]')?.textContent).toContain('选择题目后可编辑测试用例')
+  // No problem selected: the panel stays empty; the picker owns the instruction.
+  expect(element.textContent).toBe('')
   expect(element.querySelector('textarea')).toBeNull()
   act(() => root.unmount())
   element.remove()

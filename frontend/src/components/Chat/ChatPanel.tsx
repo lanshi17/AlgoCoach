@@ -20,16 +20,6 @@ const TRAINING_PHASES: ReadonlyArray<{ value: TrainingPhase; label: string }> = 
   { value: 'upsolve', label: '赛后补题' },
 ]
 
-const TRAINING_PHASE_HINTS: Record<TrainingPhase, string> = {
-  auto: '教练根据当前问题自动选择训练方式。',
-  virtual_contest: '只做读题、约束和计分策略，保留解法给你独立思考。',
-  topic_drill: '围绕同一模型练习变式，强调迁移和关键不变量。',
-  attempt: '只回答题意和评测细节，不直接给答案或代码。',
-  hint: '按概念、不变量、伪代码、实现细节逐级给提示。',
-  review: '复盘建模、证明、复杂度和反例，不假装检查未提供的代码。',
-  upsolve: '先独立补题，再对照正解归类卡点并安排变式。',
-}
-
 /** Convert the problem's total time budget to the remaining seconds at chat time. */
 export function toRemainingSeconds(raw: string, elapsedFocusSec = 0): number | undefined {
   if (raw === '') return undefined
@@ -233,18 +223,10 @@ export default function ChatPanel() {
         >
           {provider.name} · {provider.model || '未配置模型'}
         </span>
-        {isFocus && (
-          <div className="flex items-center gap-1 text-xs text-focus">
-            <Lock size={12} /> 专注模式
-          </div>
-        )}
       </div>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-        {messages.length === 0 && !isFocus && (
-          <EmptyState mode={mode} />
-        )}
         {!isFocus && messages.map(m => (
           <ChatMessage key={m.id} message={m} />
         ))}
@@ -363,9 +345,6 @@ export default function ChatPanel() {
                     <option key={phase.value} value={phase.value}>{phase.label}</option>
                   ))}
                 </select>
-                <span className="basis-full text-[11px] leading-relaxed text-text-muted dark:text-text-dark-muted">
-                  {TRAINING_PHASE_HINTS[trainingPhase]}
-                </span>
               </div>
 
               <div className="flex items-center gap-1.5">
@@ -434,24 +413,6 @@ export default function ChatPanel() {
           </div>
         )}
       </div>
-    </div>
-  )
-}
-
-function EmptyState({ mode }: { mode: string }) {
-  const hints: Record<string, string> = {
-    IDLE:   '选择一道题目，AI 教练会为你分析考点并准备讲解',
-    PREP:   '题目已加载。你可以问 AI 任何关于这道题的问题，或者请求知识点动画讲解',
-    REVIEW: '可以和 AI 教练复盘思路、复杂度和遇到的问题。',
-  }
-  return (
-    <div className="flex flex-col items-center justify-center h-full gap-3 text-center pt-8">
-      <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center">
-        <Sparkles size={24} className="text-accent" />
-      </div>
-      <p className="text-sm text-text-secondary dark:text-text-dark-secondary max-w-[220px]">
-        {hints[mode] ?? ''}
-      </p>
     </div>
   )
 }

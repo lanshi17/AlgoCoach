@@ -23,7 +23,6 @@ function checkAuthStatus(): Promise<unknown> {
   return authStatusRequest
 }
 
-const CookieSetupPage = lazy(() => import('@/pages/CookieSetupPage'))
 const ProgressPage = lazy(() => import('@/pages/ProgressPage'))
 const KnowledgeGraphPage = lazy(() => import('@/pages/KnowledgeGraphPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
@@ -127,7 +126,7 @@ export default function AppShell() {
           <Route path="/knowledge" element={<KnowledgeGraphPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/platforms" element={<PlatformLoginPage />} />
-          <Route path="/settings/cookie" element={<CookieSetupPage onDone={() => { setAuthState('ready'); setCookieInvalid(false) }} />} />
+          <Route path="/settings/cookie" element={<Navigate to="/settings/platforms" replace />} />
           <Route path="*" element={<Navigate to="/workspace" replace />} />
         </Routes></Suspense>
       </div>

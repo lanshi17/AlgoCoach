@@ -14,14 +14,12 @@ const MonacoEditor = lazy(() => import('./MonacoCodeEditor'))
  * IDLE / PREP: editor is read-only until user clicks "Start".
  */
 export default function EditorPanel() {
-  const { code, setCode, lang, theme, mode, activeProblem, enterFocus, submitLoading } = useAppStore(useShallow(state => ({
+  const { code, setCode, lang, theme, mode, submitLoading } = useAppStore(useShallow(state => ({
     code: state.code,
     setCode: state.setCode,
     lang: state.lang,
     theme: state.theme,
     mode: state.mode,
-    activeProblem: state.activeProblem,
-    enterFocus: state.enterFocus,
     submitLoading: state.submitLoading,
   })))
   const editorRef = useRef<unknown>(null)
@@ -38,28 +36,6 @@ export default function EditorPanel() {
       {/* Editor area */}
       <div className="flex-1 min-h-0 relative">
         {submitLoading && <div role="status" className="absolute right-3 top-2 z-10 rounded bg-surface px-2 py-1 text-xs text-text-muted shadow dark:bg-surface-dark">提交中，编辑器暂时只读</div>}
-        {!activeProblem && (
-          <div role="status" className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-surface/85 text-center dark:bg-surface-dark/85">
-            <p className="text-sm font-medium text-text-secondary dark:text-text-dark-secondary">先选择一道题目</p>
-            <p className="text-xs text-text-muted dark:text-text-dark-muted">选题后，这里会显示对应的代码模板</p>
-          </div>
-        )}
-        {/* Not-started overlay */}
-        {activeProblem && mode === 'PREP' && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center
-                          bg-surface/80 dark:bg-surface-dark/80 backdrop-blur-sm">
-            <p className="text-sm text-text-secondary dark:text-text-dark-secondary mb-4">
-              准备好了吗？点击开始，AI 将进入静默模式
-            </p>
-            <button
-              onClick={enterFocus}
-              className="px-5 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white
-                         text-sm font-medium transition-colors"
-            >
-              🔒 开始做题
-            </button>
-          </div>
-        )}
 
         <Suspense fallback={<div className="grid h-full place-items-center text-xs text-text-muted dark:text-text-dark-muted">正在打开编辑器…</div>}>
         <MonacoEditor
@@ -82,7 +58,9 @@ export default function EditorPanel() {
             renderLineHighlight: 'line',
             cursorStyle: 'line',
             suggestOnTriggerCharacters: true,
-            quickSuggestions: isEditable,   // native editor suggestions only; no AI completion
+            quickSuggestions: isEditable ? { other: true, comments: false, strings: false } : false,
+            wordBasedSuggestions: isEditable ? 'currentDocument' : 'off',
+            suggest: { preview: true, snippetsPreventQuickSuggestions: false },
             tabSize: 4,
             padding: { top: 12, bottom: 12 },
             folding: true,

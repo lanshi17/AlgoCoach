@@ -20,7 +20,7 @@ it('keeps the entered cookie and shows an error when saving fails', async () => 
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(field, 'sessionid=example')
     field.dispatchEvent(new Event('input', { bubbles: true }))
   })
-  const button = Array.from(element.querySelectorAll('button')).find(item => item.textContent?.includes('保存 AcWing'))!
+  const button = Array.from(element.querySelectorAll('button')).find(item => item.textContent?.includes('保存'))!
   await act(async () => button.click())
   expect(element.querySelector('[role="alert"]')?.textContent).toContain('保存失败')
   expect(field.value).toBe('sessionid=example')
@@ -43,7 +43,7 @@ it('shows saving feedback while a platform cookie request is pending', async () 
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(field, 'sessionid=example')
     field.dispatchEvent(new Event('input', { bubbles: true }))
   })
-  const button = Array.from(element.querySelectorAll<HTMLButtonElement>('button')).find(item => item.textContent?.includes('保存 AcWing'))!
+  const button = Array.from(element.querySelectorAll<HTMLButtonElement>('button')).find(item => item.textContent?.includes('保存'))!
   act(() => button.click())
   expect(button.disabled).toBe(true)
   expect(button.getAttribute('aria-busy')).toBe('true')
@@ -51,7 +51,7 @@ it('shows saving feedback while a platform cookie request is pending', async () 
   await act(async () => resolveSave())
   expect(button.disabled).toBe(false)
   expect(button.getAttribute('aria-busy')).toBe('false')
-  expect(button.textContent).toContain('保存 AcWing 登录态')
+  expect(button.textContent).toBe('保存')
   act(() => root.unmount())
   element.remove()
 })

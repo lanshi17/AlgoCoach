@@ -17,7 +17,7 @@ vi.mock('./SubmissionResult', () => ({ default: () => <div data-testid="submissi
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
-it('explains the next step when no problem is selected', async () => {
+it('stays silent when no problem is selected', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   useAppStore.setState(useAppStore.getInitialState(), true)
   const element = document.createElement('div')
@@ -25,8 +25,9 @@ it('explains the next step when no problem is selected', async () => {
   const root: Root = createRoot(element)
   await act(async () => root.render(<EditorPanel />))
 
-  expect(element.querySelector('[role="status"]')?.textContent).toContain('先选择一道题目')
-  expect(element.textContent).toContain('选题后，这里会显示对应的代码模板')
+  // The problem picker owns the "choose a problem" instruction; the editor stays silent.
+  expect(element.textContent).not.toContain('先选择一道题目')
+  expect(element.textContent).not.toContain('选题后')
 
   act(() => root.unmount())
   element.remove()
