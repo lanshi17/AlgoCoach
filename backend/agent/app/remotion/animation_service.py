@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 from nanoid import generate
 
-from app.config import remotion_codegen_max_active_jobs
+from app.config import remotion_codegen_max_active_jobs, remotion_enabled
 from app.remotion.codegen import (
     CodegenError,
     SandboxUnavailable,
@@ -30,6 +30,15 @@ from app.remotion.codegen import (
 logger = logging.getLogger(__name__)
 
 LIVE_GENERATED_STATUSES = frozenset({"QUEUED", "RENDERING"})
+
+
+class AnimationDisabled(RuntimeError):
+    """Prebuilt rendering is opt-in (``REMOTION_ENABLED``).
+
+    Every trigger — the chat tool, ``POST /animate`` and the weekly cron — goes
+    through :meth:`AnimationService.enqueue`, so the capability is decided here
+    exactly once; callers only translate this error into their own surface.
+    """
 
 
 class GeneratedJobLimitExceeded(Exception):
@@ -108,6 +117,8 @@ class AnimationService:
         props: dict | None = None,
         composition_id: str | None = None,
     ) -> AnimationJob:
+        if not remotion_enabled():
+            raise AnimationDisabled
         # Default: pick component by topic keyword
         if component is None:
             component = self._guess_component(topic)

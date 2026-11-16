@@ -42,9 +42,9 @@ from app.agent.self_improve import (
     evaluate_due_recommendations,
     monthly_strategy_review,
 )
-from app.config import gateway_base_url, gateway_timeout_seconds, remotion_enabled
+from app.config import gateway_base_url, gateway_timeout_seconds
 from app.memory.memory_service import memory, utcnow
-from app.remotion.animation_service import animation_service
+from app.remotion.animation_service import AnimationDisabled, animation_service
 
 logger = logging.getLogger(__name__)
 
@@ -409,9 +409,7 @@ def weekly_report_props(stats: dict) -> dict:
 
 async def _enqueue_weekly_animation(stats: dict, local: date) -> None:
     # The text report is always kept; the video is part of the opt-in
-    # Remotion surface (REMOTION_ENABLED).
-    if not remotion_enabled():
-        return
+    # Remotion surface, refused by animation_service.enqueue itself.
     try:
         await animation_service.enqueue(
             kind="WEEKLY_REPORT",
@@ -421,6 +419,8 @@ async def _enqueue_weekly_animation(stats: dict, local: date) -> None:
             composition_id="WeeklyReport",
             props=weekly_report_props(stats),
         )
+    except AnimationDisabled:
+        return
     except Exception as exc:  # a failed render must not lose the text report
         logger.warning("Weekly report animation enqueue failed: %s", exc)
 

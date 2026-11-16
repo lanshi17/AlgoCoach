@@ -91,7 +91,7 @@ from app.memory.vector_store import (
     VectorStoreUnavailable,
     vector_store,
 )
-from app.remotion.animation_service import animation_service
+from app.remotion.animation_service import AnimationDisabled, animation_service
 
 logger = logging.getLogger(__name__)
 
@@ -591,14 +591,15 @@ class AlgoCoach:
             return await memory.weak_topics(threshold=threshold)
 
         if name == "request_animation":
-            if not remotion_enabled():
+            try:
+                job = await animation_service.enqueue(
+                    kind=inputs["type"],
+                    topic=inputs["topic"],
+                    title=inputs["title"],
+                    problem_id=inputs.get("problem_id") or problem_id,
+                )
+            except AnimationDisabled:
                 return {"error": "动画功能未启用（REMOTION_ENABLED=false）"}
-            job = await animation_service.enqueue(
-                kind=inputs["type"],
-                topic=inputs["topic"],
-                title=inputs["title"],
-                problem_id=inputs.get("problem_id") or problem_id,
-            )
             sink = _animation_sink.get()
             if sink is not None:
                 sink["animation_id"] = job.id

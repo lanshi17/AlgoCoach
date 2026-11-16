@@ -1,4 +1,28 @@
-from app.remotion.animation_service import PREBUILT, animation_service
+import asyncio
+
+import pytest
+
+from app.remotion.animation_service import (
+    AnimationDisabled,
+    PREBUILT,
+    animation_service,
+)
+
+
+def test_enqueue_is_the_single_gate_for_the_opt_in(monkeypatch):
+    """The chat tool, POST /animate and the cron all call enqueue()."""
+    async def fake_render(job_id):
+        return None
+
+    monkeypatch.setattr(animation_service, "_render", fake_render)
+
+    monkeypatch.delenv("REMOTION_ENABLED", raising=False)
+    with pytest.raises(AnimationDisabled):
+        asyncio.run(animation_service.enqueue(kind="PRE_EXPLAIN", topic="BFS", title="BFS"))
+
+    monkeypatch.setenv("REMOTION_ENABLED", "true")
+    job = asyncio.run(animation_service.enqueue(kind="PRE_EXPLAIN", topic="BFS", title="BFS"))
+    assert job.status == "QUEUED"
 
 
 def test_prebuilt_mapping_only_targets_registered_compositions():

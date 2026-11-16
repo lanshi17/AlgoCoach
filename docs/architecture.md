@@ -100,6 +100,24 @@
 - ❌ 在 FOCUS 模式发送消息到 agent（前端强制封锁）
 - ❌ 存储任何敏感数据（Cookie 在 gateway 侧）
 
+### 2.4 单一入口原则
+
+**每个功能只保留一个入口**：一个函数或端点负责该功能的开关判定、状态写入和副作用，其他调用方只能调用它，不得各自再判一次。
+
+| 功能 | 唯一入口 |
+|------|----------|
+| 预置动画触发 | `animation_service.enqueue` — chat 的 `request_animation`、`POST /animate`、周报 cron 全部调用它；`REMOTION_ENABLED` 只在这里判定，调用方只把 `AnimationDisabled` 映射成自己的返回形态（tool 错误 / 503 / 静默跳过） |
+| 生成代码动画 | `POST /animate/generated` — 开关与 Bearer 鉴权都在端点、早于 body 解析；服务层 `enqueue_generated` 只做容量与沙箱 |
+| 平台 Cookie | `POST /api/platforms/{platform}/cookie` — 设置页与统一登录页共用 |
+| 记忆写入 | `memory_service` 的对应方法（`record_attempt` 等） |
+| 题目原文 | `gateway.fetch_problem` — 自带进程内缓存，tool 与路由复用同一结果 |
+
+判定规则：
+
+1. 能力开关（如 `REMOTION_ENABLED`）只在入口里读一次；调用方看到的是类型化异常，不是第二个 `if`。
+2. “是否暴露”的读取（工具 schema、system prompt 片段）可以出现在展示层，但必须读同一个 `app.config` 函数，不得复制判定逻辑。
+3. 新增触发/写入路径时先问：能不能调用既有入口？不能才新增入口，并删除旧路径。
+
 ---
 
 ## 3. 数据流图

@@ -15,7 +15,6 @@ from app.config import (
     chat_session_id,
     remotion_codegen_enabled,
     remotion_codegen_token,
-    remotion_enabled,
 )
 from app.memory.memory_service import memory
 from app.models.schemas import (
@@ -27,6 +26,7 @@ from app.models.schemas import (
     MemoryRecordResponse,
 )
 from app.remotion.animation_service import (
+    AnimationDisabled,
     GeneratedJobLimitExceeded,
     animation_service,
 )
@@ -178,20 +178,22 @@ async def export_memory():
 async def animate(req: AnimateRequest):
     """Manually request an animation (from frontend, e.g., button click).
 
-    ``REMOTION_ENABLED`` is off by default so the coach never advertises the
-    animation tool; the endpoint then fails closed instead of queueing work.
+    ``REMOTION_ENABLED`` is off by default; ``animation_service.enqueue`` is the
+    single entry that owns the capability, and this route only maps its refusal
+    to HTTP 503.
     """
-    if not remotion_enabled():
+    try:
+        job = await animation_service.enqueue(
+            kind=req.type,
+            topic=req.topic,
+            title=req.title,
+            problem_id=req.problemId,
+        )
+    except AnimationDisabled:
         raise HTTPException(
             503,
             detail={"code": "AnimationDisabled", "reason": "remotion_disabled"},
-        )
-    job = await animation_service.enqueue(
-        kind=req.type,
-        topic=req.topic,
-        title=req.title,
-        problem_id=req.problemId,
-    )
+        ) from None
     return {"job_id": job.id, "status": job.status}
 
 

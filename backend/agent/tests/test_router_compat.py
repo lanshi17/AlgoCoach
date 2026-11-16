@@ -150,11 +150,7 @@ async def test_animate_route_keeps_request_and_response_fields(client, monkeypat
 
 async def test_animate_fails_closed_unless_opted_in(client, monkeypatch):
     monkeypatch.delenv("REMOTION_ENABLED", raising=False)
-
-    async def must_not_enqueue(**kwargs):
-        raise AssertionError("disabled feature must not queue a job")
-
-    monkeypatch.setattr(animation_service, "enqueue", must_not_enqueue)
+    before = len(animation_service._jobs)
 
     resp = await client.post(
         "/animate",
@@ -166,6 +162,8 @@ async def test_animate_fails_closed_unless_opted_in(client, monkeypatch):
         "code": "AnimationDisabled",
         "reason": "remotion_disabled",
     }
+    # The service is the gate: nothing was queued.
+    assert len(animation_service._jobs) == before
 
 
 async def test_poll_animate_keeps_response_fields(client, monkeypatch):

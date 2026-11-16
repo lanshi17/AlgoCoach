@@ -457,17 +457,16 @@ async def test_weekly_report_keeps_text_but_skips_animation_when_disabled(monkey
     async def fake_summary(stats):
         return "仅文本周报"
 
-    async def must_not_enqueue(**kwargs):
-        raise AssertionError("animations are disabled")
-
     monkeypatch.setattr(crons, "generate_weekly_summary", fake_summary)
-    monkeypatch.setattr(crons.animation_service, "enqueue", must_not_enqueue)
+    before = len(crons.animation_service._jobs)
 
     # A different ISO week so the earlier weekly-report test cannot dedupe this.
     notification = await crons.weekly_report(now=NOW - timedelta(days=70))
 
     assert notification is not None
     assert notification.content == "仅文本周报"
+    # The disabled service refuses the enqueue; no render job is created.
+    assert len(crons.animation_service._jobs) == before
 
 
 @pytest.mark.asyncio
