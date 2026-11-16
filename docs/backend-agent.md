@@ -178,6 +178,9 @@ Soul 是 agent 的人格与行为准则，注入 Claude 的 `system` 参数。�
 
 `POST /chat` 增加两个可选字段，`ChatResponse` 与旧请求体不变：
 
+`POST /chat/stream` 提供同一请求体的 SSE 版本，按 `thinking`、`text`、`done`
+和 `error` 事件增量返回；旧 `/chat` 保留给兼容客户端。
+
 | 字段 | 类型 | 规则 |
 |------|------|------|
 | `trainingPhase` | str，默认 `auto` | 允许 `virtual_contest` / `topic_drill` / `attempt` / `hint` / `review` / `upsolve`；大小写与首尾空白归一化，未知/空值回退 `auto` |

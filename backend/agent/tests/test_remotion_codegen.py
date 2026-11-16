@@ -62,10 +62,20 @@ export const GeneratedComposition = () => {
 """
 
 
-def test_default_remotion_root_does_not_assume_repository_depth() -> None:
-    """Packaged images must resolve the bundled project without parents[4]."""
-    root = codegen._default_remotion_root()
-    assert root.name == "remotion-compositions"
+def test_default_remotion_root_does_not_assume_repository_depth(monkeypatch) -> None:
+    """Packaged images must resolve /remotion-compositions, not parents[4].
+
+    Only the packaged path is made to exist, so a resolver that still guessed
+    the checkout depth would return a different directory and fail here.
+    """
+    packaged = Path("/remotion-compositions")
+
+    def only_packaged_exists(self) -> bool:
+        return self == packaged
+
+    monkeypatch.setattr(Path, "is_dir", only_packaged_exists)
+
+    assert codegen._default_remotion_root() == packaged
 
 
 def _enable(monkeypatch, tmp_path: Path) -> Path:

@@ -47,7 +47,8 @@ from agentscope.credential import (
     VolcengineCredential,
     XAICredential,
 )
-from agentscope.message import UserMsg
+from agentscope.event import EventType
+from agentscope.message import Msg, UserMsg
 from agentscope.middleware import ReMeMiddleware
 from agentscope.model import (
     AnthropicChatModel,
@@ -609,6 +610,116 @@ class AlgoCoach:
 
         content = reply.get_text_content() or ""
         return {"content": content, "animation_id": sink.get("animation_id")}
+
+    async def chat_stream(
+        self,
+        session_id: str,
+        message: str,
+        mode: str,
+        problem_id: str | None = None,
+        *,
+        goal: str | UserGoal | None = DEFAULT_GOAL,
+        training_phase: str | TrainingPhase | None = DEFAULT_TRAINING_PHASE,
+        time_remaining_sec: int | None = None,
+        provider: dict[str, Any] | None = None,
+        platform: str | None = None,
+    ):
+        """Stream thinking/text deltas followed by one terminal result.
+
+        AgentScope already exposes provider-native streaming events. Keeping
+        the same prompt, lock, memory and tool lifecycle as :meth:`chat` here
+        means the streaming endpoint is only a transport/UI change; the
+        coaching conversation remains one continuous session.
+        """
+        if mode == "FOCUS":
+            yield {"type": "done", "content": "", "animation_id": None}
+            return
+
+        if (
+            mode == "IDLE"
+            and not problem_id
+            and _PLAIN_GREETING_RE.fullmatch(message)
+        ):
+            yield {
+                "type": "text",
+                "delta": IDLE_GREETING_REPLY,
+            }
+            yield {
+                "type": "done",
+                "content": IDLE_GREETING_REPLY,
+                "animation_id": None,
+            }
+            return
+
+        phase = resolve_training_phase(training_phase)
+        resolved_goal = resolve_goal(goal) or (
+            UserGoal.CONTEST
+            if is_contest_context(phase, time_remaining_sec)
+            else DEFAULT_GOAL
+        )
+        training_context = build_training_context(phase, time_remaining_sec)
+        user_content = f"{training_context}\n{message}" if training_context else message
+        agent = await self._get_agent(session_id, provider)
+        lock = self._locks[session_id]
+
+        async with lock:
+            ctx = await memory.build_context_snapshot()
+            agent._system_prompt = get_system_prompt(
+                resolved_goal,
+                training_phase=phase,
+                time_remaining_sec=time_remaining_sec,
+                animations=remotion_enabled(),
+            ).format(memory_context=json.dumps(ctx, ensure_ascii=False, indent=2)) + (
+                "\n\n当前界面状态（以本轮为准，高于历史对话和记忆）："
+                "如果用户只是问候或闲聊，先自然回应这条消息，不要擅自转成训练、代码复盘或换题引导。"
+                f"模式={mode}；" + ("已选择题目。" if problem_id else "尚未选择题目。") + (
+                    f"当前题目平台={platform}；题目标识={problem_id}。"
+                    if problem_id and platform else ""
+                ) + (
+                    "用户尚未开始做题；正常回答，不要声称处于 FOCUS、催用户贴代码或要求复盘。"
+                    if mode in ("IDLE", "PREP") else
+                    "只有用户提供的提交或代码事实才可用于复盘；不要假定已查看代码。"
+                    if mode == "REVIEW" else
+                    "不要推测用户是否开始做题或提交。"
+                )
+            )
+
+            sink: dict = {}
+            animation_token = _animation_sink.set(sink)
+            problem_token = _active_problem_id.set(problem_id)
+            platform_token = _active_platform.set(platform)
+            streamed_text = ""
+            final_message: Msg | None = None
+            try:
+                async for event in agent.reply_stream(
+                    UserMsg(name="user", content=user_content),
+                    yield_final_msg=True,
+                ):
+                    if isinstance(event, Msg):
+                        final_message = event
+                        continue
+                    event_type = getattr(event, "type", None)
+                    if event_type == EventType.THINKING_BLOCK_DELTA:
+                        yield {"type": "thinking", "delta": event.delta}
+                    elif event_type == EventType.TEXT_BLOCK_DELTA:
+                        streamed_text += event.delta
+                        yield {"type": "text", "delta": event.delta}
+            finally:
+                _active_problem_id.reset(problem_token)
+                _active_platform.reset(platform_token)
+                _animation_sink.reset(animation_token)
+
+            content = final_message.get_text_content() if final_message else None
+            content = content or streamed_text
+            # Non-streaming adapters may emit only the terminal Msg. Complete
+            # the UI without duplicating any deltas already delivered.
+            if content and len(content) > len(streamed_text):
+                yield {"type": "text", "delta": content[len(streamed_text):]}
+            yield {
+                "type": "done",
+                "content": content,
+                "animation_id": sink.get("animation_id"),
+            }
 
     # ── Tool dispatcher ──────────────────────────────────────
 

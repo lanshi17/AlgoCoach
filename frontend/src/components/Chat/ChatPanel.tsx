@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
-import { Lock, Send, Sparkles } from 'lucide-react'
+import { ChevronDown, Lock, Send, Sparkles } from 'lucide-react'
 import { useAppStore } from '@/stores/useAppStore'
 import ChatMessage from './ChatMessage'
 import AnimationCard from '../Animation/AnimationCard'
@@ -70,6 +70,9 @@ export default function ChatPanel() {
   const input = chatDrafts[inputKey] ?? ''
   const setInput = setChatDraft
   const [loading, setLoading] = useState(false)
+  const [thinkingText, setThinkingText] = useState('')
+  const [thinkingExpanded, setThinkingExpanded] = useState(false)
+  const [streamedReply, setStreamedReply] = useState('')
   const [errorAction, setErrorAction] = useState<ReturnType<typeof getAgentErrorAction>>(null)
   const [retryMessage, setRetryMessage] = useState<Msg | null>(null)
   const trainingPhase = chatPhases[inputKey] ?? 'auto'
@@ -87,6 +90,9 @@ export default function ChatPanel() {
   useEffect(() => {
     contextVersionRef.current += 1
     setLoading(false)
+    setThinkingText('')
+    setThinkingExpanded(false)
+    setStreamedReply('')
     setErrorAction(null)
     return () => {
       chatRequestRef.current?.abort()
@@ -123,12 +129,15 @@ export default function ChatPanel() {
     const requestMode = mode
     setErrorAction(null)
     setLoading(true)
+    setThinkingText('')
+    setThinkingExpanded(false)
+    setStreamedReply('')
     const controller = new AbortController()
     chatRequestRef.current = controller
 
     try {
       const timeRemainingSec = toRemainingSeconds(timeInput, getFocusDurationSec())
-      const reply = await agentService.chat(userMsg.content, {
+      const reply = await agentService.chatStream(userMsg.content, {
         mode: requestMode,
         problemId: activeProblem?.platformId,
         platform: activeProblem?.platform,
@@ -136,6 +145,9 @@ export default function ChatPanel() {
         provider,
         trainingPhase: userMsg.trainingPhase ?? trainingPhase,
         ...(timeRemainingSec !== undefined ? { timeRemainingSec } : {}),
+      }, {
+        onThinking: delta => setThinkingText(current => current + delta),
+        onText: delta => setStreamedReply(current => current + delta),
       }, controller.signal)
       const current = useAppStore.getState()
       if (!canCommitChatReply(requestMode, current.mode, controller.signal.aborted)
@@ -156,6 +168,8 @@ export default function ChatPanel() {
           timestamp: new Date().toISOString(), mode: requestMode,
         })
       }
+      setStreamedReply('')
+      setThinkingText('')
       setRetryMessage(null)
       if (isRetry) setInput('')
     } catch (e) {
@@ -166,6 +180,8 @@ export default function ChatPanel() {
       if (!useAppStore.getState().chatDrafts[inputKey]) setInput(userMsg.content)
       setErrorAction(getAgentErrorAction(e))
       setRetryMessage(userMsg)
+      setStreamedReply('')
+      setThinkingText('')
       addMessage({
         id: nanoid(),
         role: 'system',
@@ -233,16 +249,30 @@ export default function ChatPanel() {
           <ChatMessage key={m.id} message={m} />
         ))}
         {!isFocus && loading && (
-          <div role="status" aria-live="polite" aria-atomic="true" className="flex items-center gap-2 text-xs text-text-muted dark:text-text-dark-muted">
-            <span className="inline-flex gap-0.5">
-              {[0,1,2].map(i => (
-                <span key={i} className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce"
-                      style={{ animationDelay: `${i * 0.15}s` }} />
-              ))}
-            </span>
-            正在思考…
+          <div role="status" aria-live="polite" aria-atomic="true" className="space-y-2 text-xs text-text-muted dark:text-text-dark-muted">
+            <button type="button" aria-expanded={thinkingExpanded} aria-controls="chat-thinking-details"
+              onClick={() => setThinkingExpanded(value => !value)}
+              className="flex w-full min-w-0 items-center gap-2 text-left hover:text-text-secondary dark:hover:text-text-dark-secondary">
+              <span className="inline-flex shrink-0 gap-0.5">
+                {[0,1,2].map(i => (
+                  <span key={i} className="h-1.5 w-1.5 rounded-full bg-accent animate-bounce"
+                        style={{ animationDelay: `${i * 0.15}s` }} />
+                ))}
+              </span>
+              <span className="min-w-0 flex-1 truncate">
+                {thinkingText ? `正在思考：${lastThinkingLine(thinkingText)}` : '正在思考…'}
+              </span>
+              <ChevronDown size={14} className={`shrink-0 transition-transform ${thinkingExpanded ? 'rotate-180' : ''}`} />
+            </button>
+            {thinkingExpanded && <div id="chat-thinking-details" className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-surface-soft px-3 py-2 text-[11px] leading-relaxed dark:border-border-dark dark:bg-surface-dark-soft">
+              {thinkingText || '模型尚未返回可展开的思考内容。'}
+            </div>}
           </div>
         )}
+        {!isFocus && streamedReply && <ChatMessage message={{
+          id: 'streaming-reply', role: 'agent', content: streamedReply,
+          timestamp: new Date().toISOString(), mode,
+        }} />}
 
         {/* Active animation card */}
         {!isFocus && animation && <AnimationCard
@@ -424,4 +454,9 @@ function EmptyState({ mode }: { mode: string }) {
       </p>
     </div>
   )
+}
+
+function lastThinkingLine(value: string): string {
+  const lines = value.split(/\r?\n/).filter(Boolean)
+  return lines[lines.length - 1] ?? ''
 }

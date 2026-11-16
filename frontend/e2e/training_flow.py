@@ -20,6 +20,26 @@ summary = [
 def respond(route, status=200, body=None):
     route.fulfill(status=status, content_type='application/json', body=json.dumps({} if body is None else body))
 
+def respond_chat(route, path, status=200, body=None):
+    """Fulfill either the legacy JSON chat route or the SSE chat route."""
+    body = {} if body is None else body
+    if path.endswith('/stream'):
+        if status >= 400:
+            events = [{"type": "error", "status": status, "detail": body.get("detail")}]
+        else:
+            events = []
+            if body.get("content"):
+                events.append({"type": "text", "delta": body["content"]})
+            events.append({
+                "type": "done",
+                "content": body.get("content", ""),
+                "animation_id": body.get("animationId"),
+            })
+        payload = ''.join(f'data: {json.dumps(event, ensure_ascii=False)}\n\n' for event in events)
+        route.fulfill(status=200, content_type='text/event-stream', body=payload)
+    else:
+        respond(route, status=status, body=body)
+
 def mock_api(route):
     global valid_cookie, problem_detail_calls, problem_list_requests, retry_requests, review_requests, provider_repair_requests
     request = route.request
@@ -85,42 +105,42 @@ def mock_api(route):
         route.fulfill(status=200, content_type='application/zip', body=b'PK\x03\x04mock')
     elif path == '/api/submissions' and request.method == 'GET':
         respond(route, body=[])
-    elif path == '/api/agent/chat':
+    elif path in ('/api/agent/chat', '/api/agent/chat/stream'):
         payload = json.loads(request.post_data or '{}')
         assert 'def two_sum' not in payload['message']
         if payload['message'] == '验证面板切换回复':
             time.sleep(1)
-            respond(route, body={"content": "切换面板后，这条回复仍然送达。", "animationId": None})
+            respond_chat(route, path, body={"content": "切换面板后，这条回复仍然送达。", "animationId": None})
         elif payload['message'] == '验证失败后重试':
             retry_requests += 1
             if retry_requests == 1:
-                respond(route, status=502, body={"detail": "模型服务暂时不可用，请稍后重试。"})
+                respond_chat(route, path, status=502, body={"detail": "模型服务暂时不可用，请稍后重试。"})
             else:
-                respond(route, body={"content": "失败的消息已成功重试。", "animationId": None})
+                respond_chat(route, path, body={"content": "失败的消息已成功重试。", "animationId": None})
         elif payload['message'] == '配置缺失场景':
             provider_repair_requests += 1
             if 'provider' not in payload:
-                respond(route, status=400, body={"detail": {
+                respond_chat(route, path, status=400, body={"detail": {
                     "code": "provider_api_key_required",
                     "message": "当前 Provider 需要 API key，请在设置页配置",
                 }})
             else:
-                respond(route, body={"content": "Provider 修复后已成功重试。", "animationId": None})
+                respond_chat(route, path, body={"content": "Provider 修复后已成功重试。", "animationId": None})
         elif payload['trainingPhase'] == 'review':
             assert payload['mode'] == 'REVIEW'
             assert payload['goal'] == 'contest'
             review_requests += 1
             if review_requests == 1:
-                respond(route, status=502, body={"detail": "模型服务暂时不可用，请稍后重试。"})
+                respond_chat(route, path, status=502, body={"detail": "模型服务暂时不可用，请稍后重试。"})
             else:
-                respond(route, body={
+                respond_chat(route, path, body={
                     "content": "复盘完成：先验证不变量，再比较复杂度，时间复杂度是 $O(n\\log n)$。\n\n"
                                "$$\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}$$",
                     "animationId": None,
                 })
         else:
             assert payload['goal'] == 'interview_prep'
-            respond(route, body={"content": "已按面试目标调整教练建议。", "animationId": None})
+            respond_chat(route, path, body={"content": "已按面试目标调整教练建议。", "animationId": None})
     else:
         respond(route, status=404, body={"message": f'unmocked {path}'})
 

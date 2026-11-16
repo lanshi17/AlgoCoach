@@ -6,6 +6,7 @@ from typing import Any
 
 import anthropic
 from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 from openai import APIConnectionError as OpenAIAPIConnectionError
 from openai import APIStatusError as OpenAIAPIStatusError
 from pydantic import ValidationError
@@ -40,6 +41,11 @@ from app.remotion.codegen import (
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _sse(payload: dict[str, Any]) -> str:
+    """Encode one newline-safe JSON event for the chat stream."""
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
 def _provider_error_detail(status_code: int, protocol: str) -> str:
@@ -134,6 +140,10 @@ async def chat(req: ChatRequest):
             status_code=502,
             detail="无法连接模型服务，请检查网络和 Provider Base URL。",
         ) from None
+    except HTTPException:
+        # A deliberate HTTPException already carries the status and detail the
+        # client needs; the catch-all below must never rewrite it into a 502.
+        raise
     except Exception:
         # AgentScope/provider adapters can surface a new SDK-specific
         # exception type without going through the typed OpenAI/Anthropic
@@ -145,6 +155,90 @@ async def chat(req: ChatRequest):
             detail="教练服务暂时不可用，请稍后重试。",
         ) from None
     return ChatResponse(content=result["content"], animationId=result["animation_id"])
+
+
+@router.post("/chat/stream")
+async def chat_stream(req: ChatRequest):
+    """Stream thinking/text deltas through a small SSE contract.
+
+    Errors are emitted as an event because HTTP headers have already been sent
+    once the first model delta arrives. The existing JSON ``/chat`` endpoint
+    remains unchanged for older clients.
+    """
+    session_id = chat_session_id()
+    if req.conversationId or (req.problemId and req.platform):
+        identity = json.dumps(
+            [req.conversationId, req.platform, req.problemId],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        session_id += "-" + hashlib.sha256(identity.encode()).hexdigest()[:24]
+    provider = req.provider
+
+    async def events():
+        try:
+            kwargs: dict[str, Any] = {
+                "session_id": session_id,
+                "message": req.message,
+                "mode": req.mode,
+                "problem_id": req.problemId,
+                "goal": req.goal,
+                "training_phase": req.trainingPhase,
+                "time_remaining_sec": req.timeRemainingSec,
+            }
+            if req.platform:
+                kwargs["platform"] = req.platform
+            if provider is not None:
+                kwargs["provider"] = provider.model_dump()
+            async for event in coach.chat_stream(**kwargs):
+                yield _sse(event)
+        except (OpenAIAPIStatusError, anthropic.APIStatusError) as exc:
+            protocol = provider.protocol if provider is not None else ""
+            logger.warning(
+                "Model provider rejected streaming chat request (protocol=%s, status=%s)",
+                protocol,
+                exc.status_code,
+            )
+            yield _sse({
+                "type": "error",
+                "status": 502,
+                "detail": _provider_error_detail(exc.status_code, protocol),
+            })
+        except ProviderConfigurationError as exc:
+            logger.warning("Streaming provider configuration rejected: %s", exc.code)
+            yield _sse({
+                "type": "error",
+                "status": 400,
+                "detail": {"code": exc.code, "message": str(exc)},
+            })
+        except (PermissionError, RuntimeError) as exc:
+            logger.warning("Streaming provider configuration rejected: %s", type(exc).__name__)
+            yield _sse({
+                "type": "error",
+                "status": 400,
+                "detail": str(exc) if isinstance(exc, RuntimeError)
+                else "模型 Provider 配置无效，请检查 API Key 和模型名称。",
+            })
+        except (OpenAIAPIConnectionError, anthropic.APIConnectionError):
+            logger.warning("Streaming model provider connection failed")
+            yield _sse({
+                "type": "error",
+                "status": 502,
+                "detail": "无法连接模型服务，请检查网络和 Provider Base URL。",
+            })
+        except Exception:
+            logger.exception("Unexpected streaming chat failure")
+            yield _sse({
+                "type": "error",
+                "status": 502,
+                "detail": "教练服务暂时不可用，请稍后重试。",
+            })
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/memory/record", response_model=MemoryRecordResponse)

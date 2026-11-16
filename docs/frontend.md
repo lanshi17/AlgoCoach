@@ -133,7 +133,7 @@ frontend/
 - 运行/提交仅在 FOCUS 模式可用；请求期间显示 loading 并阻止重复提交。REVIEW 可继续做题，重试阶段的 FOCUS 时间会累计。
 - Gateway 保存提交后将判题事实、用时和题目标签写入 Agent episodic/semantic 记忆；前端随后发送不含代码的 `review` 阶段消息，启动 OI/xCPC 结构化复盘。
 
-**当前限制**：REVIEW 的 Agent 网络调用没有 SSE 流式呈现；当前是整条回复返回后一次展示。
+**当前行为**：Agent 回复通过 `/api/agent/chat/stream` 以 SSE 流式呈现；思考状态默认折叠为一行，模型返回思考事件时可展开查看，文本回复也会逐段出现。旧版 Gateway 不支持该路径时自动回退到 JSON `/api/agent/chat`。
 
 ### 3.4 EditorPanel.tsx
 
@@ -187,7 +187,7 @@ frontend/
 - `loading` 时显示三点跳动动画 + "思考中…"
 - `activeAnimation` 存在时在消息流末尾渲染 `<AnimationCard>`
 
-**当前行为**：对话按题目保存在进程内 Zustand 状态，切换题目后可返回原对话；刷新页面会清空，避免把用户粘贴的代码写入浏览器存储。Submit 结束后发送不含代码的判题摘要启动赛后复盘；动画生成期间加入 system 状态消息。尚未实现 SSE。
+**当前行为**：对话按题目保存在进程内 Zustand 状态，切换题目后可返回原对话；刷新页面会清空，避免把用户粘贴的代码写入浏览器存储。Submit 结束后发送不含代码的判题摘要启动赛后复盘；动画生成期间加入 system 状态消息。聊天文本和可用的 thinking block 通过 SSE 流式到达。
 
 ### 3.6 ChatMessage.tsx
 

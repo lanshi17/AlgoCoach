@@ -134,6 +134,31 @@ describe('chat when changing training context', () => {
     expect(element.querySelector('button[aria-label="发送消息"]')).not.toBeNull()
   })
 
+  it('shows one-line thinking and expands streamed thinking details', async () => {
+    let finish!: (reply: { content: string }) => void
+    vi.spyOn(agentService, 'chatStream').mockImplementation(async (_message, _ctx, handlers) => {
+      handlers?.onThinking?.('先确认约束。\n再选择不变量。')
+      return await new Promise(resolve => { finish = resolve })
+    })
+    useAppStore.getState().setActiveProblem(problem)
+    act(() => renderChatPanel(root))
+    const textarea = element.querySelector<HTMLTextAreaElement>('textarea[aria-label="发送给 AI 教练的消息"]')!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, '怎么建模？')
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => element.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')!.click())
+
+    const thinking = element.querySelector<HTMLButtonElement>('button[aria-controls="chat-thinking-details"]')!
+    expect(thinking.textContent).toContain('正在思考：再选择不变量。')
+    expect(thinking.getAttribute('aria-expanded')).toBe('false')
+    act(() => thinking.click())
+    expect(element.querySelector('#chat-thinking-details')?.textContent).toContain('先确认约束。')
+    expect(thinking.getAttribute('aria-expanded')).toBe('true')
+    await act(async () => finish({ content: '答案流式完成。' }))
+    expect(element.textContent).toContain('答案流式完成。')
+  })
+
   it('does not claim a submission occurred after ending focus manually', () => {
     act(() => {
       useAppStore.getState().setActiveProblem(problem)

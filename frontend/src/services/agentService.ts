@@ -7,6 +7,11 @@ interface ChatReply {
   animationId?: string
 }
 
+export interface ChatStreamHandlers {
+  onThinking?: (delta: string) => void
+  onText?: (delta: string) => void
+}
+
 /** Keep provider/API errors visible in the conversation without raw network details. */
 export function getAgentErrorMessage(error: unknown): string {
   if (axios.isAxiosError<{ detail?: unknown; message?: unknown }>(error)) {
@@ -98,6 +103,105 @@ export const agentService = {
       ...(shouldSendProvider ? { provider } : {}),
     }, { signal })
     return data
+  },
+
+  async chatStream(
+    message: string,
+    ctx: ChatCtx,
+    handlers: ChatStreamHandlers = {},
+    signal?: AbortSignal,
+  ): Promise<ChatReply> {
+    // Keep unit-test/older embedded browsers usable while the normal browser
+    // path consumes the gateway's SSE response incrementally.
+    const isTestDom = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent)
+    if (typeof window === 'undefined' || typeof window.fetch !== 'function' || !window.ReadableStream || isTestDom) {
+      const reply = await this.chat(message, ctx, signal)
+      if (reply.content) handlers.onText?.(reply.content)
+      return reply
+    }
+
+    const { provider, ...rest } = ctx
+    const shouldSendProvider = Boolean(provider?.apiKey) || provider?.protocol === 'ollama'
+    const response = await window.fetch('/api/agent/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify({
+        message,
+        ...rest,
+        conversationId,
+        ...(shouldSendProvider ? { provider } : {}),
+      }),
+      signal,
+    })
+    // A rolling deployment may expose the legacy endpoint before the stream
+    // route is available. Keep the conversation usable during that window.
+    if (response.status === 404) {
+      const reply = await this.chat(message, ctx, signal)
+      if (reply.content) handlers.onText?.(reply.content)
+      return reply
+    }
+    if (!response.ok) {
+      let data: { detail?: unknown; message?: unknown } = {}
+      try { data = await response.json() as typeof data } catch { /* use status fallback */ }
+      const error = new Error(`chat stream failed: ${response.status}`) as Error & {
+        isAxiosError: boolean
+        response: { status: number; data: typeof data }
+      }
+      error.isAxiosError = true
+      error.response = { status: response.status, data }
+      throw error
+    }
+    if (!response.body) {
+      const reply = await this.chat(message, ctx, signal)
+      if (reply.content) handlers.onText?.(reply.content)
+      return reply
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let reply: ChatReply | null = null
+    const consume = (frame: string) => {
+      const line = frame.split(/\r?\n/).find(item => item.startsWith('data:'))
+      if (!line) return
+      const event = JSON.parse(line.slice(5).trim()) as {
+        type: 'thinking' | 'text' | 'done' | 'error'
+        delta?: string
+        content?: string
+        animation_id?: string | null
+        status?: number
+        detail?: unknown
+      }
+      if (event.type === 'thinking' && event.delta) handlers.onThinking?.(event.delta)
+      if (event.type === 'text' && event.delta) handlers.onText?.(event.delta)
+      if (event.type === 'error') {
+        const error = new Error('chat stream failed') as Error & {
+          isAxiosError: boolean
+          response: { status: number; data: { detail?: unknown } }
+        }
+        error.isAxiosError = true
+        error.response = { status: event.status ?? 502, data: { detail: event.detail } }
+        throw error
+      }
+      if (event.type === 'done') {
+        reply = { content: event.content ?? '', animationId: event.animation_id ?? undefined }
+      }
+    }
+    while (true) {
+      const { value, done } = await reader.read()
+      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done })
+      let boundary = buffer.indexOf('\n\n')
+      while (boundary >= 0) {
+        const frame = buffer.slice(0, boundary)
+        buffer = buffer.slice(boundary + 2)
+        consume(frame)
+        boundary = buffer.indexOf('\n\n')
+      }
+      if (done) break
+    }
+    if (buffer.trim()) consume(buffer)
+    if (!reply) throw new Error('聊天流提前结束')
+    return reply
   },
 
   async requestAnimation(type: string, topic: string, title: string, problemId?: string) {

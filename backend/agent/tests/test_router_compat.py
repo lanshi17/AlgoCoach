@@ -94,6 +94,25 @@ async def test_chat_focus_mode_still_returns_empty_content(client):
     assert resp.json() == {"content": "", "animationId": None}
 
 
+async def test_chat_stream_emits_thinking_text_and_done_events(client, monkeypatch):
+    async def fake_stream(**_kwargs):
+        yield {"type": "thinking", "delta": "先确认约束。"}
+        yield {"type": "text", "delta": "答案是 O(n)。"}
+        yield {"type": "done", "content": "答案是 O(n)。", "animation_id": None}
+
+    monkeypatch.setattr(router_module.coach, "chat_stream", fake_stream)
+    response = await client.post(
+        "/chat/stream",
+        json={"message": "怎么做？", "mode": "PREP", "problemId": "two-sum"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert '"type": "thinking"' in response.text
+    assert '"delta": "先确认约束。"' in response.text
+    assert '"type": "done"' in response.text
+
+
 async def test_chat_still_requires_message(client):
     resp = await client.post("/chat", json={"mode": "FOCUS"})
 

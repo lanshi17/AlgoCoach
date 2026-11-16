@@ -26,9 +26,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Remotion rasterizes inside Chromium; without a CJK font every Chinese label
 # renders blank. Kept in its own layer (after the slow pip install) so changing
-# the font set does not invalidate the Python dependency cache. The build fails
-# instead of shipping a renderer that silently drops Chinese text.
-RUN apt-get update && apt-get install -y --no-install-recommends fonts-noto-cjk \
+# the font set does not invalidate the Python dependency cache. `fontconfig` is
+# named explicitly because the layer calls fc-cache/fc-list: today it only
+# arrives transitively through chromium, which is not a contract we control.
+# The build fails instead of shipping a renderer that silently drops Chinese
+# text.
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-noto-cjk fontconfig \
     && fc-cache -f \
     && test -n "$(fc-list :lang=zh)" \
     && rm -rf /var/lib/apt/lists/*

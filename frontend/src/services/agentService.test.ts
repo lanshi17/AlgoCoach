@@ -98,6 +98,41 @@ describe('focus chat guard', () => {
     )
   })
 
+  it('parses streamed thinking and answer deltas', async () => {
+    const nativeFetch = window.fetch
+    const nativeReadableStream = (window as unknown as { ReadableStream?: typeof ReadableStream }).ReadableStream
+    Object.defineProperty(window.navigator, 'userAgent', { configurable: true, value: 'Chrome' })
+    Object.defineProperty(window, 'ReadableStream', { configurable: true, value: ReadableStream })
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(
+          'data: {"type":"thinking","delta":"先看约束。"}\n\n'
+          + 'data: {"type":"text","delta":"复杂度是 O(n)。"}\n\n'
+          + 'data: {"type":"done","content":"复杂度是 O(n)。","animation_id":null}\n\n',
+        ))
+        controller.close()
+      },
+    })
+    const fetch = vi.fn().mockResolvedValue(new Response(body, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    }))
+    Object.defineProperty(window, 'fetch', { configurable: true, value: fetch })
+    const thinking: string[] = []
+    const text: string[] = []
+    const reply = await agentService.chatStream('hello', { mode: 'PREP' }, {
+      onThinking: delta => thinking.push(delta),
+      onText: delta => text.push(delta),
+    })
+
+    expect(reply).toEqual({ content: '复杂度是 O(n)。' })
+    expect(thinking).toEqual(['先看约束。'])
+    expect(text).toEqual(['复杂度是 O(n)。'])
+    expect(fetch).toHaveBeenCalledWith('/api/agent/chat/stream', expect.objectContaining({ method: 'POST' }))
+    Object.defineProperty(window, 'fetch', { configurable: true, value: nativeFetch })
+    Object.defineProperty(window, 'ReadableStream', { configurable: true, value: nativeReadableStream })
+  })
+
   it('uses a stable conversation identifier for requests in this page', async () => {
     const post = vi.spyOn(axios, 'post').mockResolvedValue({ data: { content: 'ok' } })
     await agentService.chat('first', { mode: 'IDLE' })

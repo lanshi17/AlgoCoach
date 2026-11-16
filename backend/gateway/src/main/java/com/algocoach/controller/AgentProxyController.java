@@ -5,6 +5,7 @@ import org.springframework.web.context.request.async.DeferredResult;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyEmitter;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
@@ -62,6 +64,7 @@ public class AgentProxyController {
     public static final String BASE_PATH = "/api/agent";
 
     static final String CHAT_PATH = "/chat";
+    static final String CHAT_STREAM_PATH = "/chat/stream";
     static final String MEMORY_RECORD_PATH = "/memory/record";
     static final String MEMORY_PROFILE_PATH = "/memory/profile";
     static final String MEMORY_EXPORT_PATH = "/memory/export";
@@ -111,6 +114,33 @@ public class AgentProxyController {
         result.onTimeout(upstream::dispose);
         result.onCompletion(upstream::dispose);
         return result;
+    }
+
+    @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public ResponseBodyEmitter chatStream(
+            HttpServletRequest request,
+            @RequestBody(required = false) byte[] body) {
+        ResponseBodyEmitter emitter = new ResponseBodyEmitter(CHAT_ASYNC_TIMEOUT.toMillis());
+        WebClient.RequestBodySpec preparedRequest = agentChatClient.method(HttpMethod.POST)
+                .uri(upstreamUri(CHAT_STREAM_PATH, request.getQueryString()))
+                .headers(headers -> copyRequestHeaders(request, headers));
+        WebClient.RequestHeadersSpec<?> requestWithBody =
+                body != null ? preparedRequest.bodyValue(body) : preparedRequest;
+        Disposable upstream = requestWithBody.exchangeToFlux(response ->
+                        response.bodyToFlux(byte[].class))
+                .subscribe(
+                        chunk -> {
+                            try {
+                                emitter.send(chunk);
+                            } catch (Exception sendFailure) {
+                                emitter.completeWithError(sendFailure);
+                            }
+                        },
+                        emitter::completeWithError,
+                        emitter::complete);
+        emitter.onTimeout(upstream::dispose);
+        emitter.onCompletion(upstream::dispose);
+        return emitter;
     }
 
     @PostMapping("/memory/record")

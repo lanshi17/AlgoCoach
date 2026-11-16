@@ -15,7 +15,7 @@ from conftest import FakeChatModel, RecordingReMe
 
 from app.agent import coach as coach_module
 from app.agent import router as router_module
-from app.agent.coach import AlgoCoach
+from app.agent.coach import IDLE_GREETING_REPLY, AlgoCoach
 from app.remotion.animation_service import animation_service
 
 pytestmark = pytest.mark.asyncio
@@ -67,15 +67,32 @@ async def test_chat_route_uses_agentscope_agent_and_stable_session(
     assert reme.start_count == 1
 
 
+async def test_chat_stream_yields_terminal_message(tmp_path):
+    coach, model, reme = _make_coach(tmp_path)
+
+    events = [event async for event in coach.chat_stream(
+        "stream-session", "讲讲 BFS", "PREP", "bfs-1"
+    )]
+
+    assert events[-1] == {
+        "type": "done",
+        "content": "好的",
+        "animation_id": None,
+    }
+    assert model.calls
+    assert reme.start_count == 1
+
+
+@pytest.mark.parametrize("message", ["help", "你好"])
 async def test_focus_route_returns_before_model_memory_and_tools(
-    client, tmp_path, monkeypatch
+    client, tmp_path, monkeypatch, message
 ):
     coach, model, reme = _make_coach(tmp_path)
     monkeypatch.setattr(router_module, "coach", coach)
 
     resp = await client.post(
         "/chat",
-        json={"message": "help", "mode": "FOCUS", "problemId": "two-sum"},
+        json={"message": message, "mode": "FOCUS", "problemId": "two-sum"},
     )
 
     assert resp.status_code == 200
@@ -99,6 +116,16 @@ async def test_idle_plain_greeting_does_not_invoke_model_or_claim_focus(tmp_path
     assert model.calls == []
     assert reme.start_count == 0
     assert reme.jobs == []
+
+
+async def test_idle_greeting_with_a_question_still_reaches_the_model(tmp_path):
+    """Only a bare greeting is short-circuited; a question keeps its turn."""
+    coach, model, _reme = _make_coach(tmp_path)
+
+    result = await coach.chat("greeting-question", "你好，这题怎么做？", "IDLE")
+
+    assert result["content"] != IDLE_GREETING_REPLY
+    assert len(model.calls) == 1
 
 
 @pytest.mark.parametrize(
