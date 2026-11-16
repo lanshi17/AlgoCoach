@@ -398,8 +398,9 @@ export default function ProblemPanel() {
         className="flex-1 overflow-y-auto px-5 py-4 text-sm leading-relaxed
                    text-text-primary dark:text-text-dark-primary prose prose-sm
                    dark:prose-invert max-w-none
-                   [&_pre]:bg-surface-muted [&_pre]:dark:bg-surface-dark-muted
-                   [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:text-xs [&_pre]:font-mono"
+                   [&_pre]:overflow-x-auto [&_pre]:bg-surface-muted [&_pre]:dark:bg-surface-dark-muted
+                   [&_pre]:rounded-lg [&_pre]:p-3 [&_pre]:text-xs [&_pre]:font-mono
+                   [&_code]:break-words"
         dangerouslySetInnerHTML={{ __html: safeContent }}
       />
 

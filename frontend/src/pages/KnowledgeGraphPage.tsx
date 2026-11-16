@@ -3,6 +3,7 @@ import { AlertCircle, BarChart3, Loader2, RefreshCw } from 'lucide-react'
 import { agentService } from '@/services/agentService'
 import Button from '@/components/Common/Button'
 import PageHeader from '@/components/Common/PageHeader'
+import Segmented from '@/components/Common/Segmented'
 import { makeGraph } from './graphLayout'
 import type { AgentProfile } from '@/types'
 
@@ -55,10 +56,12 @@ export default function KnowledgeGraphPage() {
           title="知识图谱"
           icon={<BarChart3 size={18} />}
           actions={<>
-            <Button size="sm" onClick={() => setListView(value => !value)} aria-pressed={listView}
-              aria-label={listView ? '切换到图谱视图' : '切换到列表视图'}>
-              {listView ? '图谱视图' : '列表视图'}
-            </Button>
+            <Segmented
+              label="视图"
+              value={listView ? 'list' : 'graph'}
+              options={[{ value: 'graph', label: '图谱' }, { value: 'list', label: '列表' }] as const}
+              onChange={value => setListView(value === 'list')}
+            />
             <Button size="sm" onClick={() => void load()} disabled={loading} aria-busy={loading} aria-label="刷新知识图谱">
               <RefreshCw size={14} />刷新
             </Button>

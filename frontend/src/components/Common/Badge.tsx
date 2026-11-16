@@ -11,5 +11,5 @@ export function Badge({ difficulty }: { difficulty: Difficulty }) {
     MEDIUM: 'badge-medium',
     HARD:   'badge-hard',
   }[difficulty]
-  return <span className={`badge ${cls}`}>{LABEL[difficulty]}</span>
+  return <span className={`badge ${cls} whitespace-nowrap`}>{LABEL[difficulty]}</span>
 }

@@ -29,7 +29,7 @@ it('leaves the theme control to the shell sidebar', () => {
   element.remove()
 })
 
-it('makes unavailable judging actions visibly neutral and explains why', () => {
+it('only renders judge actions when they can be used', () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   useAppStore.setState(useAppStore.getInitialState(), true)
   const element = document.createElement('div')
@@ -44,13 +44,10 @@ it('makes unavailable judging actions visibly neutral and explains why', () => {
     id: 'one', platform: 'LEETCODE', platformId: 'one', title: 'One', difficulty: 'EASY',
     contentHtml: '', topics: [], sampleTestCases: '', codeSnippets: [],
   }))
-  const submit = element.querySelector<HTMLButtonElement>('button[aria-label="提交"]')!
-  const run = element.querySelector<HTMLButtonElement>('button[aria-label="运行"]')!
-  expect(submit.disabled).toBe(true)
-  expect(run.disabled).toBe(true)
-  // The visible note (not a hover title) is the only explanation.
+  // PREP has its own single entry: the problem panel's 开始做题 button.
+  expect(element.querySelector('button[aria-label="提交"]')).toBeNull()
+  expect(element.querySelector('button[aria-label="运行"]')).toBeNull()
   expect(element.querySelector('#judge-capability-note')).toBeNull()
-  expect(submit.className).toContain('disabled:bg-surface-muted')
 
   act(() => root.unmount())
   element.remove()
@@ -73,8 +70,11 @@ it('explains unsupported in-app judging for AcWing and HDU without relying on ho
   expect(note?.textContent).toContain('AcWing')
   expect(note?.textContent).toContain('回对应平台完成判题')
   expect(note?.className).toContain('text-[11px]')
+  const submit = element.querySelector<HTMLButtonElement>('button[aria-label="提交"]')!
+  expect(submit.disabled).toBe(true)
+  expect(submit.className).toContain('disabled:bg-surface-muted')
   expect(element.querySelector('button[aria-label="运行"]')?.getAttribute('aria-describedby')).toBe('judge-capability-note')
-  expect(element.querySelector('button[aria-label="提交"]')?.getAttribute('aria-describedby')).toBe('judge-capability-note')
+  expect(submit.getAttribute('aria-describedby')).toBe('judge-capability-note')
 
   act(() => root.unmount())
   element.remove()

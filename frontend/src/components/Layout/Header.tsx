@@ -206,7 +206,7 @@ export default function Header() {
   const remainingTimeSec = problemTimeLimitSec === undefined
     ? undefined
     : Math.max(0, problemTimeLimitSec - focusDurationSec)
-  const judgeCapabilityNote = activeProblem && !judgeRunnable
+  const judgeCapabilityNote = activeProblem && mode === 'FOCUS' && !judgeRunnable
     ? `${activeProblem.platform === 'ACWING' ? 'AcWing' : 'HDU'} 暂不支持站内运行和提交，请回对应平台完成判题。`
     : ''
 
@@ -214,7 +214,7 @@ export default function Header() {
     <header className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 min-h-[48px] border-b border-border
                        dark:border-border-dark bg-surface dark:bg-surface-dark flex-shrink-0
                        xl:h-[48px] xl:flex-nowrap xl:gap-3 xl:px-4 xl:py-0">
-      <div className="flex min-w-0 flex-1 items-center gap-3 xl:min-w-[120px]">
+      <div className="flex min-w-0 flex-1 basis-full items-center gap-3 xl:basis-auto xl:min-w-[120px]">
         <h1 className="truncate font-editorial text-[15px] font-medium tracking-wide text-text-primary dark:text-text-dark-primary">
           {activeProblem ? activeProblem.title : '工作区'}
         </h1>
@@ -269,8 +269,8 @@ export default function Header() {
         </button>
       )}
 
-      {activeProblem && <>
-        <button onClick={onRun} disabled={!judgeRunnable || mode !== 'FOCUS' || isBusy}
+      {activeProblem && mode === 'FOCUS' && <>
+        <button onClick={onRun} disabled={!judgeRunnable || isBusy}
           aria-label="运行"
           aria-busy={runLoading}
           aria-describedby={judgeCapabilityNote ? 'judge-capability-note' : undefined}
@@ -281,7 +281,7 @@ export default function Header() {
           {runLoading ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
           {runLoading ? '运行中' : '运行'}
         </button>
-        <button onClick={onSubmit} disabled={!judgeRunnable || mode !== 'FOCUS' || isBusy}
+        <button onClick={onSubmit} disabled={!judgeRunnable || isBusy}
           aria-label="提交"
           aria-busy={submitLoading}
           aria-describedby={judgeCapabilityNote ? 'judge-capability-note' : undefined}
