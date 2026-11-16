@@ -146,9 +146,9 @@ frontend/
 - `MONACO_LANGUAGES`（`services/languages.ts`）：前端 lang → Monaco language id（`rust→rust`, `cpp→cpp`, `python3→python`, `typescript→typescript`, `golang→go`, `java→java`）
 - `isEditable = mode === 'FOCUS' || mode === 'REVIEW'`：PREP/IDLE 下编辑器只读
 - PREP 模式下显示半透明蒙层 + "开始做题" 按钮，点击调用 `enterFocus()`
-- Monaco `options.quickSuggestions` 绑定到 `isEditable`：FOCUS 下只启用 Monaco 本地语言建议，不接入 AI 补全
+- Monaco `quickSuggestions` 绑定到 `isEditable`：FOCUS 下显示离线词语联想和六种语言的本地关键字/算法模板补全，不接入 AI 补全
 - 选题后使用当前语言对应的 LeetCode starter code；切换语言只更新 Monaco 语言标识，不覆盖用户编辑内容。
-- `MonacoCodeEditor` 使用 Monaco 树摇入口 `monaco-editor/editor`，只注册 Rust、C++、Python、TypeScript、Go、Java 六种语法定义，并统一使用本地 editor worker；不引入未使用的语言服务 worker，保持离线加载。
+- `MonacoCodeEditor` 使用 Monaco 树摇入口 `monaco-editor/editor`，只注册 Rust、C++、Python、TypeScript、Go、Java 六种语法定义和本地 `CompletionItemProvider`，并统一使用本地 editor worker；不启动外部语言服务器，保持离线加载。
 
 **Monaco 配置要点**：
 ```typescript
@@ -157,7 +157,8 @@ frontend/
   fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
   minimap: { enabled: false },
   readOnly: !isEditable,
-  quickSuggestions: isEditable,        // FOCUS 下只开 Monaco 本地建议
+  quickSuggestions: { other: true, comments: false, strings: false },
+  wordBasedSuggestions: 'currentDocument',
   suggestOnTriggerCharacters: true,
   tabSize: 4,
   padding: { top: 12, bottom: 12 },
@@ -466,18 +467,18 @@ const LANG_MAP: Record<string, string> = {
 }
 ```
 
-Monaco 内置支持 `rust` / `cpp` / `python` 语法高亮、括号匹配、缩进和本地建议；当前没有启动外部 LSP 服务。
+Monaco 为 `rust` / `cpp` / `python` / `typescript` / `go` / `java` 注册本地关键字和算法常用结构候选，配合当前文档词语联想。当前没有启动外部 LSP 服务，因此不提供类型检查、符号跳转或项目级语义补全。
 
 ### 7.3 FOCUS 模式下的约束
 
 | 配置项 | PREP/IDLE | FOCUS | REVIEW |
 |--------|-----------|-------|--------|
 | `readOnly` | `true` | `false` | `false` |
-| `quickSuggestions` | `false` | `true`（Monaco 本地语言建议） | `true` |
+| `quickSuggestions` | `false` | `true`（本地关键字、算法结构和文档词语候选） | `true` |
 | `suggestOnTriggerCharacters` | `false` | `true` | `true` |
 | `wordBasedSuggestions` | `false` | `true` | `true` |
 
-**关键**：Monaco 本地建议不调用 AI，也不代表已接入 LSP 协议。当前没有注册自定义 AI `CompletionItemProvider`。
+**说明**：候选由本地 Monaco `CompletionItemProvider` 提供，不调用 AI；这不是 LSP 语义服务，也没有注册自定义 AI 补全。
 
 ### 7.4 自定义 LSP 扩展（可选）
 

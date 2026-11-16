@@ -219,6 +219,14 @@ with sync_playwright() as p:
     editor_accessible.focus()
     assert editor_accessible.get_attribute('aria-label') == '代码编辑器'
     assert page.evaluate('document.activeElement?.getAttribute("aria-label")') == '代码编辑器'
+    editor_accessible.press('Control+A')
+    page.keyboard.type('ret')
+    completion_list = page.locator('.suggest-widget')
+    completion_list.wait_for(state='visible', timeout=5000)
+    assert 'return' in completion_list.inner_text().lower(), completion_list.inner_text()
+    editor_accessible.press('Escape')
+    editor_accessible.press('Control+A')
+    page.keyboard.type('def two_sum():\n    pass')
     timer = page.get_by_role('timer')
     timer.wait_for(timeout=5000)
     assert re.search(r'剩余 09:\d\d', timer.inner_text()), timer.inner_text()

@@ -1,6 +1,7 @@
 import Editor, { loader } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor/editor'
 import EditorWorker from '../../../node_modules/monaco-editor/esm/vs/editor/editor.worker.js?worker'
+import './registerLocalCompletions'
 
 // Register only the languages AlgoCoach exposes. The package root imports every
 // Monaco language (and its optional language services); these granular
