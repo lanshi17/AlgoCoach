@@ -699,11 +699,15 @@ class AlgoCoach:
                         final_message = event
                         continue
                     event_type = getattr(event, "type", None)
-                    if event_type == EventType.THINKING_BLOCK_DELTA:
-                        yield {"type": "thinking", "delta": event.delta}
-                    elif event_type == EventType.TEXT_BLOCK_DELTA:
-                        streamed_text += event.delta
-                        yield {"type": "text", "delta": event.delta}
+                    # AgentScope yields one wide union of event dataclasses and
+                    # mypy cannot narrow on a `type` attribute (it is not a
+                    # discriminated union), so read the payload defensively.
+                    delta = getattr(event, "delta", "")
+                    if event_type == EventType.THINKING_BLOCK_DELTA and delta:
+                        yield {"type": "thinking", "delta": delta}
+                    elif event_type == EventType.TEXT_BLOCK_DELTA and delta:
+                        streamed_text += delta
+                        yield {"type": "text", "delta": delta}
             finally:
                 _active_problem_id.reset(problem_token)
                 _active_platform.reset(platform_token)
