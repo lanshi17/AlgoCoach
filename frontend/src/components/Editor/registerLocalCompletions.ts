@@ -12,6 +12,9 @@ const COMPLETIONS: Record<string, LocalCompletion[]> = {
   python: [
     { label: 'def', insertText: 'def ${1:name}(${2:args}):\n    ${3:pass}', detail: '函数定义', snippet: true },
     { label: 'for', insertText: 'for ${1:item} in ${2:items}:\n    ${3:pass}', detail: 'for 循环', snippet: true },
+    { label: 'return', detail: '返回函数结果' },
+    { label: 'if', insertText: 'if ${1:condition}:\n    ${2:pass}', detail: '条件分支', snippet: true },
+    { label: 'while', insertText: 'while ${1:condition}:\n    ${2:pass}', detail: 'while 循环', snippet: true },
     { label: 'enumerate', insertText: 'enumerate(${1:items})', detail: '遍历下标与元素' },
     { label: 'range', insertText: 'range(${1:n})', detail: '整数范围' },
     { label: 'deque', insertText: 'deque()', detail: '双端队列（collections）' },
@@ -23,6 +26,8 @@ const COMPLETIONS: Record<string, LocalCompletion[]> = {
   ],
   cpp: [
     { label: 'vector', insertText: 'vector<${1:int}> ${2:values};', detail: '动态数组', snippet: true },
+    { label: 'return', detail: '返回函数结果' },
+    { label: 'if', insertText: 'if (${1:condition}) {\n    ${2:}\n}', detail: '条件分支', snippet: true },
     { label: 'unordered_map', insertText: 'unordered_map<${1:int}, ${2:int}> ${3:indices};', detail: '哈希表', snippet: true },
     { label: 'unordered_set', insertText: 'unordered_set<${1:int}> ${2:seen};', detail: '哈希集合', snippet: true },
     { label: 'priority_queue', insertText: 'priority_queue<${1:int}> ${2:heap};', detail: '优先队列', snippet: true },
@@ -33,6 +38,8 @@ const COMPLETIONS: Record<string, LocalCompletion[]> = {
   ],
   rust: [
     { label: 'let mut', insertText: 'let mut ${1:value} = ${2:Vec::new()};', detail: '可变变量', snippet: true },
+    { label: 'return', detail: '返回函数结果' },
+    { label: 'if', insertText: 'if ${1:condition} {\n    ${2:}\n}', detail: '条件分支', snippet: true },
     { label: 'Vec::new', insertText: 'Vec::new()', detail: '创建动态数组' },
     { label: 'HashMap::new', insertText: 'HashMap::new()', detail: '创建哈希表' },
     { label: 'HashSet::new', insertText: 'HashSet::new()', detail: '创建哈希集合' },
@@ -43,6 +50,8 @@ const COMPLETIONS: Record<string, LocalCompletion[]> = {
   ],
   typescript: [
     { label: 'const', insertText: 'const ${1:name} = ${2:value};', detail: '常量声明', snippet: true },
+    { label: 'return', detail: '返回函数结果' },
+    { label: 'if', insertText: 'if (${1:condition}) {\n  ${2:}\n}', detail: '条件分支', snippet: true },
     { label: 'let', insertText: 'let ${1:name} = ${2:value};', detail: '变量声明', snippet: true },
     { label: 'function', insertText: 'function ${1:name}(${2:args}) {\n  ${3:}\n}', detail: '函数定义', snippet: true },
     { label: 'Map', insertText: 'new Map<${1:string}, ${2:number}>()', detail: '键值映射' },
@@ -52,6 +61,8 @@ const COMPLETIONS: Record<string, LocalCompletion[]> = {
   ],
   go: [
     { label: 'func', insertText: 'func ${1:name}(${2:args}) ${3:error} {\n\t${4:}\n}', detail: '函数定义', snippet: true },
+    { label: 'return', detail: '返回函数结果' },
+    { label: 'if', insertText: 'if ${1:condition} {\n\t${2:}\n}', detail: '条件分支', snippet: true },
     { label: 'for', insertText: 'for ${1:i} := 0; ${1:i} < ${2:n}; ${1:i}++ {\n\t${3:}\n}', detail: '计数循环', snippet: true },
     { label: 'range', insertText: 'range ${1:items}', detail: '遍历切片、映射或通道' },
     { label: 'make', insertText: 'make(map[${1:int}]${2:int})', detail: '创建映射' },
@@ -61,6 +72,8 @@ const COMPLETIONS: Record<string, LocalCompletion[]> = {
   ],
   java: [
     { label: 'for', insertText: 'for (int ${1:i} = 0; ${1:i} < ${2:n}; ${1:i}++) {\n    ${3:}\n}', detail: '计数循环', snippet: true },
+    { label: 'return', detail: '返回函数结果' },
+    { label: 'if', insertText: 'if (${1:condition}) {\n    ${2:}\n}', detail: '条件分支', snippet: true },
     { label: 'for each', insertText: 'for (${1:int} ${2:item} : ${3:items}) {\n    ${4:}\n}', detail: '增强 for 循环', snippet: true },
     { label: 'HashMap', insertText: 'Map<${1:Integer}, ${2:Integer}> ${3:map} = new HashMap<>();', detail: '哈希表', snippet: true },
     { label: 'HashSet', insertText: 'Set<${1:Integer}> ${2:seen} = new HashSet<>();', detail: '哈希集合', snippet: true },
@@ -73,9 +86,18 @@ const COMPLETIONS: Record<string, LocalCompletion[]> = {
 const providerDisposables = Object.entries(COMPLETIONS).map(([language, items]) =>
   monaco.languages.registerCompletionItemProvider(language, {
     triggerCharacters: ['.'],
-    provideCompletionItems(model, position) {
+    provideCompletionItems(model, position, context) {
       const word = model.getWordUntilPosition(position)
       const prefix = word.word.toLowerCase()
+      // After `self.` / `value.` there is no word to complete: offering `range`
+      // or `for` would insert `self.range(${1:n})`. Member access needs a real
+      // language service, which this offline provider deliberately is not.
+      if (
+        !prefix
+        && context?.triggerKind === monaco.languages.CompletionTriggerKind.TriggerCharacter
+      ) {
+        return { suggestions: [] }
+      }
       const range = new monaco.Range(
         position.lineNumber,
         word.startColumn,
@@ -85,16 +107,22 @@ const providerDisposables = Object.entries(COMPLETIONS).map(([language, items]) 
       return {
         suggestions: items
           .filter(item => !prefix || item.label.toLowerCase().startsWith(prefix))
-          .map(item => ({
-            label: item.label,
-            detail: item.detail,
-            kind: item.kind ?? monaco.languages.CompletionItemKind.Keyword,
-            insertText: item.insertText ?? item.label,
-            insertTextRules: item.snippet
-              ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
-              : undefined,
-            range,
-          })),
+          .map(item => {
+            const insertText = item.insertText ?? item.label
+            // Placeholders only expand when Monaco is told the text is a
+            // snippet; otherwise the user gets the literal `${1:n}`.
+            const isSnippet = item.snippet === true || /\$\{\d+[:}]/.test(insertText)
+            return {
+              label: item.label,
+              detail: item.detail,
+              kind: item.kind ?? monaco.languages.CompletionItemKind.Keyword,
+              insertText,
+              insertTextRules: isSnippet
+                ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+                : undefined,
+              range,
+            }
+          }),
       }
     },
   }),
@@ -103,3 +131,10 @@ const providerDisposables = Object.entries(COMPLETIONS).map(([language, items]) 
 // Keep registrations alive for the editor module's lifetime. Referencing the
 // disposables also makes this intentional singleton setup clear to bundlers.
 void providerDisposables
+
+const hot = (import.meta as ImportMeta & {
+  hot?: { dispose(callback: () => void): void }
+}).hot
+// A Vite HMR replay evaluates this module again; without disposing the old
+// providers every language would list each suggestion twice.
+hot?.dispose(() => providerDisposables.forEach(provider => provider.dispose()))

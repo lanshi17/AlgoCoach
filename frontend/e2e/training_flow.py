@@ -206,14 +206,14 @@ with sync_playwright() as p:
     print('editor count:', page.locator('.monaco-editor').count())
     print('browser console:', browser_console[-20:])
     assert page.locator('.monaco-editor').count() == 1
-    page.get_by_role('button', name='开始做题（AI 将静默）').click()
+    page.get_by_role('button', name='开始做题').click()
     page.get_by_text('专注解题中，AI 已静默').wait_for(timeout=5000)
     page.wait_for_timeout(1300)
     page.reload(wait_until='networkidle')
     page.get_by_role('heading', name='两数之和').wait_for(timeout=10000)
     assert page.get_by_label('编程语言').input_value() == 'python3'
     page.locator('.monaco-editor').wait_for(timeout=20000)
-    page.get_by_role('button', name='开始做题（AI 将静默）').click()
+    page.get_by_role('button', name='开始做题').click()
     page.get_by_text('专注解题中，AI 已静默').wait_for(timeout=5000)
     editor_accessible = page.locator('[role="textbox"][aria-label="代码编辑器"]')
     editor_accessible.focus()
@@ -222,7 +222,22 @@ with sync_playwright() as p:
     editor_accessible.press('Control+A')
     page.keyboard.type('ret')
     completion_list = page.locator('.suggest-widget')
-    completion_list.wait_for(state='visible', timeout=5000)
+    try:
+        completion_list.wait_for(state='visible', timeout=5000)
+    except Exception:
+        print('editor debug:', page.evaluate('''() => ({
+          active: document.activeElement?.outerHTML?.slice(0, 500),
+          textareas: [...document.querySelectorAll('.monaco-editor textarea')].map(el => ({
+            label: el.getAttribute('aria-label'), value: el.value, className: el.className,
+          })),
+          lines: document.querySelector('.monaco-editor .view-lines')?.innerText,
+          suggest: [...document.querySelectorAll('.suggest-widget')].map(el => ({
+            text: el.innerText, display: getComputedStyle(el).display, visibility: getComputedStyle(el).visibility,
+          })),
+          quick: document.querySelector('.monaco-editor')?.getAttribute('data-mode-id'),
+        })'''))
+        print('browser console after typing:', browser_console[-20:])
+        raise
     assert 'return' in completion_list.inner_text().lower(), completion_list.inner_text()
     editor_accessible.press('Escape')
     editor_accessible.press('Control+A')
