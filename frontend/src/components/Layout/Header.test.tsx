@@ -204,6 +204,35 @@ it('keeps a submission pending across navigation and shows a later failure', asy
   element.remove()
 })
 
+it('skips the automatic review when the preference is off', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.getState().setCoachPrefs({ autoReview: false })
+  useAppStore.getState().setActiveProblem({
+    id: '1', platform: 'LEETCODE', platformId: 'one', title: 'One', difficulty: 'EASY',
+    contentHtml: '', topics: ['Array'], sampleTestCases: '', codeSnippets: [],
+  })
+  useAppStore.getState().enterFocus()
+  vi.spyOn(leetcodeService, 'submit').mockResolvedValue({
+    id: 'submission-1', status: 'ACCEPTED', runtimeMs: 2, memoryMb: 3,
+    passedTests: 1, totalTests: 1, errorMessage: null, durationSec: 1,
+  })
+  const chat = vi.spyOn(agentService, 'chat').mockResolvedValue({ content: '不应发送' })
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+  act(() => root.render(<Header />))
+  await act(async () => {
+    Array.from(element.querySelectorAll('button')).find(button => button.textContent === '提交')!.click()
+    await Promise.resolve()
+  })
+  expect(useAppStore.getState().mode).toBe('REVIEW')
+  expect(chat).not.toHaveBeenCalled()
+  expect(useAppStore.getState().messages.some(message => message.content === '提交已记录。可在输入框继续发起复盘。')).toBe(true)
+  act(() => root.unmount())
+  element.remove()
+})
+
 it('sends the post-submit review after leaving focus mode', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   useAppStore.setState(useAppStore.getInitialState(), true)

@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { nanoid } from 'nanoid'
-import type { AgentProfile, AnimationJob, ModelProviderConfig, TrainingGoal, TrainingPhase } from '@/types'
+import type { AgentProfile, AnimationJob, CoachStyle, ModelProviderConfig, TrainingGoal, TrainingPhase } from '@/types'
 
 interface ChatReply {
   content: string
@@ -67,6 +67,8 @@ interface ChatCtx {
   goal?: TrainingGoal
   trainingPhase?: TrainingPhase
   timeRemainingSec?: number
+  animations?: boolean
+  coachStyle?: CoachStyle
   provider?: ModelProviderConfig
 }
 

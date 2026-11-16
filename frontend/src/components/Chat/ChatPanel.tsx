@@ -38,7 +38,7 @@ export function toRemainingSeconds(raw: string, elapsedFocusSec = 0): number | u
  */
 export default function ChatPanel() {
   const {
-    mode, messages, addMessage, activeProblem, goal, provider, getFocusDurationSec,
+    mode, messages, addMessage, activeProblem, goal, provider, getFocusDurationSec, coachPrefs,
     problemTimeLimits, setProblemTimeLimitMinutes, chatDrafts, setChatDraft,
     chatPhases, setChatPhase,
   } = useAppStore(useShallow(state => ({
@@ -48,6 +48,7 @@ export default function ChatPanel() {
     activeProblem: state.activeProblem,
     goal: state.goal,
     provider: state.provider,
+    coachPrefs: state.coachPrefs,
     getFocusDurationSec: state.getFocusDurationSec,
     problemTimeLimits: state.problemTimeLimits,
     setProblemTimeLimitMinutes: state.setProblemTimeLimitMinutes,
@@ -134,6 +135,8 @@ export default function ChatPanel() {
         goal,
         provider,
         trainingPhase: userMsg.trainingPhase ?? trainingPhase,
+        animations: coachPrefs.animations,
+        coachStyle: coachPrefs.coachStyle,
         ...(timeRemainingSec !== undefined ? { timeRemainingSec } : {}),
       }, {
         onThinking: delta => setThinkingText(current => current + delta),
@@ -211,10 +214,9 @@ export default function ChatPanel() {
   return (
     <div className="relative flex flex-col h-full bg-surface dark:bg-surface-dark">
       {/* Panel header */}
-      <div className="flex items-center gap-2 px-4 h-[48px] border-b border-border
-                      dark:border-border-dark flex-shrink-0">
+      <div className="flex h-[48px] flex-shrink-0 items-center gap-2 border-b editorial-rule px-4">
         <Sparkles size={16} className="text-accent" />
-        <span className="shrink-0 text-sm font-medium text-text-primary dark:text-text-dark-primary">
+        <span className="shrink-0 font-editorial text-base font-medium tracking-wide text-text-primary dark:text-text-dark-primary">
           AI 教练
         </span>
         <span
@@ -227,28 +229,49 @@ export default function ChatPanel() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        {!isFocus && messages.length === 0 && !loading && !animation && (
+          <div className="mx-1 my-8 border-y editorial-rule py-6">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-accent">训练札记</div>
+            <h2 className="mt-2 font-editorial text-lg font-medium tracking-wide text-text-primary dark:text-text-dark-primary">
+              先写下你的观察
+            </h2>
+            <p className="mt-2 max-w-[30ch] text-xs leading-6 text-text-secondary dark:text-text-dark-secondary">
+              从题意、算法猜想或卡住的地方开始。教练会按竞赛训练的节奏陪你逐步验证。
+            </p>
+          </div>
+        )}
         {!isFocus && messages.map(m => (
           <ChatMessage key={m.id} message={m} />
         ))}
         {!isFocus && loading && (
           <div role="status" aria-live="polite" aria-atomic="true" className="space-y-2 text-xs text-text-muted dark:text-text-dark-muted">
-            <button type="button" aria-expanded={thinkingExpanded} aria-controls="chat-thinking-details"
-              onClick={() => setThinkingExpanded(value => !value)}
-              className="flex w-full min-w-0 items-center gap-2 text-left hover:text-text-secondary dark:hover:text-text-dark-secondary">
-              <span className="inline-flex shrink-0 gap-0.5">
-                {[0,1,2].map(i => (
-                  <span key={i} className="h-1.5 w-1.5 rounded-full bg-accent animate-bounce"
-                        style={{ animationDelay: `${i * 0.15}s` }} />
-                ))}
-              </span>
-              <span className="min-w-0 flex-1 truncate">
-                {thinkingText ? `正在思考：${lastThinkingLine(thinkingText)}` : '正在思考…'}
-              </span>
-              <ChevronDown size={14} className={`shrink-0 transition-transform ${thinkingExpanded ? 'rotate-180' : ''}`} />
-            </button>
-            {thinkingExpanded && <div id="chat-thinking-details" className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-surface-soft px-3 py-2 text-[11px] leading-relaxed dark:border-border-dark dark:bg-surface-dark-soft">
-              {thinkingText || '模型尚未返回可展开的思考内容。'}
-            </div>}
+            {coachPrefs.showThinking ? (
+              <>
+                <button type="button" aria-expanded={thinkingExpanded} aria-controls="chat-thinking-details"
+                  onClick={() => setThinkingExpanded(value => !value)}
+                  className="flex w-full min-w-0 items-center gap-2 text-left hover:text-text-secondary dark:hover:text-text-dark-secondary">
+              <span className="inline-flex h-2 w-2 shrink-0 rounded-full bg-accent/70">
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {thinkingText ? `正在思考：${lastThinkingLine(thinkingText)}` : '正在思考…'}
+                  </span>
+                  <ChevronDown size={14} className={`shrink-0 transition-transform ${thinkingExpanded ? 'rotate-180' : ''}`} />
+                </button>
+                {thinkingExpanded && <div id="chat-thinking-details" className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-surface-soft px-3 py-2 text-[11px] leading-relaxed dark:border-border-dark dark:bg-surface-dark-soft">
+                  {thinkingText || '模型尚未返回可展开的思考内容。'}
+                </div>}
+              </>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="inline-flex shrink-0 gap-0.5">
+                  {[0,1,2].map(i => (
+                    <span key={i} className="h-1.5 w-1.5 rounded-full bg-accent animate-bounce"
+                          style={{ animationDelay: `${i * 0.15}s` }} />
+                  ))}
+                </span>
+                正在思考…
+              </div>
+            )}
           </div>
         )}
         {!isFocus && streamedReply && <ChatMessage message={{
@@ -257,7 +280,7 @@ export default function ChatPanel() {
         }} />}
 
         {/* Active animation card */}
-        {!isFocus && animation && <AnimationCard
+        {!isFocus && coachPrefs.animations && animation && <AnimationCard
           job={animation}
           onRetry={activeProblem ? () => {
             const contextVersion = contextVersionRef.current

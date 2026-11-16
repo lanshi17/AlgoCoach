@@ -318,6 +318,30 @@ describe('training preferences and focus state', () => {
     expect(JSON.parse(localStorage.getItem('algocoach.provider')!).protocol).toBe('openai-response')
   })
 
+  it('persists AI coach preferences and reloads them', async () => {
+    useAppStore.getState().setCoachPrefs({ autoReview: false, animations: false, coachStyle: 'socratic' })
+
+    expect(JSON.parse(localStorage.getItem('algocoach.coachPrefs')!)).toEqual({
+      autoReview: false, showThinking: true, animations: false, coachStyle: 'socratic',
+    })
+    vi.resetModules()
+    const { useAppStore: restoredStore } = await import('./useAppStore')
+    expect(restoredStore.getState().coachPrefs).toEqual({
+      autoReview: false, showThinking: true, animations: false, coachStyle: 'socratic',
+    })
+  })
+
+  it('falls back to defaults for malformed coach preference values', async () => {
+    localStorage.setItem('algocoach.coachPrefs', JSON.stringify({
+      autoReview: 'yes', showThinking: null, animations: 1, coachStyle: 'wild',
+    }))
+    vi.resetModules()
+    const { useAppStore: restoredStore } = await import('./useAppStore')
+    expect(restoredStore.getState().coachPrefs).toEqual({
+      autoReview: true, showThinking: true, animations: true, coachStyle: 'auto',
+    })
+  })
+
   it('keeps working when browser storage is unavailable', async () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('storage disabled') })
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('storage disabled') })

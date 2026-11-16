@@ -314,6 +314,9 @@ async def test_chat_route_forwards_training_fields_unchanged(client, monkeypatch
             "goal": "interview_prep",
             "training_phase": "review",
             "time_remaining_sec": 1800,
+            # UI preferences are forwarded with their defaults when omitted.
+            "animations": True,
+            "coach_style": "auto",
         }
     ]
 

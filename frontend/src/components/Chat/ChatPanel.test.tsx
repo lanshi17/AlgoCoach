@@ -159,6 +159,28 @@ describe('chat when changing training context', () => {
     expect(element.textContent).toContain('答案流式完成。')
   })
 
+  it('sends the coach preferences and hides thinking when requested', async () => {
+    let finish!: (reply: { content: string }) => void
+    const chatStream = vi.spyOn(agentService, 'chatStream').mockImplementation(async (_message, _ctx, handlers) => {
+      handlers?.onThinking?.('内部推理')
+      return await new Promise(resolve => { finish = resolve })
+    })
+    useAppStore.getState().setCoachPrefs({ animations: false, coachStyle: 'direct', showThinking: false })
+    useAppStore.getState().setActiveProblem(problem)
+    act(() => renderChatPanel(root))
+    const textarea = element.querySelector<HTMLTextAreaElement>('textarea[aria-label="发送给 AI 教练的消息"]')!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, '怎么建模？')
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => element.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')!.click())
+
+    expect(chatStream.mock.calls[0][1]).toMatchObject({ animations: false, coachStyle: 'direct' })
+    expect(element.querySelector('button[aria-controls="chat-thinking-details"]')).toBeNull()
+    expect(element.textContent).toContain('正在思考')
+    await act(async () => finish({ content: '完成' }))
+  })
+
   it('does not claim a submission occurred after ending focus manually', () => {
     act(() => {
       useAppStore.getState().setActiveProblem(problem)

@@ -53,7 +53,8 @@ describe('provider setup return path', () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(apiKey, 'test-session-key')
       apiKey.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await act(async () => element.querySelector<HTMLButtonElement>('button[type="button"]')!.click())
+    await act(async () => Array.from(element.querySelectorAll<HTMLButtonElement>('button'))
+      .find(button => button.textContent?.includes('保存 Provider'))!.click())
 
     expect(element.querySelector('[data-testid="return-target"]')?.textContent).toBe('chat')
     expect(useAppStore.getState().provider.apiKey).toBe('test-session-key')
@@ -91,6 +92,32 @@ describe('provider setup return path', () => {
       preset.dispatchEvent(new Event('change', { bubbles: true }))
     })
     expect(element.querySelector<HTMLInputElement>('input[aria-label="Provider API key"]')?.value).toBe('anthropic-key')
+  })
+
+  it('persists the AI coach switches and style', async () => {
+    await act(async () => {
+      root.render(
+        <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <SettingsPage />
+        </MemoryRouter>,
+      )
+    })
+
+    act(() => element.querySelector<HTMLButtonElement>('button[aria-label="自动赛后复盘"]')!.click())
+    act(() => element.querySelector<HTMLButtonElement>('button[aria-label="动画讲解"]')!.click())
+    const style = element.querySelector<HTMLSelectElement>('select[aria-label="教练风格"]')!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(style, 'socratic')
+      style.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    expect(useAppStore.getState().coachPrefs).toMatchObject({
+      autoReview: false, animations: false, coachStyle: 'socratic',
+    })
+    expect(JSON.parse(localStorage.getItem('algocoach.coachPrefs')!)).toMatchObject({
+      autoReview: false, animations: false, coachStyle: 'socratic',
+    })
+    expect(element.querySelector<HTMLButtonElement>('button[aria-label="自动赛后复盘"]')?.getAttribute('aria-checked')).toBe('false')
   })
 
   it('exports local memory even when LeetCode submission history is unavailable', async () => {

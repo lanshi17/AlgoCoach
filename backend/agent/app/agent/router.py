@@ -94,6 +94,8 @@ async def chat(req: ChatRequest):
                 goal=req.goal,
                 training_phase=req.trainingPhase,
                 time_remaining_sec=req.timeRemainingSec,
+                animations=req.animations,
+                coach_style=req.coachStyle,
                 **platform_kwargs,
             )
         else:
@@ -185,6 +187,8 @@ async def chat_stream(req: ChatRequest):
                 "goal": req.goal,
                 "training_phase": req.trainingPhase,
                 "time_remaining_sec": req.timeRemainingSec,
+                "animations": req.animations,
+                "coach_style": req.coachStyle,
             }
             if req.platform:
                 kwargs["platform"] = req.platform

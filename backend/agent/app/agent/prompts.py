@@ -267,12 +267,27 @@ def _without_animation_guidance(prompt: str) -> str:
     return prompt.replace(ANIMATION_PREP_CLAUSE, "").removesuffix(ANIMATION_STYLE_LINE)
 
 
+DEFAULT_COACH_STYLE = "auto"
+COACH_STYLES: tuple[str, ...] = ("auto", "socratic", "direct")
+COACH_STYLE_GUIDANCE = {
+    "socratic": "教学风格：先反问与拆解，让用户自己走到关键不变量；只在卡住时给最小必要提示。",
+    "direct": "教学风格：直接给出结论、复杂度与可执行步骤，再说明为什么成立。",
+}
+
+
+def resolve_coach_style(value: object) -> str:
+    """Normalise a requested coaching style; unknown values fall back to auto."""
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in COACH_STYLE_GUIDANCE else DEFAULT_COACH_STYLE
+
+
 def get_system_prompt(
     goal: str | UserGoal | None = DEFAULT_GOAL,
     *,
     training_phase: str | TrainingPhase | None = DEFAULT_TRAINING_PHASE,
     time_remaining_sec: int | None = None,
     animations: bool = True,
+    coach_style: str = DEFAULT_COACH_STYLE,
 ) -> str:
     """Build the Soul template for ``goal`` and the contest ``training_phase``.
 
@@ -283,10 +298,14 @@ def get_system_prompt(
     ignore both training fields entirely.
     """
     resolved = resolve_goal(goal)
+    style_note = COACH_STYLE_GUIDANCE.get(resolve_coach_style(coach_style))
     if resolved is None:
-        return SOUL if animations else _without_animation_guidance(SOUL)
+        prompt = SOUL if animations else _without_animation_guidance(SOUL)
+        return f"{prompt}\n\n{style_note}" if style_note else prompt
 
     parts = [SOUL if animations else _without_animation_guidance(SOUL), GOAL_GUIDANCE[resolved]]
+    if style_note:
+        parts.append(style_note)
     if resolved is UserGoal.CONTEST:
         phase = resolve_training_phase(training_phase)
         if phase is not TrainingPhase.AUTO:

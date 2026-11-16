@@ -269,6 +269,10 @@ _active_platform: ContextVar[str | None] = ContextVar(
 _animation_sink: ContextVar[dict | None] = ContextVar(
     "algocoach_animation_sink", default=None
 )
+# Per-request user preference (设置 → AI 教练 → 动画讲解).
+_animations_allowed: ContextVar[bool] = ContextVar(
+    "algocoach_animations_allowed", default=True
+)
 
 
 class AlgoCoach:
@@ -523,6 +527,8 @@ class AlgoCoach:
         goal: str | UserGoal | None = DEFAULT_GOAL,
         training_phase: str | TrainingPhase | None = DEFAULT_TRAINING_PHASE,
         time_remaining_sec: int | None = None,
+        animations: bool = True,
+        coach_style: str = "auto",
         provider: dict[str, Any] | None = None,
         platform: str | None = None,
     ) -> dict:
@@ -578,7 +584,8 @@ class AlgoCoach:
                 resolved_goal,
                 training_phase=phase,
                 time_remaining_sec=time_remaining_sec,
-                animations=remotion_enabled(),
+                animations=remotion_enabled() and animations,
+                coach_style=coach_style,
             ).format(memory_context=json.dumps(ctx, ensure_ascii=False, indent=2)) + (
                 "\n\n当前界面状态（以本轮为准，高于历史对话和记忆）："
                 "如果用户只是问候或闲聊，先自然回应这条消息，不要擅自转成训练、代码复盘或换题引导。"
@@ -597,6 +604,7 @@ class AlgoCoach:
 
             sink: dict = {}
             animation_token = _animation_sink.set(sink)
+            allowed_token = _animations_allowed.set(animations)
             problem_token = _active_problem_id.set(problem_id)
             platform_token = _active_platform.set(platform)
             try:
@@ -606,6 +614,7 @@ class AlgoCoach:
             finally:
                 _active_problem_id.reset(problem_token)
                 _active_platform.reset(platform_token)
+                _animations_allowed.reset(allowed_token)
                 _animation_sink.reset(animation_token)
 
         content = reply.get_text_content() or ""
@@ -621,6 +630,8 @@ class AlgoCoach:
         goal: str | UserGoal | None = DEFAULT_GOAL,
         training_phase: str | TrainingPhase | None = DEFAULT_TRAINING_PHASE,
         time_remaining_sec: int | None = None,
+        animations: bool = True,
+        coach_style: str = "auto",
         provider: dict[str, Any] | None = None,
         platform: str | None = None,
     ):
@@ -668,7 +679,8 @@ class AlgoCoach:
                 resolved_goal,
                 training_phase=phase,
                 time_remaining_sec=time_remaining_sec,
-                animations=remotion_enabled(),
+                animations=remotion_enabled() and animations,
+                coach_style=coach_style,
             ).format(memory_context=json.dumps(ctx, ensure_ascii=False, indent=2)) + (
                 "\n\n当前界面状态（以本轮为准，高于历史对话和记忆）："
                 "如果用户只是问候或闲聊，先自然回应这条消息，不要擅自转成训练、代码复盘或换题引导。"
@@ -686,6 +698,7 @@ class AlgoCoach:
 
             sink: dict = {}
             animation_token = _animation_sink.set(sink)
+            allowed_token = _animations_allowed.set(animations)
             problem_token = _active_problem_id.set(problem_id)
             platform_token = _active_platform.set(platform)
             streamed_text = ""
@@ -711,6 +724,7 @@ class AlgoCoach:
             finally:
                 _active_problem_id.reset(problem_token)
                 _active_platform.reset(platform_token)
+                _animations_allowed.reset(allowed_token)
                 _animation_sink.reset(animation_token)
 
             content = final_message.get_text_content() if final_message else None
@@ -733,6 +747,8 @@ class AlgoCoach:
             return await memory.weak_topics(threshold=threshold)
 
         if name == "request_animation":
+            if not _animations_allowed.get():
+                return {"error": "用户已在设置中关闭动画讲解。"}
             try:
                 job = await animation_service.enqueue(
                     kind=inputs["type"],

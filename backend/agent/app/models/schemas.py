@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.agent.prompts import (
     DEFAULT_TRAINING_PHASE,
+    resolve_coach_style,
     resolve_goal,
     resolve_training_phase,
 )
@@ -33,6 +34,9 @@ class ChatRequest(BaseModel):
     goal: str | None = None
     trainingPhase: str = DEFAULT_TRAINING_PHASE.value
     timeRemainingSec: int | None = Field(default=None, ge=0)
+    # UI preferences (设置 → AI 教练). Optional so older clients keep working.
+    animations: bool = True
+    coachStyle: str = "auto"
     provider: "ProviderConfig | None" = None
 
     @field_validator("trainingPhase", mode="before")
@@ -40,6 +44,12 @@ class ChatRequest(BaseModel):
     def _known_training_phase(cls, value: object) -> str:
         """Normalise a phase; unknown values fall back to ``auto``."""
         return resolve_training_phase(value).value
+
+    @field_validator("coachStyle", mode="before")
+    @classmethod
+    def _known_coach_style(cls, value: object) -> str:
+        """Unknown styles fall back to ``auto``."""
+        return resolve_coach_style(value)
 
     @field_validator("goal", mode="before")
     @classmethod

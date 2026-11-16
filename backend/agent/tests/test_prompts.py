@@ -64,6 +64,17 @@ def test_disabled_animations_remove_only_the_animation_guidance():
     )
 
 
+def test_coach_style_appends_its_guidance():
+    socratic = get_system_prompt(coach_style="socratic")
+    direct = get_system_prompt(coach_style="direct")
+    assert "先反问" in socratic
+    assert "直接给出结论" in direct
+    # Auto (and unknown values) keep the legacy Soul without extra guidance.
+    assert get_system_prompt(coach_style="auto") == LEGACY_SOUL
+    assert get_system_prompt(coach_style="wild") == LEGACY_SOUL
+    assert get_system_prompt(coach_style=None) == LEGACY_SOUL
+
+
 def test_default_prompt_keeps_mode_and_style_rules():
     prompt = get_system_prompt()
     assert "PREP" in prompt and "request_animation" in prompt

@@ -13,6 +13,16 @@ export type TrainingPhase =
   | 'review'
   | 'upsolve'
 
+export type CoachStyle = 'auto' | 'socratic' | 'direct'
+
+/** 设置 → AI 教练。Persisted per browser and sent with every chat request. */
+export interface CoachPrefs {
+  autoReview: boolean
+  showThinking: boolean
+  animations: boolean
+  coachStyle: CoachStyle
+}
+
 /** LeetCode langSlug values the editor supports. */
 export type CodeLanguage = 'rust' | 'cpp' | 'python3' | 'typescript' | 'golang' | 'java'
 

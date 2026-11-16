@@ -34,6 +34,28 @@ async def test_chat_sessions_are_isolated_by_platform_and_problem(client, monkey
     assert calls[1]["platform"] == "HDU"
 
 
+async def test_chat_forwards_animations_and_coach_style(client, monkeypatch):
+    calls = []
+
+    async def fake_chat(**kwargs):
+        calls.append(kwargs)
+        return {"content": "ok", "animation_id": None}
+
+    monkeypatch.setattr(router_module.coach, "chat", fake_chat)
+
+    response = await client.post("/chat", json={
+        "message": "hi", "mode": "PREP", "animations": False, "coachStyle": "socratic",
+    })
+    assert response.status_code == 200
+    assert calls[0]["animations"] is False
+    assert calls[0]["coach_style"] == "socratic"
+
+    # Old clients and unknown styles fall back to the defaults.
+    await client.post("/chat", json={"message": "hi", "mode": "PREP", "coachStyle": "wild"})
+    assert calls[1]["animations"] is True
+    assert calls[1]["coach_style"] == "auto"
+
+
 async def test_chat_separates_page_conversations(client, monkeypatch):
     sessions = []
 

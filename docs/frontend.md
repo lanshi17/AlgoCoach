@@ -72,7 +72,7 @@ frontend/
     │       ├── Button.tsx          # 唯一按钮原语（primary/secondary/ghost）
     │       └── PageHeader.tsx      # 唯一页面标题（图标 + 标题 + 右侧操作）
     └── pages/
-        ├── SettingsPage.tsx        # 目标/Provider/题库登录/导出
+        ├── SettingsPage.tsx        # 目标/AI 教练/Provider/题库登录/导出
         ├── ProgressPage.tsx        # 训练进度
         ├── KnowledgeGraphPage.tsx  # 掌握关系图
         └── graphLayout.ts          # 图布局算法
@@ -435,6 +435,15 @@ interface AppState {
 
 `SettingsPage` 提供 OMP 风格的 Provider 预设（Anthropic、OpenAI、OpenAI Responses、OpenCode Go、Command Code GOAT、DeepSeek、Qwen/DashScope、Moonshot/Kimi、MiniMax、Gemini、OpenRouter、Ollama、Volcengine、xAI）和自定义端点。用户可编辑协议、Base URL、模型名和 API key；API key 只放在当前浏览器 `sessionStorage`，每次聊天按请求传给本机 Agent，不进入 SQLite、ReMe、导出文件或 Git。OpenCode Go 预设指向 `https://opencode.ai/inference/go/openai/v1`（Chat Completions），Command Code GOAT 预设指向 `https://api.commandcode.ai/provider/v1`（Responses）；Agent 对 `opencode.ai` 端点自动附加 `x-opencode-session` 请求头，否则 OpenCode Go 在鉴权前就返回 `400 MissingSessionID`。未配置页面 Provider 时，Agent 继续使用服务端 `.env` 的默认 Anthropic 配置。
 
+**AI 教练**：四个偏好，`localStorage` 键 `algocoach.coachPrefs`，随每次 `/chat` 请求发送：
+
+| 偏好 | 请求字段 | 生效位置 |
+|------|----------|----------|
+| 自动赛后复盘 | —（仅前端） | 提交成功后是否自动发起复盘对话；关闭时只留一条“提交已记录”系统消息 |
+| 显示思考过程 | —（仅前端） | 聊天里的思考过程是否可展开；关闭时只显示单行“正在思考…” |
+| 动画讲解 | `animations` | 关闭时 system prompt 去掉动画指引，tool 分发直接拒绝并说明原因 |
+| 教练风格 | `coachStyle` | `auto` / `socratic`（先反问）/ `direct`（直接给结论），后端追加到 system prompt |
+
 设置页的“题库平台 Cookie”管理 AcWing 与可选的 HDU Cookie：通过 `POST /api/platforms/{platform}/cookie` 写入本机网关 SQLite，只显示“已配置/未配置”，不回显内容。
 
 语言偏好、训练目标和主题保存在当前浏览器；数据导出下载 Agent 训练记忆 ZIP 与 Gateway 提交历史 JSON。提交历史导出包含用户提交代码，LeetCode Cookie 不导出。
@@ -603,7 +612,7 @@ colors: {
 - `darkMode: 'class'`，通过 `<html class="dark">` 切换
 - `useAppStore.theme` 初始值从 `window.matchMedia('(prefers-color-scheme: dark)')` 推导
 - `toggleTheme` 切换并写入 `localStorage` 的 `algocoach.theme`
-- `SettingsPage` 调用 `useAppStore.toggleTheme`；`AppShell` 将主题同步到 `<html>` 的 `dark` class
+- 主题的唯一切换入口是 `Sidebar` 底部按钮；`AppShell` 将主题同步到 `<html>` 的 `dark` class
 
 ```typescript
 // AppShell.tsx

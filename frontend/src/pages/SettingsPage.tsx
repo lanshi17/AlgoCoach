@@ -5,10 +5,11 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { readProviderApiKey, useAppStore } from '@/stores/useAppStore'
 import { agentService } from '@/services/agentService'
 import { leetcodeService } from '@/services/leetcodeService'
-import type { ModelProviderConfig, TrainingGoal } from '@/types'
+import type { CoachStyle, ModelProviderConfig, TrainingGoal } from '@/types'
 import { CUSTOM_PROVIDER_PRESET, PROTOCOL_OPTIONS, PROVIDER_PRESETS, providerFromPreset } from '@/services/providerPresets'
 import Button from '@/components/Common/Button'
 import PageHeader from '@/components/Common/PageHeader'
+import Switch from '@/components/Common/Switch'
 
 const field = 'mt-1 w-full rounded-md border border-border bg-surface-soft px-3 py-2 text-sm dark:border-border-dark dark:bg-surface-dark-soft'
 const label = 'text-xs text-text-muted dark:text-text-dark-muted'
@@ -16,12 +17,14 @@ const label = 'text-xs text-text-muted dark:text-text-dark-muted'
 export default function SettingsPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { goal, setGoal, provider, setProvider, mode } = useAppStore(useShallow(state => ({
+  const { goal, setGoal, provider, setProvider, mode, coachPrefs, setCoachPrefs } = useAppStore(useShallow(state => ({
     goal: state.goal,
     setGoal: state.setGoal,
     provider: state.provider,
     setProvider: state.setProvider,
     mode: state.mode,
+    coachPrefs: state.coachPrefs,
+    setCoachPrefs: state.setCoachPrefs,
   })))
   const [exporting, setExporting] = useState(false)
   const [providerMessage, setProviderMessage] = useState('')
@@ -111,6 +114,35 @@ export default function SettingsPage() {
               <option value="interview_prep">技术面试准备</option>
               <option value="casual">日常算法学习</option>
             </select>
+          </div>
+
+          <div className="space-y-4 border-t border-border pt-5 dark:border-border-dark">
+            <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">AI 教练</p>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-sm text-text-primary dark:text-text-dark-primary">自动赛后复盘</span>
+              <Switch label="自动赛后复盘" checked={coachPrefs.autoReview}
+                onChange={value => setCoachPrefs({ autoReview: value })} />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-sm text-text-primary dark:text-text-dark-primary">显示思考过程</span>
+              <Switch label="显示思考过程" checked={coachPrefs.showThinking}
+                onChange={value => setCoachPrefs({ showThinking: value })} />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-sm text-text-primary dark:text-text-dark-primary">动画讲解</span>
+              <Switch label="动画讲解" checked={coachPrefs.animations}
+                onChange={value => setCoachPrefs({ animations: value })} />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-sm text-text-primary dark:text-text-dark-primary">教练风格</span>
+              <select aria-label="教练风格" value={coachPrefs.coachStyle}
+                onChange={event => setCoachPrefs({ coachStyle: event.target.value as CoachStyle })}
+                className="w-40 rounded-md border border-border bg-surface-soft px-3 py-2 text-sm dark:border-border-dark dark:bg-surface-dark-soft">
+                <option value="auto">自动</option>
+                <option value="socratic">苏格拉底式追问</option>
+                <option value="direct">直接讲解</option>
+              </select>
+            </div>
           </div>
 
           <div className="border-t border-border pt-5 dark:border-border-dark">

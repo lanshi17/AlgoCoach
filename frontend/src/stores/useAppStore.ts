@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { AgentMode, Problem, ChatMessage, AnimationJob, RunResult, TrainingGoal, TrainingPhase, ModelProviderConfig, CodeLanguage } from '@/types'
+import type { AgentMode, Problem, ChatMessage, AnimationJob, RunResult, TrainingGoal, TrainingPhase, ModelProviderConfig, CodeLanguage, CoachPrefs } from '@/types'
 import { CODE_LANGUAGES } from '@/services/languages'
 
 const GOALS: TrainingGoal[] = ['contest', 'interview_prep', 'casual']
@@ -8,6 +8,7 @@ const ACTIVE_PROBLEM_KEY = 'algocoach.activeProblem'
 const CHAT_DRAFTS_KEY = 'algocoach.chatDrafts'
 const CHAT_PHASES_KEY = 'algocoach.chatPhases'
 const TIME_LIMITS_KEY = 'algocoach.problemTimeLimits'
+const COACH_PREFS_KEY = 'algocoach.coachPrefs'
 const FOCUS_TIMES_KEY = 'algocoach.problemFocusElapsed'
 const PROVIDER_API_KEY_KEY = 'algocoach.provider.apiKey'
 const PROVIDER_API_KEY_PREFIX = `${PROVIDER_API_KEY_KEY}.`
@@ -114,6 +115,30 @@ function readChatPhases(): Record<string, TrainingPhase> {
     return Object.fromEntries(Object.entries(value).filter(([, phase]) =>
       TRAINING_PHASES.includes(phase as TrainingPhase))) as Record<string, TrainingPhase>
   } catch { return {} }
+}
+
+const DEFAULT_COACH_PREFS: CoachPrefs = {
+  autoReview: true,
+  showThinking: true,
+  animations: true,
+  coachStyle: 'auto',
+}
+
+function readCoachPrefs(): CoachPrefs {
+  try {
+    const value = JSON.parse(window.localStorage.getItem(COACH_PREFS_KEY) ?? 'null') as Partial<CoachPrefs> | null
+    if (!value || typeof value !== 'object') return DEFAULT_COACH_PREFS
+    return {
+      autoReview: typeof value.autoReview === 'boolean' ? value.autoReview : true,
+      showThinking: typeof value.showThinking === 'boolean' ? value.showThinking : true,
+      animations: typeof value.animations === 'boolean' ? value.animations : true,
+      coachStyle: value.coachStyle === 'socratic' || value.coachStyle === 'direct' ? value.coachStyle : 'auto',
+    }
+  } catch { return DEFAULT_COACH_PREFS }
+}
+
+function persistCoachPrefs(prefs: CoachPrefs) {
+  try { window.localStorage.setItem(COACH_PREFS_KEY, JSON.stringify(prefs)) } catch { /* keep in memory */ }
 }
 
 function persistChatPhases(phases: Record<string, TrainingPhase>) {
@@ -274,6 +299,8 @@ interface AppState {
   setGoal: (goal: TrainingGoal) => void
   provider: ModelProviderConfig
   setProvider: (provider: ModelProviderConfig) => void
+  coachPrefs: CoachPrefs
+  setCoachPrefs: (patch: Partial<CoachPrefs>) => void
 
   // ─── Chat (agent对话) — locked in FOCUS ───
   messages: ChatMessage[]
@@ -467,6 +494,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     saveProvider(provider)
     set({ provider })
   },
+  coachPrefs: readCoachPrefs(),
+  setCoachPrefs: patch => set(state => {
+    const coachPrefs = { ...state.coachPrefs, ...patch }
+    persistCoachPrefs(coachPrefs)
+    return { coachPrefs }
+  }),
 
   messages: [],
   chatDrafts: readChatDrafts(),

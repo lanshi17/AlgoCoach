@@ -218,6 +218,33 @@ async def test_animation_tool_and_guidance_are_withheld_unless_opted_in(tmp_path
     assert "request_animation" in names
 
 
+async def test_animations_can_be_disabled_per_request(tmp_path, monkeypatch):
+    instance, model, _reme = _make_coach(tmp_path, responses=[
+        _tool_call("request_animation", {
+            "type": "PRE_EXPLAIN", "topic": "BFS", "title": "BFS 入门",
+        }),
+    ])
+
+    async def must_not_enqueue(**kwargs):
+        raise AssertionError("the user disabled animations for this request")
+
+    monkeypatch.setattr(animation_service, "enqueue", must_not_enqueue)
+
+    result = await instance.chat("no-anim", "讲讲 BFS", "PREP", "bfs-1", animations=False)
+
+    assert result["animation_id"] is None
+    # The tool schema stays registered, but the prompt no longer asks for it.
+    assert "request_animation" not in model.calls[0]["messages"][0].get_text_content()
+
+
+async def test_coach_style_reaches_the_system_prompt(tmp_path):
+    instance, model, _reme = _make_coach(tmp_path)
+
+    await instance.chat("style-session", "讲讲 BFS", "PREP", "bfs-1", coach_style="direct")
+
+    assert "直接给出结论" in model.calls[0]["messages"][0].get_text_content()
+
+
 async def test_chat_executes_animation_tool_and_returns_job_id(tmp_path, monkeypatch):
     coach, model, _reme = _make_coach(
         tmp_path,

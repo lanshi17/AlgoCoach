@@ -130,6 +130,13 @@ export default function Header() {
         submittedAt: new Date().toISOString(),
       })
       exitFocus()
+      if (!useAppStore.getState().coachPrefs.autoReview) {
+        addMessage({
+          id: nanoid(), role: 'system', content: '提交已记录。可在输入框继续发起复盘。',
+          timestamp: new Date().toISOString(), mode: 'REVIEW',
+        })
+        return
+      }
       const topicSummary = activeProblem.topics.length ? activeProblem.topics.join('、') : '暂无标签数据'
       const passedSummary = result.passedTests == null || result.totalTests == null
         ? '判题未返回通过用例数量'
@@ -208,7 +215,7 @@ export default function Header() {
                        dark:border-border-dark bg-surface dark:bg-surface-dark flex-shrink-0
                        xl:h-[48px] xl:flex-nowrap xl:gap-3 xl:px-4 xl:py-0">
       <div className="flex min-w-0 flex-1 items-center gap-3 xl:min-w-[120px]">
-        <h1 className="text-sm font-medium truncate text-text-primary dark:text-text-dark-primary">
+        <h1 className="truncate font-editorial text-[15px] font-medium tracking-wide text-text-primary dark:text-text-dark-primary">
           {activeProblem ? activeProblem.title : '工作区'}
         </h1>
         {activeProblem && <Badge difficulty={activeProblem.difficulty} />}
