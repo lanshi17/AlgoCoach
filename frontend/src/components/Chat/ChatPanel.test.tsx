@@ -1,10 +1,10 @@
-import React, { act } from 'react'
+import React, { act, Profiler } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentService } from '@/services/agentService'
 import { useAppStore } from '@/stores/useAppStore'
-import type { Problem } from '@/types'
+import type { ChatMessage as Msg, Problem } from '@/types'
 import ChatPanel, { toRemainingSeconds } from './ChatPanel'
 
 vi.mock('./ChatMessage', () => ({ default: ({ message }: { message: { content: string } }) => <p>{message.content}</p> }))
@@ -65,6 +65,26 @@ describe('chat when changing training context', () => {
     expect(element.querySelector<HTMLInputElement>('#chat-time-remaining')!.value).toBe('25')
   })
 
+  it('does not send while an IME composition is being confirmed', async () => {
+    useAppStore.getState().setActiveProblem(problem)
+    const chat = vi.spyOn(agentService, 'chat').mockResolvedValue({ content: '已收到。' })
+    act(() => renderChatPanel(root))
+    const textarea = element.querySelector<HTMLTextAreaElement>('textarea[aria-label="发送给 AI 教练的消息"]')!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, '你好')
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+
+    const composingEnter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+    Object.defineProperty(composingEnter, 'isComposing', { value: true })
+    act(() => textarea.dispatchEvent(composingEnter))
+    expect(chat).not.toHaveBeenCalled()
+    expect(textarea.value).toBe('你好')
+
+    await act(async () => textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+    expect(chat).toHaveBeenCalledTimes(1)
+  })
+
   it('uses immediate scrolling when the system requests reduced motion', () => {
     vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })))
     act(() => renderChatPanel(root))
@@ -73,6 +93,21 @@ describe('chat when changing training context', () => {
     }))
 
     expect(Element.prototype.scrollIntoView).toHaveBeenLastCalledWith({ behavior: 'auto' })
+  })
+
+  it('does not rerender the chat or its math messages for editor keystrokes', () => {
+    useAppStore.getState().setActiveProblem(problem)
+    let commits = 0
+    act(() => root.render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Profiler id="chat" onRender={() => { commits += 1 }}><ChatPanel /></Profiler>
+      </MemoryRouter>,
+    ))
+    const initialCommits = commits
+
+    act(() => useAppStore.getState().setCode('draft while typing'))
+
+    expect(commits).toBe(initialCommits)
   })
 
   it('unlocks the new conversation even if the old request never settles', async () => {
@@ -92,6 +127,7 @@ describe('chat when changing training context', () => {
     })
     act(() => element.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')!.click())
     expect(element.textContent).toContain('正在思考')
+    expect(element.querySelector<HTMLButtonElement>('button[aria-label="正在等待教练回复"]')?.getAttribute('aria-busy')).toBe('true')
     act(() => useAppStore.getState().setActiveProblem({ ...problem, id: '2', platformId: 'two' }))
     expect(signal?.aborted).toBe(true)
     expect(element.textContent).not.toContain('正在思考')
@@ -190,5 +226,115 @@ describe('chat when changing training context', () => {
     expect(settingsLink?.textContent).toBe('配置模型 Provider')
     expect(element.textContent).toContain('完善模型 Provider 配置后即可继续对话。')
     expect(textarea.value).toBe('你好')
+  })
+
+  it('explains endpoint and credential errors before linking to provider settings', async () => {
+    useAppStore.getState().setActiveProblem(problem)
+    vi.spyOn(agentService, 'chat').mockRejectedValue({
+      isAxiosError: true,
+      response: {
+        status: 401,
+        data: { detail: '模型服务认证失败，请检查 Provider API Key。' },
+      },
+    })
+    act(() => renderChatPanel(root))
+
+    const textarea = element.querySelector<HTMLTextAreaElement>('textarea[aria-label="发送给 AI 教练的消息"]')!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, '检查配置')
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => element.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')!.click())
+
+    expect(element.textContent).toContain('检查模型名、Base URL 或 API key 后即可继续对话。')
+    expect(element.querySelector<HTMLAnchorElement>('a[href="/settings"]')?.textContent).toBe('检查模型 Provider')
+  })
+
+  it('retries a failed message without duplicating the user turn', async () => {
+    useAppStore.getState().setActiveProblem(problem)
+    const chat = vi.spyOn(agentService, 'chat')
+      .mockRejectedValueOnce(new Error('temporary failure'))
+      .mockResolvedValueOnce({ content: '重试成功。' })
+    act(() => renderChatPanel(root))
+
+    const textarea = element.querySelector<HTMLTextAreaElement>('textarea[aria-label="发送给 AI 教练的消息"]')!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, '请给我一个提示')
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => element.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')!.click())
+
+    expect(element.querySelector<HTMLButtonElement>('button[aria-label="重试发送消息"]')).not.toBeNull()
+    expect(textarea.value).toBe('请给我一个提示')
+    await act(async () => element.querySelector<HTMLButtonElement>('button[aria-label="重试发送消息"]')!.click())
+
+    expect(chat).toHaveBeenCalledTimes(2)
+    expect(useAppStore.getState().messages.filter(message => message.role === 'user')).toHaveLength(1)
+    expect(element.textContent).toContain('重试成功。')
+    expect(element.querySelector<HTMLButtonElement>('button[aria-label="重试发送消息"]')).toBeNull()
+  })
+
+  it('clears a failed retry from the previous problem when the problem changes', async () => {
+    useAppStore.getState().setActiveProblem(problem)
+    vi.spyOn(agentService, 'chat').mockRejectedValue(new Error('temporary failure'))
+    act(() => renderChatPanel(root))
+    const textarea = element.querySelector<HTMLTextAreaElement>('textarea[aria-label="发送给 AI 教练的消息"]')!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, '旧题消息')
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => element.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')!.click())
+    expect(element.querySelector<HTMLButtonElement>('button[aria-label="重试发送消息"]')).not.toBeNull()
+
+    act(() => useAppStore.getState().setActiveProblem({ ...problem, id: '2', platformId: 'two' }))
+    expect(element.querySelector<HTMLButtonElement>('button[aria-label="重试发送消息"]')).toBeNull()
+  })
+
+  it('restores the retry action after returning from provider settings', async () => {
+    useAppStore.getState().setActiveProblem(problem)
+    const chat = vi.spyOn(agentService, 'chat')
+      .mockRejectedValueOnce(new Error('missing API key'))
+      .mockResolvedValueOnce({ content: '设置后重试成功。' })
+    act(() => renderChatPanel(root))
+    const textarea = element.querySelector<HTMLTextAreaElement>('textarea[aria-label="发送给 AI 教练的消息"]')!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, '用竞赛方式分析')
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => element.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')!.click())
+
+    act(() => root.render(null))
+    act(() => renderChatPanel(root))
+    expect(element.querySelector<HTMLButtonElement>('button[aria-label="重试发送消息"]')).not.toBeNull()
+    await act(async () => element.querySelector<HTMLButtonElement>('button[aria-label="重试发送消息"]')!.click())
+
+    expect(chat).toHaveBeenCalledTimes(2)
+    expect(useAppStore.getState().messages.filter(message => message.role === 'user')).toHaveLength(1)
+    expect(element.textContent).toContain('设置后重试成功。')
+  })
+
+  it('offers retry for an automatic post-submit review without copying its prompt', async () => {
+    const review: Msg = {
+      id: 'review-user', role: 'user', mode: 'REVIEW', trainingPhase: 'review',
+      content: '我刚完成题目，请按 OI/xCPC 复盘。', timestamp: 'now',
+    }
+    useAppStore.getState().setActiveProblem(problem)
+    useAppStore.getState().setMode('REVIEW')
+    useAppStore.getState().addMessage(review)
+    useAppStore.getState().addMessage({
+      id: 'review-error', role: 'system', content: '教练暂时无法连接。', timestamp: 'now',
+      retryMessageId: review.id,
+    })
+    const chat = vi.spyOn(agentService, 'chat').mockResolvedValue({ content: '自动复盘重试成功。' })
+    act(() => renderChatPanel(root))
+
+    const retry = element.querySelector<HTMLButtonElement>('button[aria-label="重试发送消息"]')
+    expect(retry).not.toBeNull()
+    expect(element.querySelector('textarea')?.value).toBe('')
+    await act(async () => retry!.click())
+
+    expect(chat).toHaveBeenCalledWith(review.content, expect.objectContaining({ mode: 'REVIEW', trainingPhase: 'review' }), expect.any(AbortSignal))
+    expect(useAppStore.getState().messages.filter(message => message.role === 'user')).toHaveLength(1)
+    expect(element.textContent).toContain('自动复盘重试成功。')
   })
 })

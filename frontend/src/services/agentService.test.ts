@@ -61,6 +61,20 @@ describe('getAgentErrorAction', () => {
 
     expect(getAgentErrorAction(error)).toBeNull()
   })
+
+  it('offers provider settings for authentication and endpoint errors', () => {
+    const authError = {
+      isAxiosError: true,
+      response: { status: 401, data: { detail: '模型服务认证失败，请检查 Provider API Key。' } },
+    }
+    const endpointError = {
+      isAxiosError: true,
+      response: { status: 404, data: { detail: '模型或 Responses API 路径不存在。' } },
+    }
+
+    expect(getAgentErrorAction(authError)).toEqual({ href: '/settings', label: '检查模型 Provider' })
+    expect(getAgentErrorAction(endpointError)).toEqual({ href: '/settings', label: '检查模型 Provider' })
+  })
 })
 
 describe('focus chat guard', () => {
@@ -92,5 +106,22 @@ describe('focus chat guard', () => {
     const second = post.mock.calls[1][1] as { conversationId: string }
     expect(first.conversationId).toEqual(expect.any(String))
     expect(second.conversationId).toBe(first.conversationId)
+  })
+
+  it('deduplicates concurrent profile reads and releases the request after failure', async () => {
+    let rejectProfile!: (error: Error) => void
+    const get = vi.spyOn(axios, 'get')
+      .mockReturnValueOnce(new Promise((_resolve, reject) => { rejectProfile = reject }) as never)
+      .mockResolvedValueOnce({ data: { topics: [], edges: [], recentProblems: [], dailyAttempts: [], stats: {} } })
+
+    const first = agentService.getProfile()
+    const second = agentService.getProfile()
+    expect(get).toHaveBeenCalledTimes(1)
+    rejectProfile(new Error('offline'))
+    await expect(first).rejects.toThrow('offline')
+    await expect(second).rejects.toThrow('offline')
+
+    await agentService.getProfile()
+    expect(get).toHaveBeenCalledTimes(2)
   })
 })

@@ -117,7 +117,7 @@ frontend/
 - `NAV_ITEMS` 使用 `/workspace`、`/progress`、`/knowledge`、`/settings` 路径；`NavLink` 负责切换和当前项高亮。
 - `/` 默认重定向至 `/workspace`，未知路径也回到工作区。
 - `/progress` 与 `/knowledge` 使用 Agent 本地 profile 数据；`/settings` 提供偏好设置，`/settings/platforms` 是 LeetCode / AcWing / 杭电 HDU 三平台登录态的统一入口。
-- AppShell 启动时只检查 Java Gateway；网关不可用时显示重试入口。LeetCode 未登录不会阻挡工作区，题库请求失败时在题目面板内显示平台错误并提供登录设置入口。
+- AppShell 启动时只检查 Java Gateway（探测超时后进入离线态）；网关不可用时显示重试入口。LeetCode 未登录不会阻挡工作区，题库请求失败时在题目面板内显示平台错误并提供登录设置入口。
 
 ### 3.3 Header.tsx
 

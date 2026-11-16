@@ -86,6 +86,21 @@ async def test_focus_route_returns_before_model_memory_and_tools(
     assert coach._agents == {}
 
 
+async def test_idle_plain_greeting_does_not_invoke_model_or_claim_focus(tmp_path):
+    """A new user can greet the coach before choosing a problem/provider."""
+    coach, model, reme = _make_coach(tmp_path)
+
+    result = await coach.chat("greeting", "hi", "IDLE")
+
+    assert result == {
+        "content": "你好！我在。现在还没有选题；你可以先选一道题，也可以告诉我想练的算法或训练阶段。",
+        "animation_id": None,
+    }
+    assert model.calls == []
+    assert reme.start_count == 0
+    assert reme.jobs == []
+
+
 @pytest.mark.parametrize(
     ("mode", "problem_id", "expected"),
     [
@@ -97,7 +112,7 @@ async def test_focus_route_returns_before_model_memory_and_tools(
 async def test_current_interface_mode_is_supplied_to_the_model(tmp_path, mode, problem_id, expected):
     coach, model, _reme = _make_coach(tmp_path)
 
-    await coach.chat("mode-session", "hi", mode, problem_id)
+    await coach.chat("mode-session", "请说明当前界面状态", mode, problem_id)
 
     system = model.calls[0]["messages"][0].get_text_content()
     assert expected in system

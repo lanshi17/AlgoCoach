@@ -30,6 +30,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 from contextvars import ContextVar
 from typing import Any
 from urllib.parse import urlparse
@@ -109,6 +110,20 @@ REME_TOP_K = 5
 # session and by ReMe, so one process-wide value is the honest scope.
 OPENCODE_SESSION_HEADER = "x-opencode-session"
 OPENCODE_SESSION_ID = f"ses_{uuid4().hex}"
+
+# A plain greeting before a problem is selected does not need a model turn.
+# Handling it here keeps a model from interpreting the base Soul's FOCUS/REVIEW
+# rules as the user's current state, and lets a new user discover the next
+# action even before configuring a provider key.
+_PLAIN_GREETING_RE = re.compile(
+    r"^\s*(?:hi|hello|hey|嗨|哈喽|你好|您好|早上好|晚上好|在吗|在不在)"
+    r"[\s!！?？,.，。~～]*$",
+    re.IGNORECASE,
+)
+IDLE_GREETING_REPLY = (
+    "你好！我在。现在还没有选题；你可以先选一道题，"
+    "也可以告诉我想练的算法或训练阶段。"
+)
 
 
 class ProviderConfigurationError(RuntimeError):
@@ -516,13 +531,25 @@ class AlgoCoach:
         training context from ``POST /chat``. An explicit phase or a remaining
         time budget selects the contest goal variant; the phase and budget are
         also stamped into the user message so AgentScope state and the ReMe
-        memory write-back contain them. With the default phase and no budget the
-        legacy message, Soul and FOCUS guarantees are unchanged.
+        memory write-back contain them. With the default phase and no budget,
+        ordinary turns keep the legacy message and Soul; the explicit FOCUS
+        silence and no-problem greeting guard above still take precedence.
         """
         # In FOCUS mode the agent must stay silent: no model, memory or tools.
         # This check stays first even when a training context is supplied.
         if mode == "FOCUS":
             return {"content": "", "animation_id": None}
+
+        # Do not spend a provider request on a bare greeting with no problem
+        # context. More importantly, this prevents the model from replying
+        # with a stale FOCUS/REVIEW coaching sentence before the user has
+        # started a session.
+        if (
+            mode == "IDLE"
+            and not problem_id
+            and _PLAIN_GREETING_RE.fullmatch(message)
+        ):
+            return {"content": IDLE_GREETING_REPLY, "animation_id": None}
 
         phase = resolve_training_phase(training_phase)
         resolved_goal = resolve_goal(goal) or (

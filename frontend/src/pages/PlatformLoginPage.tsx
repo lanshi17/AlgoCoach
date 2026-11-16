@@ -6,18 +6,20 @@ type StatusMap = { LEETCODE: boolean; ACWING: boolean; HDU: boolean }
 
 const card =
   'rounded-[18px] border border-[#E6E9EF] bg-white p-6 transition-[transform,box-shadow] ' +
-  'duration-[250ms] hover:-translate-y-1 hover:shadow-[0_12px_28px_rgb(11_12_15/0.042)]'
+  'duration-[250ms] hover:-translate-y-1 hover:shadow-[0_12px_28px_rgb(11_12_15/0.042)] ' +
+  'dark:border-border-dark dark:bg-surface-dark-soft dark:hover:shadow-none'
 const textarea =
   'w-full rounded-[14px] border border-[#DEE2E9] bg-white px-4 py-2 font-mono text-[12px]/[18px] ' +
-  'text-[#111317] outline-none transition-colors duration-150 focus:border-[#5B58FF]'
+  'text-[#111317] outline-none transition-colors duration-150 focus:border-[#5B58FF] ' +
+  'dark:border-border-dark dark:bg-surface-dark dark:text-text-dark-primary dark:placeholder:text-text-dark-muted'
 const primary =
   'inline-flex h-9 items-center rounded-full bg-[#111317] px-[18px] text-[13px]/[19px] font-medium ' +
-  'text-white transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40'
+  'text-white transition-opacity duration-150 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-accent'
 
 function StatusChip({ ok, okLabel, idleLabel }: { ok: boolean; okLabel: string; idleLabel: string }) {
   return (
     <span className="inline-flex items-center gap-2 rounded-full bg-[#F2F4F8] px-3 py-1
-                     text-[12px]/[16px] tracking-[0.4px] text-[#535B6B]">
+                     text-[12px]/[16px] tracking-[0.4px] text-[#535B6B] dark:bg-surface-dark-muted dark:text-text-dark-secondary">
       <span className="h-1.5 w-1.5 rounded-full" style={{ background: ok ? '#0DA740' : '#8E96A7' }} />
       {ok ? okLabel : idleLabel}
     </span>
@@ -32,7 +34,10 @@ export default function PlatformLoginPage() {
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const confirmTimer = useRef<number>()
+  const refreshingRef = useRef(false)
+  const didInitialRefresh = useRef(false)
 
   const flash = useCallback((message: string) => {
     setError('')
@@ -42,19 +47,32 @@ export default function PlatformLoginPage() {
   }, [])
 
   const refresh = useCallback(async () => {
+    if (refreshingRef.current) return
+    refreshingRef.current = true
+    setRefreshing(true)
     try {
       const summary = await platformCookieService.summary()
       setStatus(summary)
       setError('')
       // LeetCode 的真实校验要走上游，先渲染配置状态，再单独回填。
+      if (!summary.LEETCODE) return
       const lc = await platformCookieService.validateLeetCode().catch(() => summary.LEETCODE)
       setStatus(current => ({ ...current, LEETCODE: lc }))
     } catch {
       setError('无法获取登录状态，请确认网关已启动后点击“刷新状态”。')
+    } finally {
+      refreshingRef.current = false
+      setRefreshing(false)
     }
   }, [])
 
-  useEffect(() => { void refresh() }, [refresh])
+  useEffect(() => {
+    // StrictMode replays effects in development. Keep the initial status
+    // check single-shot; the explicit refresh button still always retries.
+    if (didInitialRefresh.current) return
+    didInitialRefresh.current = true
+    void refresh()
+  }, [refresh])
   useEffect(() => () => window.clearTimeout(confirmTimer.current), [])
 
   const saveLeetCode = async () => {
@@ -66,7 +84,10 @@ export default function PlatformLoginPage() {
       await platformCookieService.saveLeetCode(parsed.session, parsed.csrf)
       const ok = await platformCookieService.validateLeetCode().catch(() => false)
       setStatus(current => ({ ...current, LEETCODE: ok }))
-      if (ok) flash('已保存 · LeetCode 登录有效')
+      if (ok) {
+        window.dispatchEvent(new Event('algocoach:cookie-valid'))
+        flash('已保存 · LeetCode 登录有效')
+      }
       else setError('已保存，但上游校验未通过，请在 leetcode.cn 重新登录后复制新的 Cookie。')
     } catch {
       setError('保存失败，请检查网关连接后重试；已粘贴的内容不会被清空。')
@@ -93,7 +114,7 @@ export default function PlatformLoginPage() {
 
   return (
     <main
-      className="h-full overflow-y-auto bg-[#F9FAFD] text-[#111317]"
+      className="h-full overflow-y-auto bg-[#F9FAFD] text-[#111317] dark:bg-surface-dark dark:text-text-dark-primary"
       style={{ fontFamily: "'Inter var', Inter, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif" }}
     >
       {confirm && (
@@ -106,23 +127,23 @@ export default function PlatformLoginPage() {
       <div className="mx-auto w-full max-w-[880px] px-6 pb-16 pt-10">
         <header className="mb-8 flex items-end justify-between gap-6">
           <div>
-            <p className="text-[12px]/[16px] tracking-[0.4px] text-[#8E96A7]">ALGOCOACH · 题库</p>
-            <h1 className="mt-2 text-[28px]/[36px] font-semibold tracking-[0.5px] text-[#111317]">题库登录</h1>
-            <p className="mt-2 text-[14px]/[20px] tracking-[0.4px] text-[#535B6B]">
+            <p className="text-[12px]/[16px] tracking-[0.4px] text-[#8E96A7] dark:text-text-dark-muted">ALGOCOACH · 题库</p>
+            <h1 className="mt-2 text-[28px]/[36px] font-semibold tracking-[0.5px] text-[#111317] dark:text-text-dark-primary">题库登录</h1>
+            <p className="mt-2 text-[14px]/[20px] tracking-[0.4px] text-[#535B6B] dark:text-text-dark-secondary">
               LeetCode / AcWing / 杭电 HDU 的登录态统一在这里管理；凭据只保存在本机网关数据库。
             </p>
           </div>
-          <button onClick={() => void refresh()}
+          <button type="button" onClick={() => void refresh()} disabled={refreshing || saving} aria-busy={refreshing} aria-label="刷新题库登录状态"
             className="inline-flex h-9 shrink-0 items-center rounded-full border border-[#DEE2E9] px-4
                        text-[13px]/[19px] tracking-[0.4px] text-[#111317] transition-colors duration-150
-                       hover:border-[#D1D7E2]">
-            刷新状态
+                       hover:border-[#D1D7E2] disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark dark:text-text-dark-primary dark:hover:border-border-dark">
+            {refreshing ? '刷新中…' : '刷新状态'}
           </button>
         </header>
 
         {error && (
           <div role="alert" className="mb-3 rounded-[12px] border border-[#F3C4C4] bg-[#FDECEC] px-4 py-2
-                                       text-[12px]/[16px] tracking-[0.4px] text-[#B42318]">
+                                       text-[12px]/[16px] tracking-[0.4px] text-[#B42318] dark:border-danger/40 dark:bg-danger/10 dark:text-red-300">
             {error}
           </div>
         )}
@@ -132,15 +153,15 @@ export default function PlatformLoginPage() {
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F2F4F8]
-                                 text-[13px]/[19px] font-medium text-[#111317]">LC</span>
+                                 text-[13px]/[19px] font-medium text-[#111317] dark:bg-surface-dark-muted dark:text-text-dark-primary">LC</span>
                 <div>
-                  <h2 className="text-[18px]/[28px] font-semibold tracking-[0.4px] text-[#111317]">LeetCode</h2>
-                  <p className="text-[12px]/[16px] tracking-[0.4px] text-[#8E96A7]">leetcode.cn · 题单 / 题面 / 运行 / 提交</p>
+                  <h2 className="text-[18px]/[28px] font-semibold tracking-[0.4px] text-[#111317] dark:text-text-dark-primary">LeetCode</h2>
+                  <p className="text-[12px]/[16px] tracking-[0.4px] text-[#8E96A7] dark:text-text-dark-muted">leetcode.cn · 题单 / 题面 / 运行 / 提交</p>
                 </div>
               </div>
               <StatusChip ok={status.LEETCODE} okLabel="已登录" idleLabel="未登录" />
             </div>
-            <p className="mt-3 text-[13px]/[19px] tracking-[0.4px] text-[#535B6B]">
+            <p className="mt-3 text-[13px]/[19px] tracking-[0.4px] text-[#535B6B] dark:text-text-dark-secondary">
               在 leetcode.cn 登录后复制整段 Cookie 或 cURL 命令；只需包含 LEETCODE_SESSION 与 csrftoken。
             </p>
             <div className="mt-4 space-y-2">
@@ -149,8 +170,8 @@ export default function PlatformLoginPage() {
                 placeholder="Cookie: LEETCODE_SESSION=…; csrftoken=…　或整段 curl 命令"
                 className={textarea} />
               <div className="flex justify-end">
-                <button onClick={() => void saveLeetCode()} disabled={saving || !lcPaste.trim()} className={primary}>
-                  保存 LeetCode 登录态
+                <button onClick={() => void saveLeetCode()} disabled={saving || refreshing || !lcPaste.trim()} aria-busy={saving} className={primary}>
+                  {saving ? '保存中…' : '保存 LeetCode 登录态'}
                 </button>
               </div>
             </div>
@@ -160,15 +181,15 @@ export default function PlatformLoginPage() {
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F2F4F8]
-                                 text-[13px]/[19px] font-medium text-[#111317]">AW</span>
+                                 text-[13px]/[19px] font-medium text-[#111317] dark:bg-surface-dark-muted dark:text-text-dark-primary">AW</span>
                 <div>
-                  <h2 className="text-[18px]/[28px] font-semibold tracking-[0.4px] text-[#111317]">AcWing</h2>
-                  <p className="text-[12px]/[16px] tracking-[0.4px] text-[#8E96A7]">acwing.com · 题单 / 题面 / 标签专项</p>
+                  <h2 className="text-[18px]/[28px] font-semibold tracking-[0.4px] text-[#111317] dark:text-text-dark-primary">AcWing</h2>
+                  <p className="text-[12px]/[16px] tracking-[0.4px] text-[#8E96A7] dark:text-text-dark-muted">acwing.com · 题单 / 题面 / 标签专项</p>
                 </div>
               </div>
               <StatusChip ok={status.ACWING} okLabel="已配置" idleLabel="未配置" />
             </div>
-            <p className="mt-3 text-[13px]/[19px] tracking-[0.4px] text-[#535B6B]">
+            <p className="mt-3 text-[13px]/[19px] tracking-[0.4px] text-[#535B6B] dark:text-text-dark-secondary">
               登录 acwing.com 后复制请求里的 Cookie 请求头（含 csrftoken、sessionid）粘贴到下面。
             </p>
             <div className="mt-4 space-y-2">
@@ -177,8 +198,8 @@ export default function PlatformLoginPage() {
                 placeholder="csrftoken=…; sessionid=…"
                 className={textarea} />
               <div className="flex justify-end">
-                <button onClick={() => void savePlatform('ACWING', acCookie)} disabled={saving || !acCookie.trim()} className={primary}>
-                  保存 AcWing 登录态
+                <button onClick={() => void savePlatform('ACWING', acCookie)} disabled={saving || refreshing || !acCookie.trim()} aria-busy={saving} className={primary}>
+                  {saving ? '保存中…' : '保存 AcWing 登录态'}
                 </button>
               </div>
             </div>
@@ -188,15 +209,15 @@ export default function PlatformLoginPage() {
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
                 <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F2F4F8]
-                                 text-[13px]/[19px] font-medium text-[#111317]">HD</span>
+                                 text-[13px]/[19px] font-medium text-[#111317] dark:bg-surface-dark-muted dark:text-text-dark-primary">HD</span>
                 <div>
-                  <h2 className="text-[18px]/[28px] font-semibold tracking-[0.4px] text-[#111317]">杭电 HDU</h2>
-                  <p className="text-[12px]/[16px] tracking-[0.4px] text-[#8E96A7]">acm.hdu.edu.cn · 题单 / 题面</p>
+                  <h2 className="text-[18px]/[28px] font-semibold tracking-[0.4px] text-[#111317] dark:text-text-dark-primary">杭电 HDU</h2>
+                  <p className="text-[12px]/[16px] tracking-[0.4px] text-[#8E96A7] dark:text-text-dark-muted">acm.hdu.edu.cn · 题单 / 题面</p>
                 </div>
               </div>
               <StatusChip ok={status.HDU} okLabel="已配置" idleLabel="未配置" />
             </div>
-            <p className="mt-3 text-[13px]/[19px] tracking-[0.4px] text-[#535B6B]">
+            <p className="mt-3 text-[13px]/[19px] tracking-[0.4px] text-[#535B6B] dark:text-text-dark-secondary">
               Cookie 可选：不填写也能浏览题面；填写后列表会显示“已解决”标记。
             </p>
             <div className="mt-4 space-y-2">
@@ -205,8 +226,8 @@ export default function PlatformLoginPage() {
                 placeholder="PHPSESSID=…; exesubmitlang=0"
                 className={textarea} />
               <div className="flex justify-end">
-                <button onClick={() => void savePlatform('HDU', hduCookie)} disabled={saving || !hduCookie.trim()} className={primary}>
-                  保存 HDU 登录态
+                <button onClick={() => void savePlatform('HDU', hduCookie)} disabled={saving || refreshing || !hduCookie.trim()} aria-busy={saving} className={primary}>
+                  {saving ? '保存中…' : '保存 HDU 登录态'}
                 </button>
               </div>
             </div>

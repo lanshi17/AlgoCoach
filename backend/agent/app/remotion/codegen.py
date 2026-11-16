@@ -230,10 +230,31 @@ _NUMBER = re.compile(r"[0-9][0-9A-Za-z_.]*")
 _IDENT = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
 
 _REMOTION_ROOT_OVERRIDE = os.getenv("REMOTION_PROJECT_ROOT", "").strip()
+
+
+def _default_remotion_root() -> Path:
+    """Locate the bundled Remotion project without assuming source depth.
+
+    Development checkouts place this module several directories below the
+    repository root, while the production image copies the project to
+    ``/remotion-compositions``.  Iterating over parents keeps imports safe in
+    both layouts and avoids indexing past the root directory.
+    """
+    module_path = Path(__file__).resolve()
+    candidates = [parent / "remotion-compositions" for parent in module_path.parents]
+    candidates.append(Path("/remotion-compositions"))
+    for candidate in candidates:
+        if candidate.is_dir():
+            return candidate
+    # Preserve a useful deterministic path for callers that report a missing
+    # project later, even when neither layout exists yet.
+    return candidates[0]
+
+
 _REMOTION_ROOT = (
     Path(_REMOTION_ROOT_OVERRIDE).resolve()
     if _REMOTION_ROOT_OVERRIDE
-    else Path(__file__).resolve().parents[4] / "remotion-compositions"
+    else _default_remotion_root()
 )
 
 # ── Errors ─────────────────────────────────────────────────────

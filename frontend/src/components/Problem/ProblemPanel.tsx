@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/stores/useAppStore'
 import { Badge } from '@/components/Common/Badge'
 import { AlertCircle, Loader2, Play, RefreshCw } from 'lucide-react'
@@ -25,7 +26,13 @@ const PLATFORM_LABELS: Record<PickerPlatform, string> = {
  * Includes title, tags, difficulty, rendered statement, and a "start solving" CTA.
  */
 export default function ProblemPanel() {
-  const { activeProblem, mode, enterFocus, setActiveProblem, refreshActiveProblem } = useAppStore()
+  const { activeProblem, mode, enterFocus, setActiveProblem, refreshActiveProblem } = useAppStore(useShallow(state => ({
+    activeProblem: state.activeProblem,
+    mode: state.mode,
+    enterFocus: state.enterFocus,
+    setActiveProblem: state.setActiveProblem,
+    refreshActiveProblem: state.refreshActiveProblem,
+  })))
   const [problems, setProblems] = useState<Problem[]>([])
   const [loadingList, setLoadingList] = useState(false)
   const [loadingSlug, setLoadingSlug] = useState<string | null>(null)
@@ -43,6 +50,7 @@ export default function ProblemPanel() {
   const selectedAcWingTopic = useMemo(() => findAcWingTopic(topic), [topic])
   const topicSlugs = useMemo(() => selectedTopic?.slugs ?? [], [selectedTopic])
   const requestSeq = useRef(0)
+  const problemListRequestRef = useRef<{ key: string; promise: Promise<void> } | null>(null)
   const detailSeq = useRef(0)
   const activeProblemRef = useRef(activeProblem)
   activeProblemRef.current = activeProblem
@@ -77,17 +85,21 @@ export default function ProblemPanel() {
     })
   }, [activeProblem, activeProblem?.platform, activeProblem?.platformId, safeContent, showPicker])
 
-  const loadProblems = useCallback(async (
+  const loadProblems = useCallback((
     nextPlatform: PickerPlatform,
     nextPage: number,
     nextDifficulty: string,
     nextTopicSlugs: string[],
     nextAcWingTag: string,
-  ) => {
+  ): Promise<void> => {
+    const key = JSON.stringify([nextPlatform, nextPage, nextDifficulty, nextTopicSlugs, nextAcWingTag])
+    const inFlight = problemListRequestRef.current
+    if (inFlight?.key === key) return inFlight.promise
+
     const seq = ++requestSeq.current
     setLoadingList(true)
     setError('')
-    try {
+    const request = Promise.resolve().then(async () => {
       const result = nextPlatform === 'ACWING'
         ? await acwingService.listProblems({
             page: nextPage,
@@ -104,11 +116,14 @@ export default function ProblemPanel() {
       setProblems(result.problems)
       setTotal(result.total)
       setPageSize(result.pageSize)
-    } catch (cause) {
+    }).catch(cause => {
       if (seq === requestSeq.current) setError(getErrorMessage(cause))
-    } finally {
+    }).finally(() => {
       if (seq === requestSeq.current) setLoadingList(false)
-    }
+      if (problemListRequestRef.current?.promise === request) problemListRequestRef.current = null
+    })
+    problemListRequestRef.current = { key, promise: request }
+    return request
   }, [])
 
   const refreshRestoredProblem = useCallback((problem: Problem, seq: number, isCurrent: () => boolean) => {
@@ -139,13 +154,21 @@ export default function ProblemPanel() {
   }, [refreshActiveProblem])
 
   useEffect(() => {
+    // The detail view already has the selected problem. Avoid an unrelated
+    // list request (and its auth error) until the user explicitly opens the
+    // picker.
+    if (!showPicker) return
     const acWingTag = platform === 'ACWING' ? selectedAcWingTopic?.tag ?? '' : ''
     void loadProblems(platform, page, difficulty, topicSlugs, acWingTag)
-  }, [loadProblems, platform, page, difficulty, topicSlugs, selectedAcWingTopic])
+  }, [showPicker, loadProblems, platform, page, difficulty, topicSlugs, selectedAcWingTopic])
 
-  useEffect(() => () => {
-    requestSeq.current += 1
-    detailSeq.current += 1
+  useEffect(() => {
+    return () => {
+      // A pending detail response must not select a problem after this panel
+      // leaves the workspace. The list request has its own de-duplication and
+      // is intentionally allowed to settle across StrictMode effect replay.
+      detailSeq.current += 1
+    }
   }, [])
 
   useEffect(() => {
@@ -259,9 +282,9 @@ export default function ProblemPanel() {
             </p>
           </div>
         </div>
-        {error && <div role="alert" className="mx-4 mt-3 rounded-md bg-red-50 p-3 text-xs text-danger dark:bg-red-900/10">{error}</div>}
+        {error && visibleProblems.length > 0 && <div role="alert" className="mx-4 mt-3 rounded-md bg-red-50 p-3 text-xs text-danger dark:bg-red-900/10">{error}</div>}
         {loadingList ? (
-          <div className="flex flex-1 items-center justify-center gap-2 text-sm text-text-muted dark:text-text-dark-muted">
+          <div role="status" aria-live="polite" aria-busy="true" className="flex flex-1 items-center justify-center gap-2 text-sm text-text-muted dark:text-text-dark-muted">
             <Loader2 size={16} className="animate-spin" /> 正在取回题目列表…
           </div>
         ) : visibleProblems.length ? (
@@ -274,6 +297,7 @@ export default function ProblemPanel() {
               {visibleProblems.map(problem => (
                 <button key={problem.platformId} onClick={() => void openProblem(problem)}
                   disabled={loadingSlug !== null}
+                  aria-busy={loadingSlug === problem.platformId}
                   className="w-full rounded-md px-3 py-2 text-left hover:bg-surface-muted disabled:opacity-50
                              dark:hover:bg-surface-dark-muted">
                   <span className="flex items-center justify-between gap-2">
@@ -296,6 +320,16 @@ export default function ProblemPanel() {
                 className="text-text-secondary hover:text-accent disabled:opacity-40 dark:text-text-dark-secondary">下一页</button>
             </div>
           </div>
+        ) : error ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-sm text-text-muted dark:text-text-dark-muted">
+            <AlertCircle size={24} className="text-danger" />
+            <p role="alert" className="text-danger">{error}</p>
+            <button type="button" aria-label="重新加载题目列表"
+              onClick={() => void loadProblems(platform, page, difficulty, platform === 'ACWING' ? [] : topicSlugs, platform === 'ACWING' ? selectedAcWingTopic?.tag ?? '' : '')}
+              className="inline-flex items-center gap-2 text-accent hover:underline">
+              <RefreshCw size={14} /> 重新加载
+            </button>
+          </div>
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-sm text-text-muted dark:text-text-dark-muted">
             <AlertCircle size={24} />
@@ -304,7 +338,7 @@ export default function ProblemPanel() {
               : platform === 'LEETCODE'
                 ? '暂时没有题目可显示。请检查 LeetCode Cookie 和网关连接。'
                 : '暂时没有题目可显示。请检查平台 Cookie（设置页）和网关连接。'}</p>
-            <button onClick={() => void loadProblems(platform, page, difficulty, platform === 'ACWING' ? [] : topicSlugs, platform === 'ACWING' ? selectedAcWingTopic?.tag ?? '' : '')} className="inline-flex items-center gap-2 text-accent hover:underline">
+            <button type="button" aria-label="重新加载题目列表" onClick={() => void loadProblems(platform, page, difficulty, platform === 'ACWING' ? [] : topicSlugs, platform === 'ACWING' ? selectedAcWingTopic?.tag ?? '' : '')} className="inline-flex items-center gap-2 text-accent hover:underline">
               <RefreshCw size={14} /> 重新加载
             </button>
           </div>

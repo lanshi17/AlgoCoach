@@ -1,11 +1,12 @@
 import React, { useRef, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useShallow } from 'zustand/react/shallow'
 import { Lock, Send, Sparkles } from 'lucide-react'
 import { useAppStore } from '@/stores/useAppStore'
 import ChatMessage from './ChatMessage'
 import AnimationCard from '../Animation/AnimationCard'
-import type { ChatMessage as Msg } from '@/types'
-import { agentService, canCommitChatReply, getAgentErrorAction, getAgentErrorMessage, type TrainingPhase } from '@/services/agentService'
+import type { ChatMessage as Msg, TrainingPhase } from '@/types'
+import { agentService, canCommitChatReply, getAgentErrorAction, getAgentErrorMessage } from '@/services/agentService'
 import { usePollAnimation } from '@/hooks/usePollAnimation'
 import { nanoid } from 'nanoid'
 
@@ -18,6 +19,16 @@ const TRAINING_PHASES: ReadonlyArray<{ value: TrainingPhase; label: string }> = 
   { value: 'review', label: '赛后复盘' },
   { value: 'upsolve', label: '赛后补题' },
 ]
+
+const TRAINING_PHASE_HINTS: Record<TrainingPhase, string> = {
+  auto: '教练根据当前问题自动选择训练方式。',
+  virtual_contest: '只做读题、约束和计分策略，保留解法给你独立思考。',
+  topic_drill: '围绕同一模型练习变式，强调迁移和关键不变量。',
+  attempt: '只回答题意和评测细节，不直接给答案或代码。',
+  hint: '按概念、不变量、伪代码、实现细节逐级给提示。',
+  review: '复盘建模、证明、复杂度和反例，不假装检查未提供的代码。',
+  upsolve: '先独立补题，再对照正解归类卡点并安排变式。',
+}
 
 /** Convert the problem's total time budget to the remaining seconds at chat time. */
 export function toRemainingSeconds(raw: string, elapsedFocusSec = 0): number | undefined {
@@ -40,12 +51,27 @@ export default function ChatPanel() {
     mode, messages, addMessage, activeProblem, goal, provider, getFocusDurationSec,
     problemTimeLimits, setProblemTimeLimitMinutes, chatDrafts, setChatDraft,
     chatPhases, setChatPhase,
-  } = useAppStore()
+  } = useAppStore(useShallow(state => ({
+    mode: state.mode,
+    messages: state.messages,
+    addMessage: state.addMessage,
+    activeProblem: state.activeProblem,
+    goal: state.goal,
+    provider: state.provider,
+    getFocusDurationSec: state.getFocusDurationSec,
+    problemTimeLimits: state.problemTimeLimits,
+    setProblemTimeLimitMinutes: state.setProblemTimeLimitMinutes,
+    chatDrafts: state.chatDrafts,
+    setChatDraft: state.setChatDraft,
+    chatPhases: state.chatPhases,
+    setChatPhase: state.setChatPhase,
+  })))
   const inputKey = activeProblem ? `${activeProblem.platform}:${activeProblem.platformId}` : '__global__'
   const input = chatDrafts[inputKey] ?? ''
   const setInput = setChatDraft
   const [loading, setLoading] = useState(false)
   const [errorAction, setErrorAction] = useState<ReturnType<typeof getAgentErrorAction>>(null)
+  const [retryMessage, setRetryMessage] = useState<Msg | null>(null)
   const trainingPhase = chatPhases[inputKey] ?? 'auto'
   const timeLimitKey = activeProblem ? `${activeProblem.platform}:${activeProblem.platformId}` : '__global__'
   const timeLimitSec = problemTimeLimits[timeLimitKey]
@@ -61,11 +87,24 @@ export default function ChatPanel() {
   useEffect(() => {
     contextVersionRef.current += 1
     setLoading(false)
+    setErrorAction(null)
     return () => {
       chatRequestRef.current?.abort()
       chatRequestRef.current = null
     }
   }, [isFocus, activeProblem?.platform, activeProblem?.platformId])
+
+  useEffect(() => {
+    // Only the latest message can expose a retry action. An older failed turn
+    // must not reappear as retryable after a later successful conversation.
+    const retryMarker = messages[messages.length - 1]
+    const retryable = retryMarker?.retryMessageId
+      ? messages.find(message => message.id === retryMarker.retryMessageId)
+      : undefined
+    const canRetry = retryable?.role === 'user'
+      && (input === retryable.content || (input === '' && retryable.mode === 'REVIEW'))
+    setRetryMessage(canRetry ? retryable : null)
+  }, [input, inputKey, messages])
 
   useEffect(() => {
     const behavior = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -79,17 +118,9 @@ export default function ChatPanel() {
     setAnimationId(lastAnimationId)
   }, [messages])
 
-  const send = async () => {
-    if (!input.trim() || isFocus || loading) return
-    const userMsg: Msg = {
-      id: nanoid(),
-      role: 'user',
-      content: input.trim(),
-      timestamp: new Date().toISOString(),
-      mode,
-    }
-    addMessage(userMsg)
-    setInput('')
+  const requestReply = async (userMsg: Msg, isRetry = false) => {
+    if (isFocus || loading) return
+    const requestMode = mode
     setErrorAction(null)
     setLoading(true)
     const controller = new AbortController()
@@ -98,16 +129,16 @@ export default function ChatPanel() {
     try {
       const timeRemainingSec = toRemainingSeconds(timeInput, getFocusDurationSec())
       const reply = await agentService.chat(userMsg.content, {
-        mode,
+        mode: requestMode,
         problemId: activeProblem?.platformId,
         platform: activeProblem?.platform,
         goal,
         provider,
-        trainingPhase,
+        trainingPhase: userMsg.trainingPhase ?? trainingPhase,
         ...(timeRemainingSec !== undefined ? { timeRemainingSec } : {}),
       }, controller.signal)
       const current = useAppStore.getState()
-      if (!canCommitChatReply(mode, current.mode, controller.signal.aborted)
+      if (!canCommitChatReply(requestMode, current.mode, controller.signal.aborted)
         || current.activeProblem?.platform !== activeProblem?.platform
         || current.activeProblem?.platformId !== activeProblem?.platformId) return
       addMessage({
@@ -115,16 +146,18 @@ export default function ChatPanel() {
         role: 'agent',
         content: reply.content,
         timestamp: new Date().toISOString(),
-        mode,
+        mode: requestMode,
         animationId: reply.animationId,
       })
       if (reply.animationId) {
         setAnimationId(reply.animationId)
         addMessage({
           id: nanoid(), role: 'system', content: '动画已经排队，稍后会出现在对话里。',
-          timestamp: new Date().toISOString(), mode,
+          timestamp: new Date().toISOString(), mode: requestMode,
         })
       }
+      setRetryMessage(null)
+      if (isRetry) setInput('')
     } catch (e) {
       const current = useAppStore.getState()
       if (controller.signal.aborted || current.mode === 'FOCUS'
@@ -132,11 +165,13 @@ export default function ChatPanel() {
         || current.activeProblem?.platformId !== activeProblem?.platformId) return
       if (!useAppStore.getState().chatDrafts[inputKey]) setInput(userMsg.content)
       setErrorAction(getAgentErrorAction(e))
+      setRetryMessage(userMsg)
       addMessage({
         id: nanoid(),
         role: 'system',
         content: getAgentErrorMessage(e),
         timestamp: new Date().toISOString(),
+        retryMessageId: userMsg.id,
       })
     } finally {
       if (chatRequestRef.current === controller) {
@@ -144,6 +179,27 @@ export default function ChatPanel() {
         setLoading(false)
       }
     }
+  }
+
+  const send = async () => {
+    if (!input.trim() || isFocus || loading) return
+    const userMsg: Msg = {
+      id: nanoid(),
+      role: 'user',
+      content: input.trim(),
+      timestamp: new Date().toISOString(),
+      mode,
+      trainingPhase,
+    }
+    addMessage(userMsg)
+    setInput('')
+    setRetryMessage(null)
+    await requestReply(userMsg)
+  }
+
+  const retry = async () => {
+    if (!retryMessage || isFocus || loading) return
+    await requestReply(retryMessage, true)
   }
 
   return (
@@ -234,11 +290,24 @@ export default function ChatPanel() {
             {errorAction && (
               <div role="group" aria-label="模型配置帮助" className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface-soft px-3 py-2 text-xs dark:border-border-dark dark:bg-surface-dark-soft">
                 <span className="text-text-secondary dark:text-text-dark-secondary">
-                  完善模型 Provider 配置后即可继续对话。
+                  {errorAction.label === '检查模型 Provider'
+                    ? '检查模型名、Base URL 或 API key 后即可继续对话。'
+                    : '完善模型 Provider 配置后即可继续对话。'}
                 </span>
                 <Link to={errorAction.href} state={{ returnToChat: true }} className="shrink-0 font-medium text-accent hover:underline">
                   {errorAction.label}
                 </Link>
+              </div>
+            )}
+            {retryMessage && !loading && (
+              <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-xs">
+                <span className="text-text-secondary dark:text-text-dark-secondary">
+                  这条消息没有送达，输入内容已保留。
+                </span>
+                <button type="button" onClick={() => void retry()} aria-label="重试发送消息"
+                  className="shrink-0 font-medium text-accent hover:underline">
+                  重试
+                </button>
               </div>
             )}
             <div
@@ -264,6 +333,9 @@ export default function ChatPanel() {
                     <option key={phase.value} value={phase.value}>{phase.label}</option>
                   ))}
                 </select>
+                <span className="basis-full text-[11px] leading-relaxed text-text-muted dark:text-text-dark-muted">
+                  {TRAINING_PHASE_HINTS[trainingPhase]}
+                </span>
               </div>
 
               <div className="flex items-center gap-1.5">
@@ -297,8 +369,17 @@ export default function ChatPanel() {
             <div className="flex items-end gap-2">
               <textarea
                 value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+                onChange={e => {
+                  const next = e.target.value
+                  setInput(next)
+                  if (retryMessage && next !== retryMessage.content) setRetryMessage(null)
+                }}
+                onKeyDown={e => {
+                  // Enter confirms a Chinese/Japanese IME composition before
+                  // it should submit the chat. Let the composition finish.
+                  if (e.nativeEvent.isComposing || e.keyCode === 229) return
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send() }
+                }}
                 placeholder="问 AI 教练…（Shift+Enter 换行）"
                 aria-label="发送给 AI 教练的消息"
                 rows={2}
@@ -311,6 +392,7 @@ export default function ChatPanel() {
               <button
                 onClick={send}
                 disabled={!input.trim() || loading}
+                aria-busy={loading}
                 title={loading ? '正在等待教练回复' : '发送消息（Enter）'}
                 aria-label={loading ? '正在等待教练回复' : '发送消息'}
                 className="p-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white

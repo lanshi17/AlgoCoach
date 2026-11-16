@@ -4,6 +4,7 @@
  */
 import React from 'react'
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion'
+import { MONO_FONT_STACK } from '../fonts'
 
 interface WindowStep { left: number; right: number; note?: string }
 interface Props {
@@ -77,12 +78,12 @@ export const SlidingWindow: React.FC<Props> = ({
                 strokeWidth={i === left || i === right ? 2 : 1} rx={6} />
               <text x={x + cellW / 2} y={startY + cellH / 2 + 7} textAnchor="middle"
                 fill={inWindow ? C.text : C.muted} fontSize={22} fontWeight={600}
-                fontFamily="JetBrains Mono, monospace">
+                fontFamily={MONO_FONT_STACK}>
                 {v}
               </text>
               {/* index */}
               <text x={x + cellW / 2} y={startY + cellH + 24} textAnchor="middle"
-                fill={C.muted} fontSize={12} fontFamily="JetBrains Mono, monospace">
+                fill={C.muted} fontSize={12} fontFamily={MONO_FONT_STACK}>
                 {i}
               </text>
             </g>
@@ -91,11 +92,11 @@ export const SlidingWindow: React.FC<Props> = ({
 
         {/* Pointer labels */}
         <text x={startX + left * (cellW + gap) + cellW / 2} y={startY - 20}
-          textAnchor="middle" fill={C.accent} fontSize={14} fontFamily="JetBrains Mono, monospace">
+          textAnchor="middle" fill={C.accent} fontSize={14} fontFamily={MONO_FONT_STACK}>
           L
         </text>
         <text x={startX + right * (cellW + gap) + cellW / 2} y={startY - 20}
-          textAnchor="middle" fill={C.accent} fontSize={14} fontFamily="JetBrains Mono, monospace">
+          textAnchor="middle" fill={C.accent} fontSize={14} fontFamily={MONO_FONT_STACK}>
           R
         </text>
       </svg>

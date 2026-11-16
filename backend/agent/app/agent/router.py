@@ -134,6 +134,16 @@ async def chat(req: ChatRequest):
             status_code=502,
             detail="无法连接模型服务，请检查网络和 Provider Base URL。",
         ) from None
+    except Exception:
+        # AgentScope/provider adapters can surface a new SDK-specific
+        # exception type without going through the typed OpenAI/Anthropic
+        # branches above. Keep those failures retryable and credential-safe;
+        # an internal traceback belongs in the service log, not the response.
+        logger.exception("Unexpected chat failure")
+        raise HTTPException(
+            status_code=502,
+            detail="教练服务暂时不可用，请稍后重试。",
+        ) from None
     return ChatResponse(content=result["content"], animationId=result["animation_id"])
 
 

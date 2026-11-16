@@ -11,6 +11,7 @@
  */
 import React from 'react'
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from 'remotion'
+import { MONO_FONT_STACK } from '../fonts'
 
 interface TopicCount {
   name: string
@@ -98,7 +99,7 @@ export const WeeklyReport: React.FC<WeeklyReportProps> = ({
   ]
 
   return (
-    <AbsoluteFill style={{ background: C.bg, fontFamily: "'JetBrains Mono', monospace" }}>
+    <AbsoluteFill style={{ background: C.bg, fontFamily: MONO_FONT_STACK }}>
       <AbsoluteFill
         style={{
           background: `radial-gradient(circle at 18% 0%, ${C.visited}22 0%, transparent 46%)`,

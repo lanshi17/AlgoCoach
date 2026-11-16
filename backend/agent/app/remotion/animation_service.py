@@ -15,6 +15,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 
@@ -48,6 +49,35 @@ RENDER_BIN = os.getenv("REMOTION_BIN", "npx")  # or path to local remotion CLI
 RENDER_TIMEOUT = 120
 OUTPUT_DIR = os.getenv("OUTPUT_DIR", "../../data/animations")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+
+def _browser_executable() -> str | None:
+    """Locate a browser for Remotion.
+
+    Without ``--browser-executable`` Remotion downloads its own Chrome Headless
+    Shell (~100 MB) on the first render, which can outlive RENDER_TIMEOUT and
+    fail every job in a fresh container. The agent image already ships Chromium
+    (compose passes it as ``PUPPETEER_EXECUTABLE_PATH``), so reuse that.
+    """
+    for candidate in (
+        os.getenv("REMOTION_BROWSER_EXECUTABLE"),
+        os.getenv("PUPPETEER_EXECUTABLE_PATH"),
+        "chromium",
+        "chromium-browser",
+        "google-chrome",
+        "google-chrome-stable",
+    ):
+        if not candidate:
+            continue
+        path = candidate if os.path.isabs(candidate) else shutil.which(candidate)
+        if path and os.access(path, os.X_OK):
+            return path
+    return None
+
+
+def _browser_args() -> list[str]:
+    browser = _browser_executable()
+    return ["--browser-executable", browser] if browser else []
 
 # Prebuilt components — agent picks by name; we map to composition IDs
 PREBUILT = {
@@ -257,6 +287,7 @@ class AnimationService:
                 RENDER_BIN, "remotion", "render",
                 "--props", json.dumps(render_props, ensure_ascii=False),
                 "--output", out_path,
+                *_browser_args(),
                 job.composition_id,
                 cwd=project_root,
                 stdout=subprocess.PIPE,

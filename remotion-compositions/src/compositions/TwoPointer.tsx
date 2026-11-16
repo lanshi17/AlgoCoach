@@ -4,6 +4,7 @@
  */
 import React from 'react'
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion'
+import { MONO_FONT_STACK } from '../fonts'
 
 interface Step { left: number; right: number; action: string; note?: string }
 interface Props { title?: string; array?: number[]; steps?: Step[] }
@@ -52,10 +53,10 @@ export const TwoPointer: React.FC<Props> = ({
             <g key={i}>
               <rect x={x} y={startY} width={cellW} height={cellH} fill={fill} stroke={stroke} strokeWidth={(isL || isR) ? 2.5 : 1} rx={6} />
               <text x={x + cellW / 2} y={startY + cellH / 2 + 8} textAnchor="middle" fill={between ? C.text : C.muted}
-                fontSize={22} fontWeight={600} fontFamily="JetBrains Mono, monospace">{v}</text>
+                fontSize={22} fontWeight={600} fontFamily={MONO_FONT_STACK}>{v}</text>
               {/* Pointer arrows */}
-              {isL && <text x={x + cellW / 2} y={startY - 16} textAnchor="middle" fill={C.accent} fontSize={14} fontFamily="JetBrains Mono, monospace">L →</text>}
-              {isR && <text x={x + cellW / 2} y={startY - 16} textAnchor="middle" fill={C.accent} fontSize={14} fontFamily="JetBrains Mono, monospace">← R</text>}
+              {isL && <text x={x + cellW / 2} y={startY - 16} textAnchor="middle" fill={C.accent} fontSize={14} fontFamily={MONO_FONT_STACK}>L →</text>}
+              {isR && <text x={x + cellW / 2} y={startY - 16} textAnchor="middle" fill={C.accent} fontSize={14} fontFamily={MONO_FONT_STACK}>← R</text>}
             </g>
           )
         })}

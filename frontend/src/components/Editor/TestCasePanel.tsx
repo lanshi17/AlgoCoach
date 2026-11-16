@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/stores/useAppStore'
 import { Plus } from 'lucide-react'
 
@@ -6,7 +7,16 @@ export default function TestCasePanel() {
   const {
     activeProblem, testInput, setTestInput, runResult, setRunResult,
     runError, setRunError, runLoading,
-  } = useAppStore()
+  } = useAppStore(useShallow(state => ({
+    activeProblem: state.activeProblem,
+    testInput: state.testInput,
+    setTestInput: state.setTestInput,
+    runResult: state.runResult,
+    setRunResult: state.setRunResult,
+    runError: state.runError,
+    setRunError: state.setRunError,
+    runLoading: state.runLoading,
+  })))
   const [activeCase, setActiveCase] = useState(0)
   const [customCases, setCustomCases] = useState<string[]>([])
 
@@ -59,16 +69,26 @@ export default function TestCasePanel() {
   const expectedOutput = runResult?.expected_code_answer?.join('\n')
   const runStatus = runResult?.status_msg ?? runResult?.state
 
+  if (!activeProblem) {
+    return (
+      <div role="status" className="flex h-full items-center justify-center px-4 text-center text-xs text-text-muted dark:text-text-dark-muted">
+        选择题目后可编辑测试用例
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col h-full text-xs font-mono">
       {/* Tab row */}
-      <div className="flex items-center gap-1 px-3 h-9 border-b border-border dark:border-border-dark
+      <div className="flex items-center gap-1 px-3 h-9 overflow-x-auto border-b border-border dark:border-border-dark
                       bg-surface-soft dark:bg-surface-dark-soft">
         {samples.map((_, i) => (
           <button
             key={i}
+            type="button"
+            aria-pressed={activeCase === i}
             onClick={() => selectCase(i)}
-            className={`px-2.5 py-1 rounded text-xs transition-colors ${
+            className={`shrink-0 px-2.5 py-1 rounded text-xs transition-colors ${
               activeCase === i
                 ? 'bg-accent text-white'
                 : 'text-text-secondary dark:text-text-dark-secondary hover:bg-surface-muted dark:hover:bg-surface-dark-muted'
@@ -80,8 +100,10 @@ export default function TestCasePanel() {
         {customCases.map((_, i) => (
           <button
             key={`custom-${i}`}
+            type="button"
+            aria-pressed={activeCase === samples.length + i}
             onClick={() => selectCase(samples.length + i)}
-            className={`px-2.5 py-1 rounded text-xs transition-colors ${
+            className={`shrink-0 px-2.5 py-1 rounded text-xs transition-colors ${
               activeCase === samples.length + i
                 ? 'bg-accent text-white'
                 : 'text-text-secondary dark:text-text-dark-secondary hover:bg-surface-muted dark:hover:bg-surface-dark-muted'

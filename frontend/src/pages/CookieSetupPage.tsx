@@ -28,16 +28,21 @@ export default function CookieSetupPage({ onDone }: { onDone: () => void }) {
       return
     }
     setLoading(true); setError('')
+    let saved = false
     try {
       await leetcodeService.setCookie(parsed.session, parsed.csrf)
+      saved = true
       if (!await leetcodeService.verifyCookie()) {
         setError('LeetCode 没有确认登录状态，请重新复制当前有效的 Cookie。')
         return
       }
+      window.dispatchEvent(new Event('algocoach:cookie-valid'))
       onDone()
       navigate('/workspace')
     } catch {
-      setError('Cookie 已保存，但 LeetCode 验证未通过。请确认仍处于登录状态并检查 Cookie 后重试。')
+      setError(saved
+        ? 'Cookie 已保存，但 LeetCode 验证未通过。请确认仍处于登录状态并检查 Cookie 后重试。'
+        : 'Cookie 保存失败，请确认 Java Gateway 正常运行后重试。')
     } finally {
       setLoading(false)
     }
@@ -98,14 +103,15 @@ export default function CookieSetupPage({ onDone }: { onDone: () => void }) {
         </div>
 
         {error && (
-          <p className="text-xs text-danger mb-3">{error}</p>
+          <p role="alert" aria-live="polite" className="text-xs text-danger mb-3">{error}</p>
         )}
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !curl.trim()}
+          aria-busy={loading}
           className="w-full py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white
-                     text-sm font-medium transition-colors disabled:opacity-50"
+                     text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? '保存中…' : '保存并开始'}
         </button>

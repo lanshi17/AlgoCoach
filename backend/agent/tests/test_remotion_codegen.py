@@ -62,6 +62,12 @@ export const GeneratedComposition = () => {
 """
 
 
+def test_default_remotion_root_does_not_assume_repository_depth() -> None:
+    """Packaged images must resolve the bundled project without parents[4]."""
+    root = codegen._default_remotion_root()
+    assert root.name == "remotion-compositions"
+
+
 def _enable(monkeypatch, tmp_path: Path) -> Path:
     scratch = tmp_path / "scratch"
     scratch.mkdir(exist_ok=True)

@@ -1,5 +1,6 @@
 import React from 'react'
 import { AbsoluteFill } from 'remotion'
+import { MONO_FONT_STACK } from '../fonts'
 import { BfsGraph } from './BfsGraph'
 import { DpTable } from './DpTable'
 import { SlidingWindow } from './SlidingWindow'
@@ -33,7 +34,7 @@ const REGISTRY: Record<string, React.FC<{ data: Record<string, unknown> }>> = {
 export const MainComp: React.FC<Props> = ({ component, data }) => {
   const Comp = REGISTRY[component] ?? REGISTRY['BfsGraph']
   return (
-    <AbsoluteFill style={{ background: '#0d1117', fontFamily: "'JetBrains Mono', monospace" }}>
+    <AbsoluteFill style={{ background: '#0d1117', fontFamily: MONO_FONT_STACK }}>
       <Comp data={data} />
     </AbsoluteFill>
   )

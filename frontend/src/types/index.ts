@@ -4,6 +4,14 @@ export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD'
 export type Platform = 'LEETCODE' | 'LUOGU' | 'CODEFORCES' | 'ACWING' | 'HDU'
 export type AgentMode = 'IDLE' | 'PREP' | 'FOCUS' | 'REVIEW'
 export type TrainingGoal = 'interview_prep' | 'contest' | 'casual'
+export type TrainingPhase =
+  | 'auto'
+  | 'virtual_contest'
+  | 'topic_drill'
+  | 'attempt'
+  | 'hint'
+  | 'review'
+  | 'upsolve'
 
 /** LeetCode langSlug values the editor supports. */
 export type CodeLanguage = 'rust' | 'cpp' | 'python3' | 'typescript' | 'golang' | 'java'
@@ -88,7 +96,10 @@ export interface ChatMessage {
   content: string
   timestamp: string
   mode?: AgentMode
+  trainingPhase?: TrainingPhase
   animationId?: string        // if message carries a Remotion animation
+  retryMessageId?: string     // system error that can retry a user message
+  action?: { href: string; label: string } // optional repair action for system messages
   toolCalls?: ToolCall[]
 }
 

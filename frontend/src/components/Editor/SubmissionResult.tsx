@@ -3,7 +3,7 @@ import { useAppStore } from '@/stores/useAppStore'
 import { CheckCircle, XCircle, Clock, Cpu } from 'lucide-react'
 
 export default function SubmissionResult() {
-  const { lastSubmission } = useAppStore()
+  const lastSubmission = useAppStore(state => state.lastSubmission)
 
   if (!lastSubmission) return (
     <div className="flex items-center justify-center h-full text-xs text-text-muted dark:text-text-dark-muted">

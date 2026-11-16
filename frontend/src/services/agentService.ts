@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { nanoid } from 'nanoid'
-import type { AgentProfile, AnimationJob, ModelProviderConfig, TrainingGoal } from '@/types'
+import type { AgentProfile, AnimationJob, ModelProviderConfig, TrainingGoal, TrainingPhase } from '@/types'
 
 interface ChatReply {
   content: string
@@ -25,13 +25,25 @@ export function getAgentErrorMessage(error: unknown): string {
 
 export function getAgentErrorAction(error: unknown): { href: string; label: string } | null {
   if (!axios.isAxiosError<{ detail?: unknown }>(error)) return null
+  const status = error.response?.status
   const detail = error.response?.data?.detail
   if (detail === '当前 Provider 需要 API key，请在设置页配置') {
     return { href: '/settings', label: '配置模型 Provider' }
   }
-  if (!detail || typeof detail !== 'object' || !('code' in detail)) return null
-  if (detail.code !== 'provider_api_key_required' && detail.code !== 'provider_model_required') return null
-  return { href: '/settings', label: '配置模型 Provider' }
+  if (detail && typeof detail === 'object' && 'code' in detail
+    && (detail.code === 'provider_api_key_required' || detail.code === 'provider_model_required')) {
+    return { href: '/settings', label: '配置模型 Provider' }
+  }
+  // Authentication, permission and endpoint errors are usually a bad key,
+  // model name or Base URL. Give the user a repair path instead of a dead-end
+  // retry button; transient 429/5xx failures remain retry-only.
+  if (status === 401 || status === 403 || status === 404) {
+    return { href: '/settings', label: '检查模型 Provider' }
+  }
+  if (typeof detail === 'string' && /API key|Provider|Base URL|Responses API|模型名称/.test(detail)) {
+    return { href: '/settings', label: '检查模型 Provider' }
+  }
+  return null
 }
 
 /** Prevent a reply from a pending request from appearing after focus has begun. */
@@ -42,16 +54,6 @@ export function canCommitChatReply(
 ): boolean {
   return requestMode !== 'FOCUS' && currentMode !== 'FOCUS' && !requestAborted
 }
-
-/** OI / xCPC training stance understood by the backend chat route. */
-export type TrainingPhase =
-  | 'auto'
-  | 'virtual_contest'
-  | 'topic_drill'
-  | 'attempt'
-  | 'hint'
-  | 'review'
-  | 'upsolve'
 
 interface ChatCtx {
   mode: string
@@ -66,14 +68,19 @@ interface ChatCtx {
 // One in-memory conversation namespace per page lifetime. A refresh clears the
 // visible chat, so it must also start fresh short-term model context.
 const conversationId = nanoid()
+let profileRequest: Promise<AgentProfile> | null = null
 
 /**
  * Python FastAPI agent through the Java gateway at /api/agent/*
  */
 export const agentService = {
   async getProfile(): Promise<AgentProfile> {
-    const { data } = await axios.get<AgentProfile>('/api/agent/memory/profile')
-    return data
+    if (!profileRequest) {
+      profileRequest = axios.get<AgentProfile>('/api/agent/memory/profile')
+        .then(({ data }) => data)
+        .finally(() => { profileRequest = null })
+    }
+    return profileRequest
   },
 
   async exportMemory(): Promise<Blob> {

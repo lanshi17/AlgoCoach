@@ -4,6 +4,7 @@
  */
 import React from 'react'
 import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion'
+import { MONO_FONT_STACK } from '../fonts'
 
 interface Step { r: number; c: number; val: number; note?: string }
 interface Props {
@@ -68,7 +69,7 @@ export const DpTable: React.FC<Props> = ({
         {/* Col headers */}
         {Array.from({ length: cols }).map((_, ci) => (
           <text key={ci} x={offsetX + (ci + 1) * cellW + cellW / 2} y={offsetY + 20}
-            textAnchor="middle" fill={C.muted} fontSize={14} fontFamily="JetBrains Mono, monospace">
+            textAnchor="middle" fill={C.muted} fontSize={14} fontFamily={MONO_FONT_STACK}>
             {colHeaders?.[ci] ?? ci}
           </text>
         ))}
@@ -77,7 +78,7 @@ export const DpTable: React.FC<Props> = ({
         {Array.from({ length: rows }).map((_, ri) => (
           <g key={ri}>
             <text x={offsetX + cellW / 2} y={offsetY + cellH + ri * cellH + cellH / 2 + 6}
-              textAnchor="middle" fill={C.muted} fontSize={14} fontFamily="JetBrains Mono, monospace">
+              textAnchor="middle" fill={C.muted} fontSize={14} fontFamily={MONO_FONT_STACK}>
               {rowHeaders?.[ri] ?? ri}
             </text>
             {Array.from({ length: cols }).map((_, ci) => {
@@ -92,7 +93,7 @@ export const DpTable: React.FC<Props> = ({
                     stroke={isCurrent ? C.accent : C.border} strokeWidth={isCurrent ? 2 : 1} rx={4} />
                   {val !== null && (
                     <text x={x + cellW / 2} y={y + cellH / 2 + 6} textAnchor="middle"
-                      fill={isCurrent ? '#fff' : C.text} fontSize={16} fontFamily="JetBrains Mono, monospace" fontWeight={600}>
+                      fill={isCurrent ? '#fff' : C.text} fontSize={16} fontFamily={MONO_FONT_STACK} fontWeight={600}>
                       {val}
                     </text>
                   )}

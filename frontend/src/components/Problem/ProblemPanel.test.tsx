@@ -1,4 +1,4 @@
-import React, { act } from 'react'
+import React, { act, Profiler } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -12,6 +12,20 @@ const first: Problem = {
   id: '1', platform: 'LEETCODE', platformId: 'one', title: 'First problem', difficulty: 'EASY',
   contentHtml: '', topics: [], sampleTestCases: '', codeSnippets: [],
 }
+
+it('shows one platform-login link in the problem picker guidance', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  vi.spyOn(leetcodeService, 'listProblems').mockResolvedValue({ problems: [], total: 0, pageSize: 50 })
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+  await act(async () => root.render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><ProblemPanel /></MemoryRouter>,
+  ))
+  expect(element.querySelectorAll('a[href="/settings/platforms"]')).toHaveLength(1)
+  act(() => root.unmount())
+  element.remove()
+})
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -61,6 +75,104 @@ it('renders safe inline and display math in the sanitized statement', async () =
   expect(element.querySelector('code')?.textContent).toBe('$not math$')
   expect(element.querySelector('script')).toBeNull()
   expect((window as Window & { problemXss?: boolean }).problemXss).toBeUndefined()
+  await act(async () => root.unmount())
+  element.remove()
+})
+
+it('does not rerender the problem panel for editor draft updates', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState({ ...useAppStore.getInitialState(), activeProblem: first, mode: 'PREP' }, true)
+  vi.spyOn(leetcodeService, 'listProblems').mockResolvedValue({ problems: [], total: 0, pageSize: 50 })
+  vi.spyOn(leetcodeService, 'getProblem').mockResolvedValue(first)
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+  let commits = 0
+
+  await act(async () => {
+    root.render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Profiler id="problem" onRender={() => { commits += 1 }}><ProblemPanel /></Profiler>
+      </MemoryRouter>,
+    )
+    await new Promise(resolve => setTimeout(resolve, 0))
+  })
+  const settledCommits = commits
+  act(() => useAppStore.getState().setCode('draft while typing'))
+
+  expect(commits).toBe(settledCommits)
+  await act(async () => root.unmount())
+  element.remove()
+})
+
+it('does not request the problem list while viewing a problem, and loads it when opening the picker', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState({ ...useAppStore.getInitialState(), activeProblem: first, mode: 'PREP' }, true)
+  const listProblems = vi.spyOn(leetcodeService, 'listProblems')
+    .mockResolvedValue({ problems: [first], total: 1, pageSize: 50 })
+  vi.spyOn(leetcodeService, 'getProblem').mockResolvedValue(first)
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+
+  await act(async () => {
+    root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><ProblemPanel /></MemoryRouter>)
+    await new Promise(resolve => setTimeout(resolve, 0))
+  })
+  expect(listProblems).not.toHaveBeenCalled()
+
+  await act(async () => {
+    element.querySelector<HTMLButtonElement>('button')?.click()
+    await new Promise(resolve => setTimeout(resolve, 0))
+  })
+  expect(listProblems).toHaveBeenCalledTimes(1)
+  await act(async () => root.unmount())
+  element.remove()
+})
+
+it('deduplicates the initial problem list request under React StrictMode', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  const listProblems = vi.spyOn(leetcodeService, 'listProblems')
+    .mockResolvedValue({ problems: [first], total: 1, pageSize: 50 })
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+
+  await act(async () => {
+    root.render(
+      <React.StrictMode>
+        <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><ProblemPanel /></MemoryRouter>
+      </React.StrictMode>,
+    )
+    await new Promise(resolve => setTimeout(resolve, 0))
+  })
+
+  expect(listProblems).toHaveBeenCalledTimes(1)
+  expect(element.textContent).toContain('First problem')
+  await act(async () => root.unmount())
+  element.remove()
+})
+
+it('shows a single request error with retry instead of a misleading empty state', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  vi.spyOn(leetcodeService, 'listProblems').mockRejectedValue({
+    response: { data: { message: 'LeetCode 列表请求失败（502）' } },
+  })
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+
+  await act(async () => {
+    root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><ProblemPanel /></MemoryRouter>)
+    await new Promise(resolve => setTimeout(resolve, 0))
+  })
+
+  expect(element.querySelectorAll('[role="alert"]')).toHaveLength(1)
+  expect(element.querySelector('[role="alert"]')?.textContent).toContain('LeetCode 列表请求失败（502）')
+  expect(element.textContent).not.toContain('暂时没有题目可显示')
+  expect(element.querySelector('button[aria-label="重新加载题目列表"]')).not.toBeNull()
   await act(async () => root.unmount())
   element.remove()
 })

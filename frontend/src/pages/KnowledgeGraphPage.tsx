@@ -13,24 +13,31 @@ export default function KnowledgeGraphPage() {
   const svgRef = useRef<SVGSVGElement>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const requestSeq = useRef(0)
 
   const load = async () => {
+    const seq = ++requestSeq.current
     setLoading(true)
     setError('')
     try {
       const next = await agentService.getProfile()
+      if (seq !== requestSeq.current) return
       setProfile(next)
       setSelectedTopic(current => current && next.topics.some(topic => topic.topic === current)
         ? current
         : next.topics[0]?.topic ?? null)
     } catch {
+      if (seq !== requestSeq.current) return
       setError('无法读取本地知识点记录，请确认 Agent 服务正在运行。')
     } finally {
-      setLoading(false)
+      if (seq === requestSeq.current) setLoading(false)
     }
   }
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => {
+    void load()
+    return () => { requestSeq.current += 1 }
+  }, [])
 
   const graph = useMemo(() => makeGraph(profile?.topics ?? [], profile?.edges ?? []), [profile?.topics, profile?.edges])
   const positions = useMemo(() => new Map(graph.nodes.map(node => [
@@ -50,11 +57,14 @@ export default function KnowledgeGraphPage() {
           </div>
           <div className="ml-auto flex items-center gap-2">
             <button onClick={() => setListView(value => !value)}
+              type="button"
+              aria-pressed={listView}
+              aria-label={listView ? '切换到图谱视图' : '切换到列表视图'}
               className="rounded-md border border-border px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-muted
                          dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">
               {listView ? '图谱视图' : '列表视图'}
             </button>
-            <button onClick={() => void load()} title="刷新" aria-label="刷新知识图谱" className="sidebar-btn !h-8 !w-8">
+            <button onClick={() => void load()} disabled={loading} aria-busy={loading} title="刷新" aria-label="刷新知识图谱" className="sidebar-btn !h-8 !w-8 disabled:cursor-not-allowed disabled:opacity-40">
               <RefreshCw size={15} />
             </button>
           </div>
@@ -67,14 +77,17 @@ export default function KnowledgeGraphPage() {
           </div>
         ) : listView ? (
           <div className="overflow-hidden rounded-lg border border-border dark:border-border-dark">
-            <div className="grid grid-cols-[1fr_100px_90px] gap-3 border-b border-border bg-surface-soft px-4 py-3 text-xs text-text-muted dark:border-border-dark dark:bg-surface-dark-soft dark:text-text-dark-muted">
-              <span>知识点</span><span>掌握度</span><span>训练次数</span>
+            <div className="grid grid-cols-[minmax(0,1fr)_50px_32px] gap-2 border-b border-border bg-surface-soft px-2 py-3 text-xs text-text-muted dark:border-border-dark dark:bg-surface-dark-soft dark:text-text-dark-muted sm:grid-cols-[1fr_100px_90px] sm:gap-3 sm:px-4">
+              <span className="whitespace-nowrap">知识点</span><span className="whitespace-nowrap">掌握度</span>
+              <span className="whitespace-nowrap"><span className="sm:hidden">次数</span><span className="hidden sm:inline">训练次数</span></span>
             </div>
             {profile.topics.map(topic => <button key={topic.topic} onClick={() => setSelectedTopic(topic.topic)}
-              className={`grid w-full grid-cols-[1fr_100px_90px] gap-3 px-4 py-3 text-left text-xs hover:bg-surface-soft dark:hover:bg-surface-dark-soft ${
+              type="button"
+              aria-pressed={selectedTopic === topic.topic}
+              className={`grid w-full grid-cols-[minmax(0,1fr)_50px_32px] gap-2 px-2 py-3 text-left text-xs hover:bg-surface-soft dark:hover:bg-surface-dark-soft sm:grid-cols-[1fr_100px_90px] sm:gap-3 sm:px-4 ${
                 selectedTopic === topic.topic ? 'bg-accent/5' : ''
               }`}>
-              <span className="text-text-primary dark:text-text-dark-primary">{topic.topic}</span>
+              <span className="min-w-0 truncate text-text-primary dark:text-text-dark-primary">{topic.topic}</span>
               <span className="text-text-secondary dark:text-text-dark-secondary">{Math.round(topic.mastery * 100)}%</span>
               <span className="text-text-secondary dark:text-text-dark-secondary">{topic.attempts}</span>
             </button>)}
@@ -115,6 +128,7 @@ export default function KnowledgeGraphPage() {
                   </g>
                 })}
                 {graph.nodes.map(node => <g key={node.topic} role="button" tabIndex={0}
+                  aria-pressed={selectedTopic === node.topic}
                   aria-label={`${node.topic}，掌握度 ${Math.round(node.mastery * 100)}%，训练 ${node.attempts} 次`}
                   onPointerDown={event => {
                     event.preventDefault()
@@ -122,7 +136,12 @@ export default function KnowledgeGraphPage() {
                     setDraggingTopic(node.topic)
                   }}
                   onClick={() => setSelectedTopic(node.topic)}
-                  onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') setSelectedTopic(node.topic) }}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      setSelectedTopic(node.topic)
+                    }
+                  }}
                   className="cursor-grab active:cursor-grabbing">
                   <circle cx={positions.get(node.topic)?.x ?? node.x} cy={positions.get(node.topic)?.y ?? node.y} r={node.radius}
                     fill={masteryColor(node.mastery)} stroke={selectedTopic === node.topic ? '#725e42' : '#f4efe3'}
@@ -133,6 +152,9 @@ export default function KnowledgeGraphPage() {
                 </g>)}
               </svg>
               <p className="mt-2 text-center text-xs text-text-muted dark:text-text-dark-muted">节点按共同训练知识点自动排布；可拖动整理视图。</p>
+              <p className="mt-1 text-center text-[11px] text-text-muted dark:text-text-dark-muted sm:hidden">
+                窄屏可左右滑动查看完整图谱。
+              </p>
               {!profile.edges.length && <p className="mt-2 text-center text-xs text-text-muted dark:text-text-dark-muted">
                 暂无共同训练记录形成连线；图中只显示已记录的知识点。
               </p>}
@@ -176,7 +198,7 @@ function shortLabel(value: string): string {
 }
 
 function Loading() {
-  return <div className="flex min-h-64 items-center justify-center gap-2 text-sm text-text-muted dark:text-text-dark-muted">
+  return <div role="status" aria-live="polite" aria-busy="true" className="flex min-h-64 items-center justify-center gap-2 text-sm text-text-muted dark:text-text-dark-muted">
     <Loader2 size={16} className="animate-spin" /> 正在读取知识点…
   </div>
 }
@@ -185,6 +207,6 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
   return <div role="alert" className="flex min-h-64 flex-col items-center justify-center gap-3 text-center">
     <AlertCircle size={24} className="text-danger" />
     <p className="text-sm text-text-secondary dark:text-text-dark-secondary">{message}</p>
-    <button onClick={onRetry} className="text-sm text-accent hover:underline">重试</button>
+    <button type="button" onClick={onRetry} aria-label="重试读取知识图谱" className="text-sm text-accent hover:underline">重试</button>
   </div>
 }

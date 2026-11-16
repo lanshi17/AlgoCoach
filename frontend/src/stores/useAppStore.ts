@@ -1,7 +1,6 @@
 import { create } from 'zustand'
-import type { AgentMode, Problem, ChatMessage, AnimationJob, RunResult, TrainingGoal, ModelProviderConfig, CodeLanguage } from '@/types'
+import type { AgentMode, Problem, ChatMessage, AnimationJob, RunResult, TrainingGoal, TrainingPhase, ModelProviderConfig, CodeLanguage } from '@/types'
 import { CODE_LANGUAGES } from '@/services/languages'
-import type { TrainingPhase } from '@/services/agentService'
 
 const GOALS: TrainingGoal[] = ['contest', 'interview_prep', 'casual']
 const DRAFTS_KEY = 'algocoach.problemDrafts'
@@ -10,6 +9,27 @@ const CHAT_DRAFTS_KEY = 'algocoach.chatDrafts'
 const CHAT_PHASES_KEY = 'algocoach.chatPhases'
 const TIME_LIMITS_KEY = 'algocoach.problemTimeLimits'
 const FOCUS_TIMES_KEY = 'algocoach.problemFocusElapsed'
+const PROVIDER_API_KEY_KEY = 'algocoach.provider.apiKey'
+const PROVIDER_API_KEY_PREFIX = `${PROVIDER_API_KEY_KEY}.`
+
+function providerApiKeyStorageKey(providerId: string): string {
+  return `${PROVIDER_API_KEY_PREFIX}${encodeURIComponent(providerId || 'custom')}`
+}
+
+/**
+ * Provider credentials are session-only and scoped to the selected preset.
+ * The unscoped key is kept as a one-time compatibility fallback for older
+ * sessions that stored only one active key.
+ */
+export function readProviderApiKey(providerId: string, includeLegacy = false): string {
+  try {
+    const scoped = window.sessionStorage.getItem(providerApiKeyStorageKey(providerId))
+    if (scoped !== null) return scoped
+    return includeLegacy ? window.sessionStorage.getItem(PROVIDER_API_KEY_KEY) ?? '' : ''
+  } catch {
+    return ''
+  }
+}
 
 interface ProblemDraft {
   code: string
@@ -177,7 +197,6 @@ const INITIAL_TEST_INPUT = INITIAL_DRAFT?.testInput
 function initialProvider(): ModelProviderConfig {
   try {
     const saved = window.localStorage.getItem('algocoach.provider')
-    const apiKey = window.sessionStorage.getItem('algocoach.provider.apiKey') ?? ''
     // One-time migration for selections stored before the Chat Completions
     // default. Mark it before any early return so a later explicit Responses
     // choice survives, including on a fresh profile that saves after this load.
@@ -187,16 +206,24 @@ function initialProvider(): ModelProviderConfig {
         window.localStorage.setItem('algocoach.provider.commandcode-protocol-migrated', 'true')
       } catch { /* keep the migrated provider usable when storage is unavailable */ }
     }
-    if (!saved) return DEFAULT_PROVIDER
+    if (!saved) {
+      const apiKey = readProviderApiKey(DEFAULT_PROVIDER.id, true)
+      const provider = { ...DEFAULT_PROVIDER, apiKey }
+      if (apiKey) saveProvider(provider)
+      return provider
+    }
 
-    const provider = { ...DEFAULT_PROVIDER, ...JSON.parse(saved), apiKey } as ModelProviderConfig
-    if (needsMigration && provider.id === 'commandcode-goat' && provider.protocol === 'openai-response') {
-      provider.protocol = 'openai'
-      try {
-        const { apiKey, ...metadata } = provider
-        window.localStorage.setItem('algocoach.provider', JSON.stringify(metadata))
-        if (apiKey) window.sessionStorage.setItem('algocoach.provider.apiKey', apiKey)
-      } catch { /* keep the migrated provider usable when storage is unavailable */ }
+    const metadata = JSON.parse(saved) as Partial<ModelProviderConfig>
+    const providerId = typeof metadata.id === 'string' && metadata.id ? metadata.id : DEFAULT_PROVIDER.id
+    const apiKey = readProviderApiKey(providerId, true)
+    const provider = { ...DEFAULT_PROVIDER, ...metadata, apiKey } as ModelProviderConfig
+    const migrateProtocol = needsMigration && provider.id === 'commandcode-goat' && provider.protocol === 'openai-response'
+    if (migrateProtocol) provider.protocol = 'openai'
+    // saveProvider is the one writer for provider persistence: reuse it for the
+    // one-time migration and for backfilling a legacy session key instead of
+    // duplicating the storage layout here.
+    if (migrateProtocol || (apiKey && window.sessionStorage.getItem(providerApiKeyStorageKey(providerId)) === null)) {
+      saveProvider(provider)
     }
     return provider
   } catch { return DEFAULT_PROVIDER }
@@ -206,8 +233,14 @@ function saveProvider(provider: ModelProviderConfig) {
   try {
     const { apiKey, ...metadata } = provider
     window.localStorage.setItem('algocoach.provider', JSON.stringify(metadata))
-    if (apiKey) window.sessionStorage.setItem('algocoach.provider.apiKey', apiKey)
-    else window.sessionStorage.removeItem('algocoach.provider.apiKey')
+    if (apiKey) {
+      window.sessionStorage.setItem(providerApiKeyStorageKey(provider.id), apiKey)
+      // Keep the old key for clients from the previous single-provider format.
+      window.sessionStorage.setItem(PROVIDER_API_KEY_KEY, apiKey)
+    } else {
+      window.sessionStorage.removeItem(providerApiKeyStorageKey(provider.id))
+      window.sessionStorage.removeItem(PROVIDER_API_KEY_KEY)
+    }
   } catch { /* optional provider preference storage */ }
 }
 
@@ -312,7 +345,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (problemFocusElapsed[key] === elapsed) return
     const next = { ...problemFocusElapsed, [key]: elapsed }
     persistProblemFocusTimes(next)
-    set({ problemFocusElapsed: next })
   },
   getFocusDurationSec: (nowMs = Date.now()) => {
     const { focusStartTs, focusElapsedSec } = get()

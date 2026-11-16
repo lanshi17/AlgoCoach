@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { Download, KeyRound, Moon, Sun } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useAppStore } from '@/stores/useAppStore'
+import { readProviderApiKey, useAppStore } from '@/stores/useAppStore'
 import { agentService } from '@/services/agentService'
 import { leetcodeService } from '@/services/leetcodeService'
 import type { ModelProviderConfig, TrainingGoal } from '@/types'
@@ -11,7 +12,17 @@ import { LANGUAGE_OPTIONS } from '@/services/languages'
 export default function SettingsPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { lang, setLang, goal, setGoal, theme, toggleTheme, provider, setProvider, mode } = useAppStore()
+  const { lang, setLang, goal, setGoal, theme, toggleTheme, provider, setProvider, mode } = useAppStore(useShallow(state => ({
+    lang: state.lang,
+    setLang: state.setLang,
+    goal: state.goal,
+    setGoal: state.setGoal,
+    theme: state.theme,
+    toggleTheme: state.toggleTheme,
+    provider: state.provider,
+    setProvider: state.setProvider,
+    mode: state.mode,
+  })))
   const [exporting, setExporting] = useState(false)
   const [providerMessage, setProviderMessage] = useState('')
   const [exportMessage, setExportMessage] = useState('')
@@ -25,7 +36,10 @@ export default function SettingsPage() {
     const preset = id === 'custom'
       ? CUSTOM_PROVIDER_PRESET
       : PROVIDER_PRESETS.find(item => item.id === id) ?? PROVIDER_PRESETS[0]
-    setProviderDraft(providerFromPreset(preset, providerDraft.apiKey))
+    const apiKey = id === providerDraft.id
+      ? providerDraft.apiKey
+      : readProviderApiKey(preset.id)
+    setProviderDraft(providerFromPreset(preset, apiKey))
     setProviderMessage('')
   }
 
@@ -60,15 +74,21 @@ export default function SettingsPage() {
     setExporting(true)
     setExportMessage('')
     try {
-      const [memoryArchive, submissions] = await Promise.all([
+      const [memoryResult, submissionsResult] = await Promise.allSettled([
         agentService.exportMemory(),
         leetcodeService.submissionHistory(),
       ])
-      download(memoryArchive, 'algocoach-memory.zip')
-      download(new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), preferences: { lang, goal, theme }, submissions }, null, 2)], {
-        type: 'application/json',
-      }), 'algocoach-submissions.json')
-      setExportMessage('训练记忆和提交历史已导出。提交历史文件包含你提交过的代码。')
+      if (memoryResult.status === 'rejected') throw memoryResult.reason
+
+      download(memoryResult.value, 'algocoach-memory.zip')
+      if (submissionsResult.status === 'fulfilled') {
+        download(new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), preferences: { lang, goal, theme }, submissions: submissionsResult.value }, null, 2)], {
+          type: 'application/json',
+        }), 'algocoach-submissions.json')
+        setExportMessage('训练记忆和提交历史已导出。提交历史文件包含你提交过的代码。')
+      } else {
+        setExportMessage('训练记忆已导出；提交历史暂未导出，请配置有效的 LeetCode Cookie 后重试。')
+      }
     } catch {
       setExportMessage('导出失败，请确认 Agent 和 Java Gateway 正常运行后重试。')
     } finally {
@@ -109,7 +129,7 @@ export default function SettingsPage() {
           <div className="border-t border-border pt-5 dark:border-border-dark">
             <div>
               <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">模型 Provider</p>
-              <p className="mt-1 text-xs text-text-muted dark:text-text-dark-muted">参考 omp 的 Provider 管理：预设可直接编辑，也支持 OpenAI / Anthropic 兼容的自定义端点。</p>
+              <p className="mt-1 text-xs text-text-muted dark:text-text-dark-muted">参考 omp 的 Provider 管理：预设可直接编辑，也支持 OpenAI / Anthropic 兼容的自定义端点。每个 Provider 的 key 独立保存在当前浏览器会话。</p>
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <label className="text-xs text-text-muted dark:text-text-dark-muted">预设

@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { Play, Send, Lock, Sun, Moon, Loader2 } from 'lucide-react'
 import { useAppStore } from '@/stores/useAppStore'
 import { Badge } from '@/components/Common/Badge'
 import { leetcodeService } from '@/services/leetcodeService'
-import { agentService, canCommitChatReply } from '@/services/agentService'
+import { agentService, canCommitChatReply, getAgentErrorAction, getAgentErrorMessage } from '@/services/agentService'
 import { LANGUAGE_OPTIONS } from '@/services/languages'
 import type { CodeLanguage } from '@/types'
 import { nanoid } from 'nanoid'
@@ -19,7 +20,33 @@ export default function Header() {
     code, testInput, enterFocus, exitFocus,
     getFocusDurationSec, setRunResult, setRunError, setRunLoading, runLoading, provider,
     setLastSubmission, addMessage, submitLoading, setSubmitLoading, submitError, setSubmitError,
-  } = useAppStore()
+  } = useAppStore(useShallow(state => ({
+    activeProblem: state.activeProblem,
+    mode: state.mode,
+    lang: state.lang,
+    setLang: state.setLang,
+    goal: state.goal,
+    theme: state.theme,
+    toggleTheme: state.toggleTheme,
+    focusStartTs: state.focusStartTs,
+    problemTimeLimits: state.problemTimeLimits,
+    code: state.code,
+    testInput: state.testInput,
+    enterFocus: state.enterFocus,
+    exitFocus: state.exitFocus,
+    getFocusDurationSec: state.getFocusDurationSec,
+    setRunResult: state.setRunResult,
+    setRunError: state.setRunError,
+    setRunLoading: state.setRunLoading,
+    runLoading: state.runLoading,
+    provider: state.provider,
+    setLastSubmission: state.setLastSubmission,
+    addMessage: state.addMessage,
+    submitLoading: state.submitLoading,
+    setSubmitLoading: state.setSubmitLoading,
+    submitError: state.submitError,
+    setSubmitError: state.setSubmitError,
+  })))
   const [actionError, setActionError] = useState('')
   const [focusNow, setFocusNow] = useState(() => Date.now())
   const reviewRequestRef = useRef<AbortController | null>(null)
@@ -42,8 +69,12 @@ export default function Header() {
       reviewRequestRef.current?.abort()
       reviewRequestRef.current = null
       reviewProblemKeyRef.current = problemKey
+      // Run/submit errors belong to the old problem. Keeping them visible
+      // after a switch makes the next training attempt look broken.
+      setActionError('')
+      setSubmitError(null)
     }
-  }, [mode, activeProblem, activeProblem?.platform, activeProblem?.platformId])
+  }, [mode, activeProblem, activeProblem?.platform, activeProblem?.platformId, setSubmitError])
 
   useEffect(() => () => {
     reviewRequestRef.current?.abort()
@@ -113,7 +144,11 @@ export default function Header() {
         '请按 OI/xCPC 的赛后复盘流程，先根据题目、判题事实与我的训练记录复盘建模、正确性、复杂度和下一步。你看不到我的提交代码；若要定位实现层面的具体错误，请先让我贴出相关代码片段并说明自己的判断，不要假装检查过代码。',
       ].filter(Boolean).join('\n')
       const reviewTimestamp = new Date().toISOString()
-      addMessage({ id: nanoid(), role: 'user', content: reviewText, timestamp: reviewTimestamp, mode: 'REVIEW' })
+      const reviewMessageId = nanoid()
+      addMessage({
+        id: reviewMessageId, role: 'user', content: reviewText, timestamp: reviewTimestamp,
+        mode: 'REVIEW', trainingPhase: 'review',
+      })
       addMessage({
         id: nanoid(), role: 'system', content: '判题结果已同步，教练正在开始赛后复盘。',
         timestamp: reviewTimestamp, mode: 'REVIEW',
@@ -136,14 +171,17 @@ export default function Header() {
           id: nanoid(), role: 'agent', content: reply.content,
           timestamp: new Date().toISOString(), mode: 'REVIEW', animationId: reply.animationId,
         })
-      }).catch(() => {
+      }).catch(error => {
         const current = useAppStore.getState()
         if (reviewController.signal.aborted || current.mode === 'FOCUS'
           || current.activeProblem?.platform !== activeProblem.platform
           || current.activeProblem?.platformId !== activeProblem.platformId) return
+        const action = getAgentErrorAction(error)
         addMessage({
-          id: nanoid(), role: 'system', content: '教练暂时无法连接。你仍可在输入框中继续复盘，或稍后重试。',
-          timestamp: new Date().toISOString(), mode: 'REVIEW',
+          id: nanoid(), role: 'system',
+          content: `${getAgentErrorMessage(error)} 你仍可在输入框中继续复盘，或稍后重试。`,
+          timestamp: new Date().toISOString(), mode: 'REVIEW', retryMessageId: reviewMessageId,
+          ...(action ? { action } : {}),
         })
       }).finally(() => {
         if (reviewRequestRef.current === reviewController) reviewRequestRef.current = null
@@ -156,6 +194,15 @@ export default function Header() {
   }
 
   const isBusy = runLoading || submitLoading
+  const judgeDisabledReason = isBusy
+    ? '正在处理上一项请求'
+    : !activeProblem
+      ? '请先选择一道题目'
+      : !judgeRunnable
+        ? '该平台暂不支持站内运行和提交'
+        : mode !== 'FOCUS'
+          ? '点击“开始做题”后才能运行或提交'
+          : undefined
   const focusDurationSec = mode === 'FOCUS' ? getFocusDurationSec(focusNow) : 0
   const problemTimeLimitSec = activeProblem
     ? problemTimeLimits[`${activeProblem.platform}:${activeProblem.platformId}`]
@@ -177,7 +224,7 @@ export default function Header() {
         </h1>
         {activeProblem && <Badge difficulty={activeProblem.difficulty} />}
         <button onClick={toggleTheme} aria-label="切换主题" title="切换主题"
-          className="sidebar-btn ml-auto !w-8 !h-8 shrink-0 hidden max-[340px]:flex">
+          className="sidebar-btn ml-auto !w-8 !h-8 shrink-0 flex xl:hidden">
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
         </button>
       </div>
@@ -230,26 +277,33 @@ export default function Header() {
         </button>
       )}
 
-      <button onClick={onRun} disabled={!activeProblem || !judgeRunnable || mode !== 'FOCUS' || isBusy}
-        aria-label="运行"
-        aria-describedby={judgeCapabilityNote ? 'judge-capability-note' : undefined}
-        title={activeProblem && !judgeRunnable ? '该平台暂不支持站内运行' : undefined}
-        className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium
-                   border border-border dark:border-border-dark text-text-secondary
-                   dark:text-text-dark-secondary hover:bg-surface-muted
-                   dark:hover:bg-surface-dark-muted disabled:opacity-40 transition-colors">
-        {runLoading ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-        {runLoading ? '运行中' : '运行'}
-      </button>
-      <button onClick={onSubmit} disabled={!activeProblem || !judgeRunnable || mode !== 'FOCUS' || isBusy}
-        aria-label="提交"
-        aria-describedby={judgeCapabilityNote ? 'judge-capability-note' : undefined}
-        title={activeProblem && !judgeRunnable ? '该平台暂不支持站内提交' : undefined}
-        className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium
-                   bg-accent hover:bg-accent-hover text-white disabled:opacity-40 transition-colors">
-        {submitLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-        {submitLoading ? '提交中' : '提交'}
-      </button>
+      {activeProblem && <>
+        <button onClick={onRun} disabled={!judgeRunnable || mode !== 'FOCUS' || isBusy}
+          aria-label="运行"
+          aria-busy={runLoading}
+          aria-describedby={judgeCapabilityNote ? 'judge-capability-note' : undefined}
+          title={judgeDisabledReason}
+          className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium
+                     border border-border dark:border-border-dark text-text-secondary
+                     dark:text-text-dark-secondary hover:bg-surface-muted
+                     dark:hover:bg-surface-dark-muted disabled:opacity-40 transition-colors">
+          {runLoading ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+          {runLoading ? '运行中' : '运行'}
+        </button>
+        <button onClick={onSubmit} disabled={!judgeRunnable || mode !== 'FOCUS' || isBusy}
+          aria-label="提交"
+          aria-busy={submitLoading}
+          aria-describedby={judgeCapabilityNote ? 'judge-capability-note' : undefined}
+          title={judgeDisabledReason}
+          className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium
+                     bg-accent hover:bg-accent-hover text-white
+                     disabled:bg-surface-muted disabled:text-text-muted
+                     dark:disabled:bg-surface-dark-muted dark:disabled:text-text-dark-muted
+                     disabled:cursor-not-allowed disabled:opacity-100 transition-colors">
+          {submitLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+          {submitLoading ? '提交中' : '提交'}
+        </button>
+      </>}
 
       {judgeCapabilityNote && <span id="judge-capability-note" role="status"
         className="basis-full truncate text-[11px] text-warning dark:text-amber-300 xl:basis-auto xl:max-w-[280px]"
@@ -257,7 +311,7 @@ export default function Header() {
         {judgeCapabilityNote}
       </span>}
 
-      <button onClick={toggleTheme} aria-label="切换主题" className="sidebar-btn !w-8 !h-8 max-[340px]:hidden" title="切换主题">
+      <button onClick={toggleTheme} aria-label="切换主题" className="sidebar-btn !w-8 !h-8 hidden xl:flex" title="切换主题">
         {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
       </button>
       {(submitError || actionError) && <span role="alert" title={submitError || actionError}

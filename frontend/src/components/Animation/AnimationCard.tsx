@@ -49,7 +49,7 @@ export default function AnimationCard({ job, onRetry }: { job: AnimationJob; onR
     return (
       <div role="alert" className="rounded-lg border border-border p-4 dark:border-border-dark">
         <p className="text-sm text-text-secondary dark:text-text-dark-secondary">{job.error ?? `动画「${job.title}」没有生成成功。`}</p>
-        {onRetry && <button onClick={onRetry}
+        {onRetry && <button type="button" onClick={onRetry} aria-label="再次生成动画"
           className="mt-3 inline-flex items-center gap-2 text-xs text-accent hover:underline">
           <RefreshCw size={13} /> 再试一次
         </button>}

@@ -37,18 +37,18 @@ it('checkpoints the focused problem periodically, on pagehide, and when hidden',
     <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><AppShell /></MemoryRouter>,
   ))
   await act(async () => vi.advanceTimersByTime(3_000))
-  expect(useAppStore.getState().problemFocusElapsed['LEETCODE:one']).toBe(3)
+  expect(sessionStorage.getItem('algocoach.problemFocusElapsed')).toContain('"LEETCODE:one":3')
   await act(async () => {
     vi.setSystemTime(new Date(Date.now() + 2_000))
     window.dispatchEvent(new Event('pagehide'))
   })
-  expect(useAppStore.getState().problemFocusElapsed['LEETCODE:one']).toBe(5)
+  expect(sessionStorage.getItem('algocoach.problemFocusElapsed')).toContain('"LEETCODE:one":5')
   Object.defineProperty(document, 'hidden', { configurable: true, value: true })
   await act(async () => {
     vi.setSystemTime(new Date(Date.now() + 1_000))
     document.dispatchEvent(new Event('visibilitychange'))
   })
-  expect(useAppStore.getState().problemFocusElapsed['LEETCODE:one']).toBe(6)
+  expect(sessionStorage.getItem('algocoach.problemFocusElapsed')).toContain('"LEETCODE:one":6')
   expect(sessionStorage.getItem('algocoach.problemFocusElapsed')).toContain('"LEETCODE:one":6')
   await act(async () => root.unmount())
   element.remove()

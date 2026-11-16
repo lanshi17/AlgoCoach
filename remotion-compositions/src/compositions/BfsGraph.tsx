@@ -11,6 +11,7 @@
  */
 import React from 'react'
 import { AbsoluteFill, useCurrentFrame, useVideoConfig, interpolate } from 'remotion'
+import { MONO_FONT_STACK } from '../fonts'
 
 interface Node { id: number; x: number; y: number; label: string }
 interface Edge { from: number; to: number }
@@ -132,7 +133,7 @@ export const BfsGraph: React.FC<Props> = ({
             <g key={n.id}>
               <circle cx={n.x} cy={n.y} r={r} fill={fill} stroke={stroke} strokeWidth={2} />
               <text x={n.x} y={n.y + 7} textAnchor="middle"
-                fill={C_TEXT} fontSize={18} fontWeight={600} fontFamily="JetBrains Mono, monospace">
+                fill={C_TEXT} fontSize={18} fontWeight={600} fontFamily={MONO_FONT_STACK}>
                 {n.label}
               </text>
             </g>

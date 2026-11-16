@@ -23,6 +23,16 @@ RUN ln -sf /usr/local/bin/python3 /usr/bin/python3
 WORKDIR /app
 COPY backend/agent/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Remotion rasterizes inside Chromium; without a CJK font every Chinese label
+# renders blank. Kept in its own layer (after the slow pip install) so changing
+# the font set does not invalidate the Python dependency cache. The build fails
+# instead of shipping a renderer that silently drops Chinese text.
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-noto-cjk \
+    && fc-cache -f \
+    && test -n "$(fc-list :lang=zh)" \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=remotion-deps /remotion-compositions/node_modules /remotion-compositions/node_modules
 COPY remotion-compositions /remotion-compositions
 COPY backend/agent/app ./app

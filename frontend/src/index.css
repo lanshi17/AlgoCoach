@@ -97,6 +97,40 @@
     @apply bg-surface-dark-soft border-border-dark text-text-dark-primary;
   }
 
+  /* Bubbles live in a flex row: without min-width:0 a wide formula or a long
+     unbroken token grows the bubble past the panel instead of wrapping. */
+  .chat-bubble-user,
+  .chat-bubble-agent {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  /* Display math ($$…$$) keeps KaTeX's no-wrap layout and scrolls sideways
+     inside the bubble, so a long formula never spills over the panel edge. */
+  .chat-bubble-user .katex-display,
+  .chat-bubble-agent .katex-display {
+    max-width: 100%;
+    margin: 0.6em 0;
+    padding: 2px 0 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .chat-bubble-user .katex,
+  .chat-bubble-agent .katex {
+    font-size: 1.02em;
+  }
+
+  /* Inline math ($…$) can already break at binary operators, so it wraps
+     instead of overflowing; only display math needs its own scroll box. */
+
+  /* Fallback for fenced blocks the highlighter does not handle. */
+  .chat-bubble-agent pre {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
   /* Panel divider handle */
   .resize-handle {
     @apply w-1 cursor-col-resize hover:bg-accent/40 transition-colors

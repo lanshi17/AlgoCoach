@@ -25,7 +25,38 @@ it('keeps a labelled theme control in the compact title row', () => {
   act(() => root.render(<Header />))
 
   const titleRow = element.querySelector('h1')?.parentElement
-  expect(titleRow?.querySelector('button[aria-label="切换主题"]')).not.toBeNull()
+  const compactTheme = titleRow?.querySelector<HTMLButtonElement>('button[aria-label="切换主题"]')
+  expect(compactTheme).not.toBeNull()
+  expect(compactTheme?.className).toContain('xl:hidden')
+  const desktopTheme = Array.from(element.querySelectorAll<HTMLButtonElement>('button[aria-label="切换主题"]'))
+    .find(button => button.parentElement !== titleRow)
+  expect(desktopTheme?.className).toContain('xl:flex')
+  act(() => root.unmount())
+  element.remove()
+})
+
+it('makes unavailable judging actions visibly neutral and explains why', () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+  act(() => root.render(<Header />))
+
+  expect(element.querySelector('button[aria-label="提交"]')).toBeNull()
+  expect(element.querySelector('button[aria-label="运行"]')).toBeNull()
+
+  act(() => useAppStore.getState().setActiveProblem({
+    id: 'one', platform: 'LEETCODE', platformId: 'one', title: 'One', difficulty: 'EASY',
+    contentHtml: '', topics: [], sampleTestCases: '', codeSnippets: [],
+  }))
+  const submit = element.querySelector<HTMLButtonElement>('button[aria-label="提交"]')!
+  const run = element.querySelector<HTMLButtonElement>('button[aria-label="运行"]')!
+  expect(submit.disabled).toBe(true)
+  expect(submit.title).toBe('点击“开始做题”后才能运行或提交')
+  expect(run.title).toBe('点击“开始做题”后才能运行或提交')
+  expect(submit.className).toContain('disabled:bg-surface-muted')
+
   act(() => root.unmount())
   element.remove()
 })
@@ -68,6 +99,32 @@ it('does not show the unsupported-platform judging note for LeetCode', () => {
 
   expect(element.querySelector('#judge-capability-note')).toBeNull()
 
+  act(() => root.unmount())
+  element.remove()
+})
+
+it('clears a run error when moving to another problem', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  const first = {
+    id: '1', platform: 'LEETCODE' as const, platformId: 'one', title: 'One', difficulty: 'EASY' as const,
+    contentHtml: '', topics: [], sampleTestCases: '', codeSnippets: [],
+  }
+  useAppStore.getState().setActiveProblem(first)
+  useAppStore.getState().enterFocus()
+  vi.spyOn(leetcodeService, 'runTests').mockRejectedValue(new Error('旧题运行失败'))
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+  act(() => root.render(<Header />))
+  await act(async () => {
+    Array.from(element.querySelectorAll('button')).find(button => button.textContent === '运行')!.click()
+    await Promise.resolve()
+  })
+  expect(element.querySelector('[role="alert"]')?.textContent).toContain('旧题运行失败')
+
+  act(() => useAppStore.getState().setActiveProblem({ ...first, id: '2', platformId: 'two' }))
+  expect(element.querySelector('[role="alert"]')).toBeNull()
   act(() => root.unmount())
   element.remove()
 })
@@ -142,6 +199,7 @@ it('keeps a submission pending across navigation and shows a later failure', asy
   act(() => root.render(<Header />))
   const button = Array.from(element.querySelectorAll('button')).find(item => item.textContent === '提交中')!
   expect(button.disabled).toBe(true)
+  expect(button.getAttribute('aria-busy')).toBe('true')
   act(() => button.click())
   expect(submit).toHaveBeenCalledTimes(1)
   await act(async () => rejectSubmit(new Error('连接失败')))
@@ -182,6 +240,46 @@ it('sends the post-submit review after leaving focus mode', async () => {
     await Promise.resolve()
   })
   expect(useAppStore.getState().messages.some(message => message.content === '赛后复盘已完成。')).toBe(true)
+  act(() => root.unmount())
+  element.remove()
+})
+
+it('marks an automatic post-submit review as retryable when the coach fails', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.getState().setActiveProblem({
+    id: '1', platform: 'LEETCODE', platformId: 'one', title: 'One', difficulty: 'EASY',
+    contentHtml: '', topics: ['Array'], sampleTestCases: '', codeSnippets: [],
+  })
+  useAppStore.getState().enterFocus()
+  vi.spyOn(leetcodeService, 'submit').mockResolvedValue({
+    id: 'submission-1', status: 'WRONG_ANSWER', runtimeMs: 2, memoryMb: 3,
+    passedTests: 0, totalTests: 1, errorMessage: 'wrong answer', durationSec: 1,
+  })
+  vi.spyOn(agentService, 'chat').mockRejectedValue({
+    isAxiosError: true,
+    response: { data: { detail: {
+      code: 'provider_api_key_required',
+      message: '当前 Provider 需要 API key，请在设置页配置',
+    } } },
+  })
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+  act(() => root.render(<Header />))
+  await act(async () => {
+    Array.from(element.querySelectorAll('button')).find(button => button.textContent === '提交')!.click()
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+
+  const messages = useAppStore.getState().messages
+  const userMessage = messages.find(message => message.role === 'user')
+  const failure = messages.find(message => message.role === 'system' && message.retryMessageId)
+  expect(userMessage?.trainingPhase).toBe('review')
+  expect(failure?.retryMessageId).toBe(userMessage?.id)
+  expect(failure?.content).toContain('当前 Provider 需要 API key，请在设置页配置')
+  expect(failure?.action).toEqual({ href: '/settings', label: '配置模型 Provider' })
   act(() => root.unmount())
   element.remove()
 })

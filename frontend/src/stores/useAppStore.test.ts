@@ -379,7 +379,8 @@ describe('training preferences and focus state', () => {
     useAppStore.getState().enterFocus()
     const start = useAppStore.getState().focusStartTs!
     useAppStore.getState().checkpointFocusDuration(start + 12_000)
-    expect(useAppStore.getState().problemFocusElapsed['LEETCODE:two-sum']).toBe(12)
+    expect(useAppStore.getState().problemFocusElapsed['LEETCODE:two-sum']).toBeUndefined()
+    expect(sessionStorage.getItem('algocoach.problemFocusElapsed')).toContain('"LEETCODE:two-sum":12')
     vi.resetModules()
     const { useAppStore: restored } = await import('./useAppStore')
     expect(restored.getState()).toMatchObject({
@@ -389,6 +390,24 @@ describe('training preferences and focus state', () => {
       focusElapsedSec: 12,
     })
     expect(restored.getState().getFocusDurationSec()).toBe(12)
+    vi.useRealTimers()
+  })
+
+  it('persists focus checkpoints without broadcasting a Store update each second', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-15T00:00:00.000Z'))
+    useAppStore.getState().setActiveProblem(problem)
+    useAppStore.getState().enterFocus()
+    let notifications = 0
+    const unsubscribe = useAppStore.subscribe(() => { notifications += 1 })
+
+    const start = useAppStore.getState().focusStartTs!
+    useAppStore.getState().checkpointFocusDuration(start + 1_000)
+
+    expect(sessionStorage.getItem('algocoach.problemFocusElapsed')).toContain('"LEETCODE:two-sum":1')
+    expect(useAppStore.getState().problemFocusElapsed['LEETCODE:two-sum']).toBeUndefined()
+    expect(notifications).toBe(0)
+    unsubscribe()
     vi.useRealTimers()
   })
 

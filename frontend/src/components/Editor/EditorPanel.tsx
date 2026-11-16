@@ -1,4 +1,5 @@
 import React, { Suspense, lazy, useRef } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/stores/useAppStore'
 import { MONACO_LANGUAGES } from '@/services/languages'
 import TestCasePanel from './TestCasePanel'
@@ -13,7 +14,16 @@ const MonacoEditor = lazy(() => import('./MonacoCodeEditor'))
  * IDLE / PREP: editor is read-only until user clicks "Start".
  */
 export default function EditorPanel() {
-  const { code, setCode, lang, theme, mode, activeProblem, enterFocus, submitLoading } = useAppStore()
+  const { code, setCode, lang, theme, mode, activeProblem, enterFocus, submitLoading } = useAppStore(useShallow(state => ({
+    code: state.code,
+    setCode: state.setCode,
+    lang: state.lang,
+    theme: state.theme,
+    mode: state.mode,
+    activeProblem: state.activeProblem,
+    enterFocus: state.enterFocus,
+    submitLoading: state.submitLoading,
+  })))
   const editorRef = useRef<unknown>(null)
 
   // When a new problem loads, populate code from its snippet
@@ -28,6 +38,12 @@ export default function EditorPanel() {
       {/* Editor area */}
       <div className="flex-1 min-h-0 relative">
         {submitLoading && <div role="status" className="absolute right-3 top-2 z-10 rounded bg-surface px-2 py-1 text-xs text-text-muted shadow dark:bg-surface-dark">提交中，编辑器暂时只读</div>}
+        {!activeProblem && (
+          <div role="status" className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-surface/85 text-center dark:bg-surface-dark/85">
+            <p className="text-sm font-medium text-text-secondary dark:text-text-dark-secondary">先选择一道题目</p>
+            <p className="text-xs text-text-muted dark:text-text-dark-muted">选题后，这里会显示对应的代码模板</p>
+          </div>
+        )}
         {/* Not-started overlay */}
         {activeProblem && mode === 'PREP' && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center

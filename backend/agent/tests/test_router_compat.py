@@ -119,6 +119,18 @@ async def test_provider_configuration_error_has_a_stable_repair_code(client, mon
     }
 
 
+async def test_unexpected_chat_failure_is_a_retryable_upstream_error(client, monkeypatch):
+    async def unexpected_failure(**_kwargs):
+        raise ValueError("adapter detail must stay server-side")
+
+    monkeypatch.setattr(router_module.coach, "chat", unexpected_failure)
+
+    response = await client.post("/chat", json={"message": "hi", "mode": "PREP"})
+
+    assert response.status_code == 502
+    assert response.json() == {"detail": "教练服务暂时不可用，请稍后重试。"}
+
+
 async def test_animate_route_keeps_request_and_response_fields(client, monkeypatch):
     captured: dict[str, object] = {}
 
