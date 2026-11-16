@@ -1,6 +1,11 @@
 import Editor, { loader } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor/editor'
 import EditorWorker from '../../../node_modules/monaco-editor/esm/vs/editor/editor.worker.js?worker'
+
+// `monaco-editor/editor` exposes the API without the contributions included
+// by `editor.main`. Load completion UI and snippet insertion explicitly.
+import 'monaco-editor/editor/contrib/suggest/browser/suggestController'
+import 'monaco-editor/editor/contrib/snippet/browser/snippetController2'
 import './registerLocalCompletions'
 
 // Register only the languages AlgoCoach exposes. The package root imports every
