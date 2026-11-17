@@ -35,7 +35,7 @@ Agent(state=AgentState(session_id=session_id))
 - 回复结束后通过 `auto_memory` 按 `session_id` 自动写回；
 - 记忆卡片存 `REME_WORKSPACE_DIR`（默认 `./data/reme`）；写回按 AgentScope session_id 标记，检索在 workspace 范围内跨会话进行。
 
-**静态算法知识库**：Agent 启动时从仓库根目录的 `01-算法套路.md.zip` 和 `editor/` 幂等生成 Markdown，放到 ReMe 的 `digest/wiki/algorithm-library/`。ReMeMiddleware 同时启用本地 MiniLM 向量模型（384 维，复用 Chroma 的 ONNX `all-MiniLM-L6-v2`）和 BM25 关键词索引，向量索引保存在 ReMe workspace 的 metadata 下；首次创建 ReMeMiddleware 时，Coach 在第一次搜索前显式调用 ReMe `reindex` job，避免后台 watcher 首轮扫描尚未结束造成漏检。检索能同时命中算法套路原文、图像引用、C++/Rust/TypeScript 历史题解和代码模板。设置 `REME_VECTOR_ENABLED=false` 可退回纯关键词模式。导入器只清理自己上次登记的陈旧文件，不改写其他日记、摘要或记忆卡。导入清单和生成结果均位于该知识库子目录。
+**静态算法知识库**：Agent 启动时从仓库根目录的 `01-算法套路.md.zip` 幂等生成 Markdown，放到 ReMe 的 `digest/wiki/algorithm-library/`。历史编辑器题解已经存入 ReMe workspace，不再随代码仓库或容器镜像保留。ReMeMiddleware 同时启用本地 MiniLM 向量模型（384 维，复用 Chroma 的 ONNX `all-MiniLM-L6-v2`）和 BM25 关键词索引，向量索引保存在 ReMe workspace 的 metadata 下；首次创建 ReMeMiddleware 时，Coach 在第一次搜索前显式调用 ReMe `reindex` job，避免后台 watcher 首轮扫描尚未结束造成漏检。检索能命中算法套路原文、图像引用以及已存在的历史题解和代码模板。设置 `REME_VECTOR_ENABLED=false` 可退回纯关键词模式。导入器只清理自己登记的笔记文件，不改写其他日记、摘要、记忆卡或既有历史题解。导入清单和生成结果均位于该知识库子目录。
 
 **用户目标**：设置页将 `contest` / `interview_prep` / `casual` 偏好写入浏览器本地存储，每次 `/chat` 通过 `goal` 字段发送；Agent 不建立额外用户配置表。
 

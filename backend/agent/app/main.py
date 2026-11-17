@@ -36,8 +36,8 @@ async def lifespan(_app: FastAPI):
     await init_db()
     await start_crons()
     # ReMe's embedded AgentScope configuration indexes Markdown in daily/ and
-    # digest/. Seed the source corpus before the first lazy ReMe startup so its
-    # initial file scan sees the algorithm notes and historical solutions.
+    # digest/. Seed the notes archive before the first lazy ReMe startup so its
+    # initial file scan sees the algorithm knowledge.
     try:
         await asyncio.to_thread(seed_algorithm_knowledge)
     except Exception:  # noqa: BLE001 - local knowledge import must not block API startup

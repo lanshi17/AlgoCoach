@@ -531,7 +531,7 @@ async def test_managed_coach_reindexes_and_retrieves_algorithm_library(tmp_path,
         source_dir=repository_root,
         workspace_dir=workspace,
     )
-    assert (report.notes, report.solutions, report.assets) == (16, 496, 8)
+    assert (report.notes, report.assets) == (16, 8)
 
     monkeypatch.setattr(coach_module, "reme_workspace_dir", lambda: str(workspace))
     def fake_embedding(inputs):
@@ -556,8 +556,6 @@ async def test_managed_coach_reindexes_and_retrieves_algorithm_library(tmp_path,
         note_results = await coach._memory._search("滑动窗口算法核心代码模板")
         assert any("滑动窗口算法核心代码模板" in result for result in note_results)
 
-        solution_results = await coach._memory._search("nSumTarget", limit=50)
-        assert any("nSumTarget" in result for result in solution_results)
     finally:
         await coach.close()
 
