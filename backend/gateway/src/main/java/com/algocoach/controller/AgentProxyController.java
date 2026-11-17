@@ -1,7 +1,6 @@
 package com.algocoach.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.web.context.request.async.DeferredResult;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -63,7 +62,6 @@ public class AgentProxyController {
     /** Public gateway prefix; the FastAPI service does not use it. */
     public static final String BASE_PATH = "/api/agent";
 
-    static final String CHAT_PATH = "/chat";
     static final String CHAT_STREAM_PATH = "/chat/stream";
     static final String MEMORY_RECORD_PATH = "/memory/record";
     static final String MEMORY_PROFILE_PATH = "/memory/profile";
@@ -101,19 +99,6 @@ public class AgentProxyController {
         return HttpClient.create()
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, CONNECT_TIMEOUT_MILLIS)
                 .responseTimeout(CHAT_RESPONSE_TIMEOUT);
-    }
-
-    @PostMapping("/chat")
-    public DeferredResult<ResponseEntity<byte[]>> chat(
-            HttpServletRequest request,
-            @RequestBody(required = false) byte[] body) {
-        DeferredResult<ResponseEntity<byte[]>> result =
-                new DeferredResult<>(CHAT_ASYNC_TIMEOUT.toMillis());
-        Disposable upstream = forward(HttpMethod.POST, CHAT_PATH, request, body)
-                .subscribe(result::setResult, result::setErrorResult);
-        result.onTimeout(upstream::dispose);
-        result.onCompletion(upstream::dispose);
-        return result;
     }
 
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -186,8 +171,7 @@ public class AgentProxyController {
             String upstreamPath,
             HttpServletRequest request,
             byte[] body) {
-        WebClient client = CHAT_PATH.equals(upstreamPath) ? agentChatClient : agentClient;
-        WebClient.RequestBodySpec preparedRequest = client.method(method)
+        WebClient.RequestBodySpec preparedRequest = agentClient.method(method)
                 .uri(upstreamUri(upstreamPath, request.getQueryString()))
                 .headers(headers -> copyRequestHeaders(request, headers));
 

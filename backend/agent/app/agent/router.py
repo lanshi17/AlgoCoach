@@ -21,7 +21,6 @@ from app.memory.memory_service import memory
 from app.models.schemas import (
     AnimateRequest,
     ChatRequest,
-    ChatResponse,
     GeneratedAnimationRequest,
     MemoryRecordRequest,
     MemoryRecordResponse,
@@ -67,96 +66,14 @@ def _provider_error_detail(status_code: int, protocol: str) -> str:
     return "模型服务请求失败，请检查 Provider 设置后重试。"
 
 
-@router.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest):
-    """Main agent conversation endpoint."""
-    session_id = chat_session_id()
-    # PREP, IDLE and REVIEW are phases of the same coaching conversation, so
-    # keep their AgentState continuous. The current mode is supplied to the
-    # system prompt on every turn. FOCUS returns before model/memory access in
-    # AlgoCoach.chat and therefore never contributes stale turns to this state.
-    if req.conversationId or (req.problemId and req.platform):
-        identity = json.dumps(
-            [req.conversationId, req.platform, req.problemId],
-            ensure_ascii=False,
-            separators=(',', ':'),
-        )
-        session_id += '-' + hashlib.sha256(identity.encode()).hexdigest()[:24]
-    provider = req.provider
-    platform_kwargs: dict[str, Any] = {"platform": req.platform} if req.platform else {}
-    try:
-        if provider is None:
-            result = await coach.chat(
-                session_id=session_id,
-                message=req.message,
-                mode=req.mode,
-                problem_id=req.problemId,
-                goal=req.goal,
-                training_phase=req.trainingPhase,
-                time_remaining_sec=req.timeRemainingSec,
-                animations=req.animations,
-                coach_style=req.coachStyle,
-                **platform_kwargs,
-            )
-        else:
-            result = await coach.chat(
-                session_id=session_id,
-                message=req.message,
-                mode=req.mode,
-                problem_id=req.problemId,
-                goal=req.goal,
-                training_phase=req.trainingPhase,
-                time_remaining_sec=req.timeRemainingSec,
-                provider=provider.model_dump(),
-                **platform_kwargs,
-            )
-    except (OpenAIAPIStatusError, anthropic.APIStatusError) as exc:
-        protocol = provider.protocol if provider is not None else ""
-        logger.warning(
-            "Model provider rejected chat request (protocol=%s, status=%s)",
-            protocol,
-            exc.status_code,
-        )
-        raise HTTPException(
-            status_code=502,
-            detail=_provider_error_detail(exc.status_code, protocol),
-        ) from None
-    except ProviderConfigurationError as exc:
-        logger.warning("Model provider configuration rejected: %s", exc.code)
-        raise HTTPException(
-            status_code=400,
-            detail={"code": exc.code, "message": str(exc)},
-        ) from None
-    except (PermissionError, RuntimeError) as exc:
-        # Configuration failures are raised before the SDK request is made.
-        # Keep the message actionable, but never return arbitrary exception text
-        # that could contain a credential or provider response body.
-        logger.warning("Model provider configuration rejected: %s", type(exc).__name__)
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc) if isinstance(exc, RuntimeError) else "模型 Provider 配置无效，请检查 API Key 和模型名称。",
-        ) from None
-    except (OpenAIAPIConnectionError, anthropic.APIConnectionError):
-        logger.warning("Model provider connection failed")
-        raise HTTPException(
-            status_code=502,
-            detail="无法连接模型服务，请检查网络和 Provider Base URL。",
-        ) from None
-    except HTTPException:
-        # A deliberate HTTPException already carries the status and detail the
-        # client needs; the catch-all below must never rewrite it into a 502.
-        raise
-    except Exception:
-        # AgentScope/provider adapters can surface a new SDK-specific
-        # exception type without going through the typed OpenAI/Anthropic
-        # branches above. Keep those failures retryable and credential-safe;
-        # an internal traceback belongs in the service log, not the response.
-        logger.exception("Unexpected chat failure")
-        raise HTTPException(
-            status_code=502,
-            detail="教练服务暂时不可用，请稍后重试。",
-        ) from None
-    return ChatResponse(content=result["content"], animationId=result["animation_id"])
+def _session_id(req: ChatRequest) -> str:
+    """Derive the AgentScope state namespace from the current page context."""
+    identity = json.dumps(
+        [req.conversationId, req.platform, req.problemId],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return chat_session_id() + "-" + hashlib.sha256(identity.encode()).hexdigest()[:24]
 
 
 @router.post("/chat/stream")
@@ -164,17 +81,9 @@ async def chat_stream(req: ChatRequest):
     """Stream thinking/text deltas through a small SSE contract.
 
     Errors are emitted as an event because HTTP headers have already been sent
-    once the first model delta arrives. The existing JSON ``/chat`` endpoint
-    remains unchanged for older clients.
+    once the first model delta arrives.
     """
-    session_id = chat_session_id()
-    if req.conversationId or (req.problemId and req.platform):
-        identity = json.dumps(
-            [req.conversationId, req.platform, req.problemId],
-            ensure_ascii=False,
-            separators=(",", ":"),
-        )
-        session_id += "-" + hashlib.sha256(identity.encode()).hexdigest()[:24]
+    session_id = _session_id(req)
     provider = req.provider
 
     async def events():

@@ -1,5 +1,5 @@
 """
-AlgoCoach — the /chat agent runtime.
+AlgoCoach — the /chat/stream agent runtime.
 
 The old hand-written Claude tool loop and its in-process ``_sessions``
 conversation cache have been replaced by AgentScope 2.0.11:
@@ -138,8 +138,7 @@ class ProviderConfigurationError(RuntimeError):
         self.code = code
 
 # The tool surface advertised to the model. These schemas/descriptions are the
-# pre-migration contract; AgentScope wraps the same JSON schema so the model
-# sees no tool-interface change.
+# AgentScope wraps these stable tool schemas so the model sees one interface.
 TOOLS: list[dict[str, Any]] = [
     {
         "name": "get_weakness_topics",
@@ -279,7 +278,7 @@ _animations_allowed: ContextVar[bool] = ContextVar(
 
 
 class AlgoCoach:
-    """Single-process AgentScope runtime for the coach's ``POST /chat`` route.
+    """Single-process AgentScope runtime for the coach's ``POST /chat/stream`` route.
 
     One ReMe middleware (and therefore one embedded ReMe app) is shared by all
     sessions; each stable ``session_id`` gets its own Agent/AgentState so
@@ -433,7 +432,7 @@ class AlgoCoach:
 
         ``ANTHROPIC_API_KEY`` is required for non-FOCUS chat. The optional
         ``ANTHROPIC_BASE_URL`` keeps working for compatible proxies.
-        ``CLAUDE_MODEL`` defaults to the model name used before the migration.
+        ``CLAUDE_MODEL`` supplies the configured default model name.
         The model instance is shared by the agent and ReMe's memory extraction.
         """
         cfg = provider or {
@@ -575,11 +574,11 @@ class AlgoCoach:
         """Main entry point. Returns {"content": str, "animation_id": str | None}.
 
         ``training_phase`` / ``time_remaining_sec`` are the optional OI / xCPC
-        training context from ``POST /chat``. An explicit phase or a remaining
+        training context from ``POST /chat/stream``. An explicit phase or a remaining
         time budget selects the contest goal variant; the phase and budget are
         also stamped into the user message so AgentScope state and the ReMe
         memory write-back contain them. With the default phase and no budget,
-        ordinary turns keep the legacy message and Soul; the explicit FOCUS
+        ordinary turns keep the default message and Soul; the explicit FOCUS
         silence and no-problem greeting guard above still take precedence.
         """
         # In FOCUS mode the agent must stay silent: no model, memory or tools.

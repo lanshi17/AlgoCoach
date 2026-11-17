@@ -216,9 +216,8 @@ def seed_algorithm_knowledge(
         _atomic_write(path, content)
         written += 1
 
-    # Older releases also generated ``solutions/`` from the removed editor/
-    # tree. Those files are already in the ReMe workspace; keep them in place
-    # instead of deleting historical knowledge during migration.
+    # Existing workspaces can already contain ``solutions/`` files. They are
+    # outside the current source manifest, so keep them in place.
     stale = {path for path in previous - current if not path.startswith("solutions/")}
     removed = _remove_stale_owned_files(target_root, stale)
     manifest = json.dumps(

@@ -1,19 +1,16 @@
-"""OI / xCPC contest training protocol tests for ``POST /chat``.
+"""OI / xCPC contest training protocol tests for the streaming chat API.
 
 Covers the optional ``trainingPhase`` / ``timeRemainingSec`` wire fields, the
-phase-specific prompt guidance and its unknown-value fallback, FOCUS silence
+phase-specific prompt guidance, FOCUS silence
 with a training context, and the phase reaching AgentScope's user message and
 the ReMe auto-memory write-back through the fake model / middleware doubles.
 No real model, ReMe app, gateway or vector store is touched.
 """
 
-import httpx
 import pytest
 from conftest import FakeChatModel, RecordingReMe
-from openai import APIStatusError
 from pydantic import ValidationError
 
-from app.agent import router as router_module
 from app.agent.coach import AlgoCoach
 from app.agent.prompts import (
     CONTEST_PROTOCOL,
@@ -31,12 +28,12 @@ from app.agent.prompts import (
 )
 from app.models.schemas import ChatRequest
 
-LEGACY_SOUL_PREFIX = SOUL.split("{memory_context}")[0]
+BASE_SOUL_PREFIX = SOUL.split("{memory_context}")[0]
 CONTEST_BASE_PROMPT = get_system_prompt(UserGoal.CONTEST)
 
 
 def _request(**overrides) -> ChatRequest:
-    body = {"message": "讲讲这题", "mode": "PREP"}
+    body = {"message": "讲讲这题", "mode": "PREP", "conversationId": "test-page"}
     body.update(overrides)
     return ChatRequest.model_validate(body)
 
@@ -73,9 +70,14 @@ def test_chat_request_accepts_supported_user_goals(goal):
     assert _request(goal=goal).goal == goal
 
 
-@pytest.mark.parametrize("goal", ["unknown", "", 42, None])
-def test_chat_request_unknown_goal_uses_default(goal):
-    assert _request(goal=goal).goal is None
+def test_chat_request_missing_goal_uses_default():
+    assert _request(goal=None).goal is None
+
+
+@pytest.mark.parametrize("goal", ["unknown", "", 42])
+def test_chat_request_unknown_goal_is_rejected(goal):
+    with pytest.raises(ValidationError):
+        _request(goal=goal)
 
 
 @pytest.mark.parametrize("phase", [phase.value for phase in TrainingPhase])
@@ -92,8 +94,12 @@ def test_phase_normalisation_is_case_and_whitespace_insensitive(raw, expected):
 
 
 @pytest.mark.parametrize("raw", ["bogus", "", "practice", "unknown_phase", 42, None])
-def test_unknown_phase_falls_back_to_auto(raw):
-    assert _request(trainingPhase=raw).trainingPhase == "auto"
+def test_unknown_phase_is_rejected(raw):
+    if raw is None:
+        assert _request(trainingPhase=raw).trainingPhase == "auto"
+    else:
+        with pytest.raises(ValidationError):
+            _request(trainingPhase=raw)
 
 
 def test_time_remaining_accepts_zero_and_coerces_numeric_strings():
@@ -148,10 +154,8 @@ def test_auto_and_unknown_phases_keep_the_plain_contest_prompt():
         )
         == CONTEST_BASE_PROMPT
     )
-    assert (
+    with pytest.raises(ValueError):
         get_system_prompt(UserGoal.CONTEST, training_phase="bogus")
-        == CONTEST_BASE_PROMPT
-    )
     for guidance in PHASE_GUIDANCE.values():
         assert guidance not in CONTEST_BASE_PROMPT
 
@@ -228,7 +232,8 @@ def test_every_prompt_still_formats_the_memory_placeholder():
 
 def test_training_context_line_is_stable_and_optional():
     assert build_training_context() == ""
-    assert build_training_context("bogus") == ""
+    with pytest.raises(ValueError):
+        build_training_context("bogus")
     assert (
         build_training_context("hint", 420)
         == "[竞赛训练上下文] 训练阶段=hint；剩余时间=420 秒"
@@ -246,7 +251,6 @@ def test_training_context_line_is_stable_and_optional():
     [
         (None, None, False),
         (DEFAULT_TRAINING_PHASE, None, False),
-        ("bogus", None, False),
         ("hint", None, True),
         ("auto", 600, True),
         ("review", 0, True),
@@ -256,163 +260,24 @@ def test_contest_context_detection(phase, seconds, expected):
     assert is_contest_context(phase, seconds) is expected
 
 
-@pytest.mark.parametrize(
-    ("raw", "expected"),
-    [
-        (TrainingPhase.HINT, TrainingPhase.HINT),
-        ("REVIEW", TrainingPhase.REVIEW),
-        (" upsolve ", TrainingPhase.UPSOLVE),
-        ("nope", TrainingPhase.AUTO),
-        (None, TrainingPhase.AUTO),
-        (1, TrainingPhase.AUTO),
-    ],
-)
-def test_resolve_training_phase_falls_back_to_auto(raw, expected):
-    assert resolve_training_phase(raw) is expected
+def test_contest_context_rejects_unknown_phase():
+    with pytest.raises(ValueError):
+        is_contest_context("bogus")
 
 
-# ── HTTP route wiring ────────────────────────────────────────
-
-
-class _RecordingCoach:
-    """Spy that records what the route forwards and returns a fixed reply."""
-
-    def __init__(self):
-        self.calls: list[dict] = []
-
-    async def chat(self, **kwargs):
-        self.calls.append(kwargs)
-        return {"content": "reviewed", "animation_id": None}
-
-
-@pytest.mark.asyncio
-async def test_chat_route_forwards_training_fields_unchanged(client, monkeypatch):
-    spy = _RecordingCoach()
-    monkeypatch.setattr(router_module, "coach", spy)
-
-    resp = await client.post(
-        "/chat",
-        json={
-            "message": "这题怎么建模",
-            "mode": "REVIEW",
-            "problemId": "two-sum",
-            "goal": "interview_prep",
-            "trainingPhase": "review",
-            "timeRemainingSec": 1800,
-        },
-    )
-
-    assert resp.status_code == 200
-    # The response contract is unchanged: no training field leaks back.
-    assert resp.json() == {"content": "reviewed", "animationId": None}
-    assert spy.calls == [
-        {
-            "session_id": "default",
-            "message": "这题怎么建模",
-            "mode": "REVIEW",
-            "problem_id": "two-sum",
-            "goal": "interview_prep",
-            "training_phase": "review",
-            "time_remaining_sec": 1800,
-            # UI preferences are forwarded with their defaults when omitted.
-            "animations": True,
-            "coach_style": "auto",
-        }
-    ]
-
-
-@pytest.mark.asyncio
-async def test_chat_route_forwards_ephemeral_provider_only_when_supplied(client, monkeypatch):
-    spy = _RecordingCoach()
-    monkeypatch.setattr(router_module, "coach", spy)
-
-    resp = await client.post(
-        "/chat",
-        json={
-            "message": "用自定义模型复盘",
-            "mode": "REVIEW",
-            "provider": {
-                "id": "custom",
-                "name": "Local gateway",
-                "protocol": "openai",
-                "baseUrl": "http://localhost:9000/v1",
-                "model": "local-model",
-                "apiKey": "request-only-secret",
-            },
-        },
-    )
-
-    assert resp.status_code == 200
-    assert spy.calls[0]["provider"] == {
-        "id": "custom",
-        "name": "Local gateway",
-        "protocol": "openai",
-        "baseUrl": "http://localhost:9000/v1",
-        "model": "local-model",
-        "apiKey": "request-only-secret",
+@pytest.mark.parametrize("raw", [TrainingPhase.HINT, "REVIEW", " upsolve "])
+def test_resolve_training_phase_normalizes_known_values(raw):
+    assert resolve_training_phase(raw) in {
+        TrainingPhase.HINT, TrainingPhase.REVIEW, TrainingPhase.UPSOLVE,
     }
 
 
-@pytest.mark.asyncio
-async def test_chat_route_normalises_unknown_phase_and_keeps_legacy_body(
-    client, monkeypatch
-):
-    spy = _RecordingCoach()
-    monkeypatch.setattr(router_module, "coach", spy)
-
-    unknown = await client.post(
-        "/chat",
-        json={"message": "hi", "mode": "PREP", "trainingPhase": "no-such-phase"},
-    )
-    legacy = await client.post("/chat", json={"message": "hi", "mode": "PREP"})
-
-    assert unknown.status_code == 200 and legacy.status_code == 200
-    assert spy.calls[0]["training_phase"] == "auto"
-    assert spy.calls[0]["time_remaining_sec"] is None
-    assert spy.calls[1]["training_phase"] == "auto"
-    assert spy.calls[1]["time_remaining_sec"] is None
+@pytest.mark.parametrize("raw", ["nope", 1])
+def test_resolve_training_phase_rejects_unknown_values(raw):
+    with pytest.raises(ValueError):
+        resolve_training_phase(raw)
 
 
-@pytest.mark.asyncio
-async def test_chat_route_explains_missing_openai_responses_endpoint(client, monkeypatch):
-    class FailingCoach:
-        async def chat(self, **kwargs):
-            request = httpx.Request("POST", "https://provider.invalid/v1/responses")
-            response = httpx.Response(404, request=request)
-            raise APIStatusError("not found", response=response, body={})
-
-    monkeypatch.setattr(router_module, "coach", FailingCoach())
-    response = await client.post(
-        "/chat",
-        json={
-            "message": "你好",
-            "mode": "PREP",
-            "provider": {
-                "protocol": "openai-response",
-                "baseUrl": "https://provider.invalid/v1",
-                "model": "gpt-4o-mini",
-                "apiKey": "test-key-not-used",
-            },
-        },
-    )
-
-    assert response.status_code == 502
-    assert "支持 /responses" in response.json()["detail"]
-    assert "test-key-not-used" not in response.text
-
-
-@pytest.mark.asyncio
-async def test_chat_route_rejects_negative_remaining_time(client, monkeypatch):
-    spy = _RecordingCoach()
-    monkeypatch.setattr(router_module, "coach", spy)
-
-    resp = await client.post(
-        "/chat",
-        json={"message": "hi", "mode": "PREP", "timeRemainingSec": -1},
-    )
-
-    assert resp.status_code == 422
-    assert spy.calls == []
 
 
 # ── AgentScope / ReMe propagation ────────────────────────────
@@ -462,7 +327,7 @@ async def test_phase_reaches_user_message_system_context_and_reme(tmp_path):
         time_remaining_sec=420,
     )
 
-    # ChatResponse stays {"content", "animation_id"} for the route.
+    # The stream terminates with a stable done event.
     assert result == {"content": "好的", "animation_id": None}
 
     messages = model.calls[0]["messages"]
@@ -483,7 +348,7 @@ async def test_phase_reaches_user_message_system_context_and_reme(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_default_phase_keeps_the_legacy_message_and_soul(tmp_path):
+async def test_default_phase_keeps_the_default_message_and_soul(tmp_path):
     coach, model, reme = _make_coach(tmp_path)
 
     await coach.chat("s1", "讲讲 BFS", "PREP")
@@ -492,7 +357,7 @@ async def test_default_phase_keeps_the_legacy_message_and_soul(tmp_path):
     user_text = _last_user_text(messages)
     assert user_text == "讲讲 BFS"
     system = messages[0].get_text_content()
-    assert system.startswith(LEGACY_SOUL_PREFIX)
+    assert system.startswith(BASE_SOUL_PREFIX)
     assert "竞赛训练协议" not in system
     assert "训练阶段=" not in user_text
     assert _auto_memory_text(reme).count("训练阶段=") == 0

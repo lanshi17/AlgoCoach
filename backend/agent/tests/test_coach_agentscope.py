@@ -1,4 +1,4 @@
-"""AgentScope / ReMe migration tests for the /chat runtime.
+"""AgentScope / ReMe runtime tests for the /chat/stream runtime.
 
 No real model call is made: ``FakeChatModel`` is a deterministic AgentScope
 ``ChatModelBase`` double from ``conftest.py``, and ``RecordingReMe`` records the
@@ -52,21 +52,26 @@ def _make_coach(tmp_path, *, responses=None, search_results=None):
     return coach, model, reme
 
 
-async def test_chat_route_uses_agentscope_agent_and_stable_session(
+async def test_chat_stream_route_uses_agentscope_agent_and_stable_session(
     client, tmp_path, monkeypatch
 ):
     coach, model, reme = _make_coach(tmp_path)
     monkeypatch.setattr(router_module, "coach", coach)
 
     resp = await client.post(
-        "/chat",
-        json={"message": "讲讲 BFS", "mode": "PREP", "problemId": "bfs-1"},
+        "/chat/stream",
+        json={
+            "message": "讲讲 BFS", "mode": "PREP", "problemId": "bfs-1",
+            "conversationId": "test-page",
+        },
     )
 
     assert resp.status_code == 200
-    assert resp.json() == {"content": "好的", "animationId": None}
-    agent = coach._agents["default"]
-    assert agent.state.session_id == "default"
+    assert '"type": "done"' in resp.text
+    assert '"content": "好的"' in resp.text
+    assert len(coach._agents) == 1
+    agent = next(iter(coach._agents.values()))
+    assert agent.state.session_id.startswith("default-")
     assert len(model.calls) == 1
     # The public contract is unchanged, and FOCUS was not involved.
     assert reme.start_count == 1
@@ -96,12 +101,16 @@ async def test_focus_route_returns_before_model_memory_and_tools(
     monkeypatch.setattr(router_module, "coach", coach)
 
     resp = await client.post(
-        "/chat",
-        json={"message": message, "mode": "FOCUS", "problemId": "two-sum"},
+        "/chat/stream",
+        json={
+            "message": message, "mode": "FOCUS", "problemId": "two-sum",
+            "conversationId": "focus-page",
+        },
     )
 
     assert resp.status_code == 200
-    assert resp.json() == {"content": "", "animationId": None}
+    assert '"type": "done"' in resp.text
+    assert '"content": ""' in resp.text
     assert model.calls == []
     assert reme.start_count == 0
     assert reme.jobs == []

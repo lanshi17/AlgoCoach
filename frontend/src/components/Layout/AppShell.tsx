@@ -126,7 +126,6 @@ export default function AppShell() {
           <Route path="/knowledge" element={<KnowledgeGraphPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/platforms" element={<PlatformLoginPage />} />
-          <Route path="/settings/cookie" element={<Navigate to="/settings/platforms" replace />} />
           <Route path="*" element={<Navigate to="/workspace" replace />} />
         </Routes></Suspense>
       </div>

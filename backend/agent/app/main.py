@@ -2,7 +2,7 @@
 AlgoCoach — Python FastAPI agent service.
 
 Routes:
-  POST /chat          — main agent conversation endpoint
+  POST /chat/stream   — streaming agent conversation endpoint
   POST /animate       — request a prebuilt Remotion animation job
   POST /animate/generated — P2 sandboxed generated TSX (default off)
   GET  /animate/{id}  — poll animation job status
@@ -10,8 +10,8 @@ Routes:
   GET  /memory/profile — local progress and knowledge graph aggregates
   GET  /memory/export — ZIP download of local memories and indexes
 
-Startup runs the additive SQLite migration and starts the cron scheduler
-exactly once; shutdown stops it and closes the embedded ReMe app.
+Startup creates the current SQLite schema and starts the cron scheduler exactly
+once; shutdown stops it and closes the embedded ReMe app.
 ``ALGOCOACH_CRONS_ENABLED=false`` disables scheduled jobs for tests and local
 runs.
 """

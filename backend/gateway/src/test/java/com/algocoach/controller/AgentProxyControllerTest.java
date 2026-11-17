@@ -80,7 +80,7 @@ class AgentProxyControllerTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
-            "/chat",
+            "/chat/stream",
             "/memory/record",
             "/animate",
             "/animate/generated"
@@ -140,7 +140,7 @@ class AgentProxyControllerTest {
     void preservesQueryBodyContentTypeAndAuthorizationWhileDroppingOtherHeaders() throws Exception {
         upstreamResponse.set(jsonResponse(HttpStatus.OK, "{\"content\":\"hello\"}"));
 
-        performAsync(post(PREFIX + "/chat")
+        performAsync(post(PREFIX + "/chat/stream")
                 .queryParam("mode", "focus")
                 .queryParam("problemId", "two sum")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer token-1")
@@ -154,7 +154,7 @@ class AgentProxyControllerTest {
 
         MockClientHttpRequest request = captured.get();
         assertThat(request.getMethod()).isEqualTo(HttpMethod.POST);
-        assertThat(request.getURI().getPath()).isEqualTo("/chat");
+        assertThat(request.getURI().getPath()).isEqualTo("/chat/stream");
         assertThat(request.getURI().getRawQuery())
                 .isEqualTo("mode=focus&problemId=two%20sum");
         assertThat(request.getURI().getHost()).isEqualTo("agent.internal");
@@ -231,10 +231,10 @@ class AgentProxyControllerTest {
         upstreamFailure.set(new WebClientRequestException(
                 new ConnectException("Connection refused"),
                 HttpMethod.POST,
-                URI.create(BASE_URL + "/chat"),
+                URI.create(BASE_URL + "/chat/stream"),
                 new HttpHeaders()));
 
-        performAsync(post(PREFIX + "/chat")
+        performAsync(post(PREFIX + "/chat/stream")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"message\":\"hi\"}"))
                 .andExpect(status().isBadGateway())
@@ -246,7 +246,7 @@ class AgentProxyControllerTest {
     void requestCannotOverrideTheConfiguredBaseUrl() throws Exception {
         upstreamResponse.set(jsonResponse(HttpStatus.OK, "{}"));
 
-        performAsync(post(PREFIX + "/chat")
+        performAsync(post(PREFIX + "/chat/stream")
                 .queryParam("baseUrl", "http://evil.example")
                 .queryParam("agent.base-url", "http://evil.example")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -256,7 +256,7 @@ class AgentProxyControllerTest {
         URI upstream = captured.get().getURI();
         assertThat(upstream.getHost()).isEqualTo("agent.internal");
         assertThat(upstream.getPort()).isEqualTo(8000);
-        assertThat(upstream.getPath()).isEqualTo("/chat");
+        assertThat(upstream.getPath()).isEqualTo("/chat/stream");
     }
 
     @Test

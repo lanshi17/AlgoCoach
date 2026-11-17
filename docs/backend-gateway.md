@@ -132,7 +132,7 @@ HDU 没有标签与难度，`topics` 为空、难度按 `MEDIUM`；详情同样�
 `PlatformCookieController.java` 提供 `GET /api/platforms`（三平台登录态汇总）、
 `POST /api/platforms/{platform}/cookie` 与 `GET /api/platforms/{platform}/status`，支持 `ACWING` / `HDU`；
 保存时由 `util/CookieHeader` 从原始 Cookie 头或整段 cURL 中提取并去除控制字符（否则 Netty 会因
-`0xa` 等非法头字符回 502），读取时再做一次同样的规范化以兼容历史脏数据；Cookie 只写入本机 SQLite，
+`0xa` 等非法头字符回 502），读取时再做一次同样的规范化以保证数据格式一致；Cookie 只写入本机 SQLite，
 不回显、不写日志、不进入导出文件。
 
 ### `ProblemCacheService.java`
@@ -203,7 +203,7 @@ public class WebClientConfig {
 `isExpired()` 用当前时间判断，`isExpired(nowMillis)` 供测试注入时间。
 
 `@Table` 已声明索引 `idx_problem_cache_cached_at`（列为 `cached_at`），
-`ddl-auto: update` 启动时会为已有 `problem_cache` 表补建该索引。
+Hibernate 在创建当前 schema 时会建立该索引。
 
 **缓存策略**（`ProblemCacheService.getBySlug`）：
 1. 在 `Schedulers.boundedElastic()` 上查 SQLite（避免阻塞 Netty 线程）
@@ -215,8 +215,7 @@ public class WebClientConfig {
 `ProblemService`，三个端点的响应 JSON 形状保持不变。
 
 `ProblemCacheServiceTest` 覆盖：23h 命中无上游请求、miss 写入、25h 过期刷新；
-`ProblemCacheTest` 覆盖 24h TTL 边界；`ProblemCacheSchemaTest` 校验 `@Table` 的索引声明，
-并用临时 SQLite 库验证 `ddl-auto: update` 会在已有表上实际创建 `cached_at` 索引；
+`ProblemCacheTest` 覆盖 24h TTL 边界；
 `ProblemControllerTest` 固定“只有 bySlug 走缓存”的路由范围。
 
 ### 4.4 `SubmissionRecord.java`（✅ 已实现）
@@ -537,7 +536,7 @@ public class GlobalExceptionHandler {
 
 | 网关外部路径 | 上游路径 |
 |--------------|----------|
-| `POST /api/agent/chat` | `POST /chat` |
+| `POST /api/agent/chat/stream` | `POST /chat/stream` |
 | `POST /api/agent/memory/record` | `POST /memory/record` |
 | `GET /api/agent/memory/profile` | `GET /memory/profile` |
 | `GET /api/agent/memory/export` | `GET /memory/export` |
@@ -578,12 +577,6 @@ public class AgentProxyController {
                                 @Value("${agent.base-url}") String agentBaseUrl) {
         this.agentBaseUrl = normalizeBaseUrl(agentBaseUrl);
         this.agentClient = webClientBuilder.clone().build();
-    }
-
-    @PostMapping("/chat")
-    public Mono<ResponseEntity<byte[]>> chat(HttpServletRequest request,
-                                             @RequestBody(required = false) byte[] body) {
-        return forward(HttpMethod.POST, "/chat", request, body);
     }
 
     // /memory/record、/animate、/animate/generated 为同构的 POST 方法
@@ -854,8 +847,7 @@ CREATE INDEX idx_submission_created ON submission_record(created_at);
 
 | Method | Path | 上游 | Request | Response |
 |--------|------|------|---------|----------|
-| `POST` | `/api/agent/chat` | `POST /chat` | `{message, mode, problemId?, trainingPhase?, timeRemainingSec?}` | 上游原始 JSON |
-| `POST` | `/api/agent/chat/stream` | `POST /chat/stream` | 同 `/chat` | `text/event-stream`（thinking/text/done/error） |
+| `POST` | `/api/agent/chat/stream` | `POST /chat/stream` | `{message, mode, conversationId, problemId?, trainingPhase?, timeRemainingSec?}` | `text/event-stream`（thinking/text/done/error） |
 | `POST` | `/api/agent/memory/record` | `POST /memory/record` | `MemoryRecordRequest` | 上游原始 JSON |
 | `POST` | `/api/agent/animate` | `POST /animate` | `{type, topic?, title?, problemId?}` | 上游原始 JSON |
 | `POST` | `/api/agent/animate/generated` | `POST /animate/generated` | `GeneratedAnimationRequest` + `Authorization: Bearer <token>` | 上游原始 JSON |
@@ -966,7 +958,6 @@ src/test/java/com/algocoach/
 │   └── WebClientConfigTest.java     # 已实现：Builder 单例 + 5s/15s 超时 + 自动配置无冲突
 ├── model/
 │   ├── ProblemCacheTest.java        # 已实现：24h TTL 边界（23h / 24h / 24h+1ms）
-│   ├── ProblemCacheSchemaTest.java  # 已实现：cached_at 索引声明与 ddl-auto 建索引
 │   ├── SubmissionRecordTest.java    # 已实现：表名/索引/列映射/非空与可空
 │   └── SubmissionRecordPersistenceTest.java # 已实现：SQLite 持久化/UUID/NOT NULL
 ├── repository/
@@ -1028,7 +1019,7 @@ P1 实际运行的聚焦用例（`SubmissionServiceTest` / `SubmissionController
 P2 实际运行的聚焦用例（`AgentProxyControllerTest`，fake `ExchangeFunction` + MockMvc，
 不访问真实 Python 服务）：
 
-- `postRoutesForwardToTheirFixedUpstreamPath`（参数化）：`/chat`、`/memory/record`、
+- `postRoutesForwardToTheirFixedUpstreamPath`（参数化）：`/chat/stream`、`/memory/record`、
   `/animate`、`/animate/generated` 分别以 POST 转发到同名上游路径。
 - `getAnimateStatusForwardsJobIdAndQueryString`：GET `/api/agent/animate/job-42?verbose=true`
   转发为 `/animate/job-42`，路径参数与原始 query 均保留。

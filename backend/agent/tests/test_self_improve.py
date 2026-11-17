@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import select, text
+from sqlalchemy import select
 
 from app.agent import crons, self_improve
 from app.agent.coach import TOOLS, AlgoCoach
@@ -37,8 +37,6 @@ from app.memory.db import (
     RecommendationLog,
     SemanticNode,
     SessionLocal,
-    engine,
-    init_db,
 )
 from app.memory.memory_service import memory
 from app.memory.vector_store import VectorStoreUnavailable
@@ -152,99 +150,6 @@ def _field(trigger, name: str) -> list[str]:
         if field.name == name:
             return [str(expression) for expression in field.expressions]
     raise AssertionError(f"missing trigger field {name}")
-
-
-# ── Schema / migration ────────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_recommendation_log_migration_is_rerunnable_and_preserves_rows():
-    legacy_created = NOW - timedelta(days=8)
-    async with engine.begin() as conn:
-        await conn.execute(text("DROP TABLE recommendation_log"))
-        await conn.execute(text(
-            "CREATE TABLE recommendation_log ("
-            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-            "topic VARCHAR(64) NOT NULL, "
-            "problem_id VARCHAR(64), "
-            "mastery_before FLOAT NOT NULL, "
-            "created_at VARCHAR(32) NOT NULL, "
-            "evaluated_at VARCHAR(32), "
-            "score INTEGER)"
-        ))
-        await conn.execute(
-            text(
-                "INSERT INTO recommendation_log "
-                "(topic, problem_id, mastery_before, created_at) "
-                "VALUES ('DP', 'coin-change', 0.5, :created)"
-            ),
-            {"created": _iso(legacy_created)},
-        )
-        # A row evaluated by the previous revision keeps its score and must
-        # not gain a fabricated audit snapshot.
-        await conn.execute(
-            text(
-                "INSERT INTO recommendation_log "
-                "(topic, problem_id, mastery_before, created_at, evaluated_at, score) "
-                "VALUES ('Array', 'two-sum', 0.4, :created, :evaluated, 1)"
-            ),
-            {
-                "created": _iso(legacy_created),
-                "evaluated": _iso(legacy_created + timedelta(days=7)),
-            },
-        )
-
-    await init_db()
-    await init_db()  # rerunnable
-
-    async with engine.connect() as conn:
-        columns = {
-            row[1]
-            for row in (
-                await conn.execute(text("PRAGMA table_info(recommendation_log)"))
-            ).fetchall()
-        }
-        indexes = {
-            row[1]
-            for row in (
-                await conn.execute(text("PRAGMA index_list(recommendation_log)"))
-            ).fetchall()
-        }
-        rows = (
-            await conn.execute(text(
-                "SELECT id, topic, problem_id, strategy, evaluation_due_at, outcome, "
-                "mastery_after FROM recommendation_log"
-            ))
-        ).fetchall()
-
-    assert {
-        "id", "strategy", "topic", "problem_id", "mastery_before", "created_at",
-        "evaluation_due_at", "evaluated_at", "score", "outcome", "mastery_after",
-    } <= columns
-    assert "ix_recommendation_log_due" in indexes
-    assert len(rows) == 2
-    rec_id, topic, problem_id, strategy, due_at, outcome, mastery_after = rows[0]
-    assert (topic, problem_id) == ("DP", "coin-change")
-    assert strategy == "" and due_at == "" and outcome is None
-    assert mastery_after is None  # legacy rows keep a NULL audit snapshot
-    already_id, already_topic = rows[1][0], rows[1][1]
-    assert already_topic == "Array"
-    assert rows[1][6] is None
-
-    # A legacy row with blank due time is still evaluable: the window falls
-    # back to created_at + 7 days, and no activity means abandoned.
-    assert await evaluate_recommendation(rec_id, now=NOW) == -1
-    row = await _row(rec_id)
-    assert row.outcome == OUTCOME_ABANDONED
-    assert row.evaluated_at == _iso(NOW)
-    assert row.mastery_after == 0.5  # no events: rebuilt at the baseline
-
-    # A previously evaluated legacy row is idempotent and keeps its NULL
-    # audit snapshot (no fabricated mastery_after).
-    assert await evaluate_recommendation(already_id, now=NOW) == 1
-    already = await _row(already_id)
-    assert already.evaluated_at == _iso(legacy_created + timedelta(days=7))
-    assert already.mastery_after is None
 
 
 # ── Mastery lookup and logging ───────────────────────────────

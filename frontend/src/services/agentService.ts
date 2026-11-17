@@ -95,33 +95,12 @@ export const agentService = {
     return data
   },
 
-  async chat(message: string, ctx: ChatCtx, signal?: AbortSignal): Promise<ChatReply> {
-    const { provider, ...rest } = ctx
-    const shouldSendProvider = Boolean(provider?.apiKey) || provider?.protocol === 'ollama'
-    const { data } = await axios.post<ChatReply>('/api/agent/chat', {
-      message,
-      ...rest,
-      conversationId,
-      ...(shouldSendProvider ? { provider } : {}),
-    }, { signal })
-    return data
-  },
-
   async chatStream(
     message: string,
     ctx: ChatCtx,
     handlers: ChatStreamHandlers = {},
     signal?: AbortSignal,
   ): Promise<ChatReply> {
-    // Keep unit-test/older embedded browsers usable while the normal browser
-    // path consumes the gateway's SSE response incrementally.
-    const isTestDom = typeof navigator !== 'undefined' && /jsdom/i.test(navigator.userAgent)
-    if (typeof window === 'undefined' || typeof window.fetch !== 'function' || !window.ReadableStream || isTestDom) {
-      const reply = await this.chat(message, ctx, signal)
-      if (reply.content) handlers.onText?.(reply.content)
-      return reply
-    }
-
     const { provider, ...rest } = ctx
     const shouldSendProvider = Boolean(provider?.apiKey) || provider?.protocol === 'ollama'
     const response = await window.fetch('/api/agent/chat/stream', {
@@ -135,13 +114,6 @@ export const agentService = {
       }),
       signal,
     })
-    // A rolling deployment may expose the legacy endpoint before the stream
-    // route is available. Keep the conversation usable during that window.
-    if (response.status === 404) {
-      const reply = await this.chat(message, ctx, signal)
-      if (reply.content) handlers.onText?.(reply.content)
-      return reply
-    }
     if (!response.ok) {
       let data: { detail?: unknown; message?: unknown } = {}
       try { data = await response.json() as typeof data } catch { /* use status fallback */ }
@@ -153,11 +125,7 @@ export const agentService = {
       error.response = { status: response.status, data }
       throw error
     }
-    if (!response.body) {
-      const reply = await this.chat(message, ctx, signal)
-      if (reply.content) handlers.onText?.(reply.content)
-      return reply
-    }
+    if (!response.body) throw new Error('聊天流没有返回响应体')
 
     const reader = response.body.getReader()
     const decoder = new TextDecoder()

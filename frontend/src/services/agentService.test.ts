@@ -85,19 +85,6 @@ describe('focus chat guard', () => {
     expect(canCommitChatReply('PREP', 'PREP', false)).toBe(true)
   })
 
-  it('passes an AbortSignal to the chat request', async () => {
-    const controller = new AbortController()
-    const post = vi.spyOn(axios, 'post').mockResolvedValue({ data: { content: 'ok' } })
-
-    await agentService.chat('hello', { mode: 'PREP' }, controller.signal)
-
-    expect(post).toHaveBeenCalledWith(
-      '/api/agent/chat',
-      expect.objectContaining({ message: 'hello', mode: 'PREP' }),
-      { signal: controller.signal },
-    )
-  })
-
   it('parses streamed thinking and answer deltas', async () => {
     const nativeFetch = window.fetch
     const nativeReadableStream = (window as unknown as { ReadableStream?: typeof ReadableStream }).ReadableStream
@@ -134,13 +121,19 @@ describe('focus chat guard', () => {
   })
 
   it('uses a stable conversation identifier for requests in this page', async () => {
-    const post = vi.spyOn(axios, 'post').mockResolvedValue({ data: { content: 'ok' } })
-    await agentService.chat('first', { mode: 'IDLE' })
-    await agentService.chat('second', { mode: 'IDLE' })
-    const first = post.mock.calls[0][1] as { conversationId: string }
-    const second = post.mock.calls[1][1] as { conversationId: string }
+    const nativeFetch = window.fetch
+    const fetch = vi.fn().mockImplementation(() => new Response(
+      'data: {"type":"done","content":"ok","animation_id":null}\n\n',
+      { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+    ))
+    Object.defineProperty(window, 'fetch', { configurable: true, value: fetch })
+    await agentService.chatStream('first', { mode: 'IDLE' })
+    await agentService.chatStream('second', { mode: 'IDLE' })
+    const first = JSON.parse(fetch.mock.calls[0][1].body as string) as { conversationId: string }
+    const second = JSON.parse(fetch.mock.calls[1][1].body as string) as { conversationId: string }
     expect(first.conversationId).toEqual(expect.any(String))
     expect(second.conversationId).toBe(first.conversationId)
+    Object.defineProperty(window, 'fetch', { configurable: true, value: nativeFetch })
   })
 
   it('deduplicates concurrent profile reads and releases the request after failure', async () => {

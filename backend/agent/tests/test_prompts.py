@@ -1,6 +1,6 @@
 """Pure unit tests for the centralized system prompts.
 
-No model, gateway, database or vector store is touched here. The legacy Soul is
+No model, gateway, database or vector store is touched here. The base Soul is
 pinned verbatim so a refactor cannot silently change FOCUS silence, the PREP /
 REVIEW tool guidance, the Chinese style or the ``{memory_context}`` slot.
 """
@@ -23,7 +23,7 @@ from app.agent.prompts import (
 
 # Verbatim copy of the Soul that used to live in coach.py. This is a regression
 # pin, not a second source of truth: prompt changes must update it explicitly.
-LEGACY_SOUL = """你是 AlgoCoach，一个个性化算法刷题教练。
+BASE_SOUL = """你是 AlgoCoach，一个个性化算法刷题教练。
 
 你的核心原则：
 1. 做题前（PREP）：主动讲解题目涉及的知识点，调用 request_animation 生成可视化动画，帮助用户建立直觉理解；需要题目原文时调用 fetch_problem_meta
@@ -42,10 +42,10 @@ LEGACY_SOUL = """你是 AlgoCoach，一个个性化算法刷题教练。
 当介绍新知识点时，优先通过动画可视化而不只是文字描述。"""
 
 
-def test_default_prompt_is_the_legacy_soul_verbatim():
-    assert SOUL == LEGACY_SOUL
-    assert get_system_prompt() == LEGACY_SOUL
-    assert get_system_prompt(DEFAULT_GOAL) == LEGACY_SOUL
+def test_default_prompt_is_the_base_soul_verbatim():
+    assert SOUL == BASE_SOUL
+    assert get_system_prompt() == BASE_SOUL
+    assert get_system_prompt(DEFAULT_GOAL) == BASE_SOUL
     # The caller still renders the memory snapshot into the same placeholder.
     rendered = SOUL.format(memory_context='{"weak": []}')
     assert '{"weak": []}' in rendered
@@ -60,8 +60,8 @@ def test_disabled_animations_remove_only_the_animation_guidance():
     assert "绝对不主动发言" in prompt
     assert "record_sticking_points" in prompt
     assert "{memory_context}" in prompt
-    # Opting in restores the legacy Soul verbatim.
-    assert get_system_prompt(animations=True) == LEGACY_SOUL
+    # Opting in restores the base Soul verbatim.
+    assert get_system_prompt(animations=True) == BASE_SOUL
     # Goal variants inherit the same stripping.
     assert "request_animation" not in get_system_prompt(
         UserGoal.CONTEST, animations=False
@@ -73,10 +73,11 @@ def test_coach_style_appends_its_guidance():
     direct = get_system_prompt(coach_style="direct")
     assert "先反问" in socratic
     assert "直接给出结论" in direct
-    # Auto (and unknown values) keep the legacy Soul without extra guidance.
-    assert get_system_prompt(coach_style="auto") == LEGACY_SOUL
-    assert get_system_prompt(coach_style="wild") == LEGACY_SOUL
-    assert get_system_prompt(coach_style=None) == LEGACY_SOUL
+    # Auto keeps the base Soul; invalid styles are rejected.
+    assert get_system_prompt(coach_style="auto") == BASE_SOUL
+    with pytest.raises(ValueError):
+        get_system_prompt(coach_style="wild")
+    assert get_system_prompt(coach_style=None) == BASE_SOUL
 
 
 def test_default_prompt_keeps_mode_and_style_rules():
@@ -95,9 +96,9 @@ def test_each_goal_selects_its_own_variant():
     for goal in UserGoal:
         prompt = get_system_prompt(goal)
         # Variants extend the untouched base instead of rewriting it.
-        assert prompt.startswith(LEGACY_SOUL)
+        assert prompt.startswith(BASE_SOUL)
         assert GOAL_GUIDANCE[goal] in prompt
-        assert prompt != LEGACY_SOUL
+        assert prompt != BASE_SOUL
         # The appended emphasis must not weaken FOCUS silence or tool guidance.
         assert "FOCUS" in prompt
         assert "绝对不主动发言" in prompt
@@ -121,13 +122,17 @@ def test_goal_guidance_matches_the_requested_emphasis():
     assert GOAL_GUIDANCE[UserGoal.CASUAL] not in interview
 
 
-@pytest.mark.parametrize(
-    "goal",
-    [None, "", "unknown_goal", "interview-prep", "Interview_Prep", 42],
-)
-def test_unknown_or_missing_goal_falls_back_to_default(goal):
-    assert resolve_goal(goal) is None
-    assert get_system_prompt(goal) == LEGACY_SOUL
+def test_missing_goal_uses_the_base_soul():
+    assert resolve_goal(None) is None
+    assert get_system_prompt(None) == BASE_SOUL
+
+
+@pytest.mark.parametrize("goal", ["", "unknown_goal", "interview-prep", "Interview_Prep", 42])
+def test_unknown_goal_is_rejected(goal):
+    with pytest.raises(ValueError):
+        resolve_goal(goal)
+    with pytest.raises(ValueError):
+        get_system_prompt(goal)
 
 
 def test_known_goal_strings_resolve_to_enum_members():
@@ -184,6 +189,6 @@ async def test_chat_sends_the_default_soul_to_the_model(tmp_path, monkeypatch):
         memory_context=json.dumps({"weak_topics": ["DP"]}, ensure_ascii=False, indent=2)
     )
     assert system.startswith(expected)
-    assert system.startswith(LEGACY_SOUL.split("{memory_context}")[0])
+    assert system.startswith(BASE_SOUL.split("{memory_context}")[0])
     # ReMe's "both" mode appends its memory_search instructions after the Soul.
     assert "memory_search" in system

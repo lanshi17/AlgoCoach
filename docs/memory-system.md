@@ -37,13 +37,13 @@ Agent(state=AgentState(session_id=session_id))
 
 **静态算法知识库**：Agent 启动时从仓库根目录的 `01-算法套路.md.zip` 幂等生成 Markdown，放到 ReMe 的 `digest/wiki/algorithm-library/`。历史编辑器题解已经存入 ReMe workspace，不再随代码仓库或容器镜像保留。ReMeMiddleware 同时启用本地 MiniLM 向量模型（384 维，复用 Chroma 的 ONNX `all-MiniLM-L6-v2`）和 BM25 关键词索引，向量索引保存在 ReMe workspace 的 metadata 下；首次创建 ReMeMiddleware 时，Coach 在第一次搜索前显式调用 ReMe `reindex` job，避免后台 watcher 首轮扫描尚未结束造成漏检。检索能命中算法套路原文、图像引用以及已存在的历史题解和代码模板。设置 `REME_VECTOR_ENABLED=false` 可退回纯关键词模式。导入器只清理自己登记的笔记文件，不改写其他日记、摘要、记忆卡或既有历史题解。导入清单和生成结果均位于该知识库子目录。
 
-**用户目标**：设置页将 `contest` / `interview_prep` / `casual` 偏好写入浏览器本地存储，每次 `/chat` 通过 `goal` 字段发送；Agent 不建立额外用户配置表。
+**用户目标**：设置页将 `contest` / `interview_prep` / `casual` 偏好写入浏览器本地存储，每次 `/chat/stream` 通过 `goal` 字段发送；Agent 不建立额外用户配置表。
 
 **session_id 管理**：
 - 前端模块每个页面生命周期生成一个 `conversationId`，不持久化；刷新后可见聊天历史与短期 AgentState 同时从新会话开始。
 - 每个页面/题目的 AgentState session id 由 `ALGOCOACH_SESSION_ID` 前缀和 `[conversationId, platform, problemId]` 的 SHA-256 派生；IDLE/PREP/REVIEW 共享同一训练对话，当前模式每轮更新到系统提示。FOCUS 在模型和记忆调用前直接返回，不污染对话状态。
 - `ALGOCOACH_SESSION_ID` 仅作为本地部署的命名空间前缀。ReMe 仍共享本地 workspace，自动检索可跨题召回长期记忆。
-- 兼容旧客户端：没有 `conversationId`，但同时提供 `platform` 与 `problemId` 时按题目派生 session；否则沿用配置前缀。同一题目的不同训练阶段仍保持连续上下文。
+- 每次请求都携带页面 `conversationId`；路由将其与平台和题目标识派生 AgentScope session。同一题目的不同训练阶段保持连续上下文。
 
 ---
 
@@ -183,7 +183,7 @@ def find_similar_problems(problem_text: str, top_k: int = 5):
 - **返回边界**：query 默认 `top_k=5`、上限 10，document 截断到 500 字符；coach 的 `get_similar_problems` 进一步限制为最多 5 条。
 - **metadata**：`id` / `problem_id` / `title` / `topic` / `platform` / `created_at`（题目另有 `difficulty`），可用于等值过滤。
 - **降级**：chromadb 缺失或本地目录损坏时，相似题 tool 返回错误而不是让对话失败；索引失败只记日志。
-- **迁移**：同一 collection 不能混用不同维度 embedding；更换模型后需清空并重建 `CHROMA_PATH`，当前无自动迁移。
+- **向量索引约束**：同一 collection 不能混用不同维度 embedding；更换模型后需清空并重建 `CHROMA_PATH`。
 
 ---
 
@@ -516,4 +516,4 @@ CREATE TABLE recommendation_log (
 
 ### 9.7 测试
 
-`backend/agent/tests/test_self_improve.py` 使用隔离临时 SQLite 与确定性 fake 向量库，覆盖迁移重跑（含 `mastery_after` 旧行 NULL）、未知 mastery 默认值、成功/失败/中性/弃做/窗口未到、阈值边界、按时间/id 重放、延迟到第 10 天评估时第 8–9 天活动与 live mastery 均不影响分数、due 边界事件、并发与重试幂等、批量重跑、topic-only 与具体题推荐、月度样本分母、归档行参与窗口重建、调度器重复注册/时区与 cron 入口；不调用真实 LLM、HTTP 或 Chroma embedding 模型。
+`backend/agent/tests/test_self_improve.py` 使用隔离临时 SQLite 与确定性 fake 向量库，覆盖 7 天窗口重建（含 `mastery_after`）、未知 mastery 默认值、成功/失败/中性/弃做/窗口未到、阈值边界、按时间/id 重放、延迟到第 10 天评估时第 8–9 天活动与 live mastery 均不影响分数、due 边界事件、并发与重试幂等、批量重跑、topic-only 与具体题推荐、月度样本分母、归档行参与窗口重建、调度器重复注册/时区与 cron 入口；不调用真实 LLM、HTTP 或 Chroma embedding 模型。

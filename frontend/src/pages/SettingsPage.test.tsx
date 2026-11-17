@@ -58,7 +58,7 @@ describe('provider setup return path', () => {
 
     expect(element.querySelector('[data-testid="return-target"]')?.textContent).toBe('chat')
     expect(useAppStore.getState().provider.apiKey).toBe('test-session-key')
-    expect(sessionStorage.getItem('algocoach.provider.apiKey')).toBe('test-session-key')
+    expect(sessionStorage.getItem('algocoach.provider.apiKey.anthropic')).toBe('test-session-key')
     expect(localStorage.getItem('algocoach.provider')).not.toContain('test-session-key')
   })
 

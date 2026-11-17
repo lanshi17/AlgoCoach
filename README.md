@@ -30,8 +30,8 @@ data/              SQLite 数据库 + 渲染出的 MP4 动画
 - **程序记忆** — 用户常见错误模式，SQLite `procedural` 表
 - **向量记忆** — 题目题干、知识点解释与卡点 embedding，存本地 ChromaDB（`CHROMA_PATH`），用于相似题推荐与重复错误检索；只写本机，默认使用本地 embedding 模型，不调用云 embedding API
 - **自我改进回测** — 记录推荐并在 7 天窗口后按训练事件评估效果，提供月度策略汇总；只生成分析结果，不自动修改 prompt 或推荐权重。
-- **Prompt 目标** — 提供 `interview_prep`、`contest`、`casual` 三种系统提示词目标；竞赛训练阶段通过 `/chat` 请求选择。
-- **OI / xCPC 训练协议** — `/chat` 支持 `virtual_contest`、`topic_drill`、`attempt`、`hint`、`review`、`upsolve` 阶段和剩余时间提醒，指导读题建模、约束推导、部分得分、逐级提示与赛后复盘。
+- **Prompt 目标** — 提供 `interview_prep`、`contest`、`casual` 三种系统提示词目标；竞赛训练阶段通过 `/chat/stream` 请求选择。
+- **OI / xCPC 训练协议** — `/chat/stream` 支持 `virtual_contest`、`topic_drill`、`attempt`、`hint`、`review`、`upsolve` 阶段和剩余时间提醒，指导读题建模、约束推导、部分得分、逐级提示与赛后复盘。
 - **模型 Provider** — 设置页提供 OMP 风格的主流 Provider 预设与自定义 OpenAI/Anthropic-compatible 端点；API key 仅在当前浏览器会话中使用，不写入训练导出或 Git。
 - **题库与专项训练** — LeetCode 按专项（动态规划、图论、二分……）和难度筛选，列表与题面来自 GraphQL；AcWing 作为额外渠道，专项映射到其算法标签（走站内搜索），打开题目附六语言 starter 模板，需要配置 Cookie；杭电 HDU 提供题单浏览与题面，可匿名浏览。运行/提交仍只支持 LeetCode。
 
@@ -39,7 +39,7 @@ Submit 后只把判题事实、用时和题目标签发给 Agent；提交源码�
 
 ## Remotion 动画组件
 
-可选功能，默认关闭（`REMOTION_ENABLED=true` 启用）。关闭时 coach 不注册 `request_animation` tool、Soul 去掉动画指引、`POST /animate` 返回 503 `AnimationDisabled`——每次 `/chat` 因此少一份工具 schema 与提示词 token。
+可选功能，默认关闭（`REMOTION_ENABLED=true` 启用）。关闭时 coach 不注册 `request_animation` tool、Soul 去掉动画指引、`POST /animate` 返回 503 `AnimationDisabled`——每次 `/chat/stream` 因此少一份工具 schema 与提示词 token。
 
 Agent 通过 `request_animation` tool 主动触发，渲染后嵌入聊天面板。
 

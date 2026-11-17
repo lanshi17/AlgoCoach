@@ -14,7 +14,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import select, text
+from sqlalchemy import select
 
 from app.agent import crons
 from app.memory.db import (
@@ -24,8 +24,6 @@ from app.memory.db import (
     ReviewSchedule,
     SemanticNode,
     SessionLocal,
-    engine,
-    init_db,
 )
 from app.main import app
 from app.memory.memory_service import memory, next_review_interval_days
@@ -179,36 +177,6 @@ async def test_disabled_crons_do_not_start(monkeypatch):
     monkeypatch.setenv("ALGOCOACH_CRONS_ENABLED", "false")
     assert await crons.start_crons() is None
     assert crons.get_scheduler() is None
-
-
-@pytest.mark.asyncio
-async def test_init_db_migrates_old_notifications_table():
-    async with engine.begin() as conn:
-        await conn.execute(text("DROP TABLE notifications"))
-        await conn.execute(text(
-            "CREATE TABLE notifications ("
-            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-            "type VARCHAR(32), content TEXT, created_at VARCHAR(32))"
-        ))
-
-    await init_db()
-    await init_db()  # rerunnable
-
-    async with engine.connect() as conn:
-        columns = {
-            row[1]
-            for row in (
-                await conn.execute(text("PRAGMA table_info(notifications)"))
-            ).fetchall()
-        }
-        indexes = {
-            row[1]
-            for row in (
-                await conn.execute(text("PRAGMA index_list(notifications)"))
-            ).fetchall()
-        }
-    assert {"dedupe_key", "read"} <= columns
-    assert "ix_notifications_dedupe_key" in indexes
 
 
 # ── Daily problem ─────────────────────────────────────────────

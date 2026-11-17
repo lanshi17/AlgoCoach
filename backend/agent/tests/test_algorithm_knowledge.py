@@ -55,12 +55,12 @@ def test_reimport_removes_only_previously_imported_stale_files(tmp_path):
     seed_algorithm_knowledge(source_dir=sources, workspace_dir=workspace)
 
     library = workspace / "digest/wiki/algorithm-library"
-    legacy_solution = library / "solutions/legacy.cpp.md"
-    legacy_solution.parent.mkdir(parents=True)
-    legacy_solution.write_text("Stored historical solution", encoding="utf-8")
+    stored_solution = library / "solutions/stored.cpp.md"
+    stored_solution.parent.mkdir(parents=True)
+    stored_solution.write_text("Stored historical solution", encoding="utf-8")
     manifest_path = library / ".source-manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["files"].append("solutions/legacy.cpp.md")
+    manifest["files"].append("solutions/stored.cpp.md")
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
     with zipfile.ZipFile(sources / "01-算法套路.md.zip", "w") as archive:
@@ -72,5 +72,5 @@ def test_reimport_removes_only_previously_imported_stale_files(tmp_path):
 
     assert update.removed == 2
     assert not (library / "notes/01-算法套路/广度优先搜索.md").exists()
-    assert legacy_solution.read_text(encoding="utf-8") == "Stored historical solution"
+    assert stored_solution.read_text(encoding="utf-8") == "Stored historical solution"
     assert (library / "manual-note.md").read_text(encoding="utf-8").startswith("Manual ReMe")

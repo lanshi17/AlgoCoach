@@ -373,8 +373,11 @@ def _created_time(rec: RecommendationLog) -> datetime:
 
 
 def _due_time(rec: RecommendationLog) -> datetime:
-    """Stored due time, derived from ``created_at`` for legacy blank rows."""
-    return _parse_iso(rec.evaluation_due_at) or evaluation_due_at(_created_time(rec))
+    """Return the stored evaluation deadline."""
+    due = _parse_iso(rec.evaluation_due_at)
+    if due is None:
+        raise ValueError(f"recommendation {rec.id} has no valid evaluation deadline")
+    return due
 
 
 def _as_dict(row: RecommendationLog) -> dict:
@@ -680,20 +683,14 @@ async def monthly_strategy_review(now: datetime | None = None) -> dict:
 
 
 def _outcome_key(row: RecommendationLog) -> str:
-    """Count an evaluated row, tolerating legacy rows that only stored a score."""
+    """Return the normalized outcome bucket for a completed recommendation."""
     outcome = (row.outcome or "").strip()
-    if outcome in {
+    return outcome if outcome in {
         OUTCOME_IMPROVED,
         OUTCOME_NEUTRAL,
         OUTCOME_DECLINED,
         OUTCOME_ABANDONED,
-    }:
-        return outcome
-    if row.score == 1:
-        return OUTCOME_IMPROVED
-    if row.score == -1:
-        return OUTCOME_DECLINED
-    return OUTCOME_NEUTRAL
+    } else OUTCOME_NEUTRAL
 
 
 def _build_suggestions(strategies: list[dict]) -> list[str]:

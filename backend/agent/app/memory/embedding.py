@@ -12,7 +12,7 @@ import asyncio
 import threading
 import time
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, cast
 
 from agentscope.credential import CredentialBase
 from agentscope.embedding import EmbeddingModelBase, EmbeddingResponse, EmbeddingUsage
@@ -43,15 +43,21 @@ class LocalChromaEmbeddingModel(EmbeddingModelBase[str]):
         self._embedding_lock = threading.Lock()
 
     def _get_embedding_function(self) -> Callable[[list[str]], Sequence[Sequence[float]]]:
-        if self._embedding_function is None:
+        function = self._embedding_function
+        if function is None:
             with self._embedding_lock:
                 if self._embedding_function is None:
                     from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
                     # Chroma lazily downloads its ONNX model on the first call;
                     # constructing the function itself is local and cheap.
-                    self._embedding_function = DefaultEmbeddingFunction()
-        return self._embedding_function
+                    self._embedding_function = cast(
+                        Callable[[list[str]], Sequence[Sequence[float]]],
+                        DefaultEmbeddingFunction(),
+                    )
+                function = self._embedding_function
+        assert function is not None
+        return function
 
     async def _call_api(self, inputs: list[str], **_: Any) -> EmbeddingResponse:
         started = time.perf_counter()

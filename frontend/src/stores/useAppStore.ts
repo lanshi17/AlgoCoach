@@ -10,23 +10,16 @@ const CHAT_PHASES_KEY = 'algocoach.chatPhases'
 const TIME_LIMITS_KEY = 'algocoach.problemTimeLimits'
 const COACH_PREFS_KEY = 'algocoach.coachPrefs'
 const FOCUS_TIMES_KEY = 'algocoach.problemFocusElapsed'
-const PROVIDER_API_KEY_KEY = 'algocoach.provider.apiKey'
-const PROVIDER_API_KEY_PREFIX = `${PROVIDER_API_KEY_KEY}.`
+const PROVIDER_API_KEY_PREFIX = 'algocoach.provider.apiKey.'
 
 function providerApiKeyStorageKey(providerId: string): string {
   return `${PROVIDER_API_KEY_PREFIX}${encodeURIComponent(providerId || 'custom')}`
 }
 
-/**
- * Provider credentials are session-only and scoped to the selected preset.
- * The unscoped key is kept as a one-time compatibility fallback for older
- * sessions that stored only one active key.
- */
-export function readProviderApiKey(providerId: string, includeLegacy = false): string {
+/** Provider credentials are session-only and scoped to the selected preset. */
+export function readProviderApiKey(providerId: string): string {
   try {
-    const scoped = window.sessionStorage.getItem(providerApiKeyStorageKey(providerId))
-    if (scoped !== null) return scoped
-    return includeLegacy ? window.sessionStorage.getItem(PROVIDER_API_KEY_KEY) ?? '' : ''
+    return window.sessionStorage.getItem(providerApiKeyStorageKey(providerId)) ?? ''
   } catch {
     return ''
   }
@@ -222,17 +215,8 @@ const INITIAL_TEST_INPUT = INITIAL_DRAFT?.testInput
 function initialProvider(): ModelProviderConfig {
   try {
     const saved = window.localStorage.getItem('algocoach.provider')
-    // One-time migration for selections stored before the Chat Completions
-    // default. Mark it before any early return so a later explicit Responses
-    // choice survives, including on a fresh profile that saves after this load.
-    const needsMigration = window.localStorage.getItem('algocoach.provider.commandcode-protocol-migrated') !== 'true'
-    if (needsMigration) {
-      try {
-        window.localStorage.setItem('algocoach.provider.commandcode-protocol-migrated', 'true')
-      } catch { /* keep the migrated provider usable when storage is unavailable */ }
-    }
     if (!saved) {
-      const apiKey = readProviderApiKey(DEFAULT_PROVIDER.id, true)
+      const apiKey = readProviderApiKey(DEFAULT_PROVIDER.id)
       const provider = { ...DEFAULT_PROVIDER, apiKey }
       if (apiKey) saveProvider(provider)
       return provider
@@ -240,16 +224,8 @@ function initialProvider(): ModelProviderConfig {
 
     const metadata = JSON.parse(saved) as Partial<ModelProviderConfig>
     const providerId = typeof metadata.id === 'string' && metadata.id ? metadata.id : DEFAULT_PROVIDER.id
-    const apiKey = readProviderApiKey(providerId, true)
+    const apiKey = readProviderApiKey(providerId)
     const provider = { ...DEFAULT_PROVIDER, ...metadata, apiKey } as ModelProviderConfig
-    const migrateProtocol = needsMigration && provider.id === 'commandcode-goat' && provider.protocol === 'openai-response'
-    if (migrateProtocol) provider.protocol = 'openai'
-    // saveProvider is the one writer for provider persistence: reuse it for the
-    // one-time migration and for backfilling a legacy session key instead of
-    // duplicating the storage layout here.
-    if (migrateProtocol || (apiKey && window.sessionStorage.getItem(providerApiKeyStorageKey(providerId)) === null)) {
-      saveProvider(provider)
-    }
     return provider
   } catch { return DEFAULT_PROVIDER }
 }
@@ -260,11 +236,8 @@ function saveProvider(provider: ModelProviderConfig) {
     window.localStorage.setItem('algocoach.provider', JSON.stringify(metadata))
     if (apiKey) {
       window.sessionStorage.setItem(providerApiKeyStorageKey(provider.id), apiKey)
-      // Keep the old key for clients from the previous single-provider format.
-      window.sessionStorage.setItem(PROVIDER_API_KEY_KEY, apiKey)
     } else {
       window.sessionStorage.removeItem(providerApiKeyStorageKey(provider.id))
-      window.sessionStorage.removeItem(PROVIDER_API_KEY_KEY)
     }
   } catch { /* optional provider preference storage */ }
 }

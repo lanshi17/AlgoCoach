@@ -31,10 +31,9 @@ class UserGoal(str, Enum):
 
 
 class TrainingPhase(str, Enum):
-    """OI / xCPC training stance carried by one ``POST /chat`` request.
+    """OI / xCPC training stance carried by one ``POST /chat/stream`` request.
 
-    ``AUTO`` keeps the legacy, phase-neutral behaviour and is also the fallback
-    for every unknown or blank value, so a stale client cannot break a chat.
+    ``AUTO`` is the phase-neutral default for ordinary coaching turns.
     """
 
     AUTO = "auto"
@@ -81,7 +80,7 @@ SOUL = """你是 AlgoCoach，一个个性化算法刷题教练。
 
 
 # Real OI / xCPC training protocol. It is appended to the contest goal only, so
-# interview/casual coaching and the legacy default Soul keep their old text.
+# interview/casual coaching and the default Soul keep their own text.
 CONTEST_PROTOCOL = """竞赛训练协议（OI / xCPC 赛制）：
 - 读题：先完整读题再动笔，复述输入输出、数据范围、时间与内存限制、取模和多测要求；不确定的地方先标记，不要凭印象猜。
 - 分类：判断题型与经典模型（贪心、DP、图论、数据结构、数学、构造、搜索、字符串等），并说明本题与模板题的差异。
@@ -155,38 +154,29 @@ GOAL_GUIDANCE: dict[UserGoal, str] = {
 
 
 def resolve_goal(goal: object) -> UserGoal | None:
-    """Return the matching :class:`UserGoal`, or ``None`` for unknown input.
-
-    ``None`` means "use the legacy default Soul". Unknown or blank strings fall
-    back the same way instead of raising, so a stale client value cannot break
-    a chat request.
-    """
+    """Return the matching :class:`UserGoal`; ``None`` selects the base Soul."""
     if isinstance(goal, UserGoal):
         return goal
     if goal is None:
         return None
     try:
         return UserGoal(str(goal).strip())
-    except ValueError:
-        return None
+    except ValueError as exc:
+        raise ValueError(f"unsupported coaching goal: {goal!r}") from exc
 
 
 def resolve_training_phase(
     phase: object,
 ) -> TrainingPhase:
-    """Return the matching :class:`TrainingPhase`, falling back to ``AUTO``.
-
-    Unknown, blank or non-string values never raise: an old or buggy client
-    must keep the legacy behaviour instead of breaking the chat route.
-    """
+    """Return the matching :class:`TrainingPhase` or raise for invalid input."""
     if isinstance(phase, TrainingPhase):
         return phase
     if phase is None:
         return TrainingPhase.AUTO
     try:
         return TrainingPhase(str(phase).strip().lower())
-    except ValueError:
-        return TrainingPhase.AUTO
+    except ValueError as exc:
+        raise ValueError(f"unsupported training phase: {phase!r}") from exc
 
 
 def is_contest_context(
@@ -249,8 +239,7 @@ def build_training_context(
 
     The line is part of the AgentScope ``UserMsg`` (so ``AgentState`` and the
     ReMe auto-memory write-back both contain the phase), which is why it must
-    stay short and deterministic. ``AUTO`` with no budget returns ``""`` so the
-    legacy message is untouched.
+    stay short and deterministic. ``AUTO`` with no budget returns ``""``.
     """
     phase = resolve_training_phase(training_phase)
     if phase is TrainingPhase.AUTO and time_remaining_sec is None:
@@ -280,9 +269,13 @@ COACH_STYLE_GUIDANCE = {
 
 
 def resolve_coach_style(value: object) -> str:
-    """Normalise a requested coaching style; unknown values fall back to auto."""
-    normalized = str(value or "").strip().lower()
-    return normalized if normalized in COACH_STYLE_GUIDANCE else DEFAULT_COACH_STYLE
+    """Validate a requested coaching style."""
+    if value is None:
+        return DEFAULT_COACH_STYLE
+    normalized = str(value).strip().lower()
+    if normalized == DEFAULT_COACH_STYLE or normalized in COACH_STYLE_GUIDANCE:
+        return normalized
+    raise ValueError(f"unsupported coaching style: {value!r}")
 
 
 def get_system_prompt(
@@ -296,8 +289,8 @@ def get_system_prompt(
     """Build the Soul template for ``goal`` and the contest ``training_phase``.
 
     The returned string still contains the ``{memory_context}`` placeholder and
-    is formatted by the caller. Unknown goals (and ``None``) return the original
-    Soul unchanged. Contest adds the OI / xCPC protocol, plus the phase stance
+    is formatted by the caller. ``None`` returns the original Soul unchanged.
+    Contest adds the OI / xCPC protocol, plus the phase stance
     and remaining-time reminder when the request provides them. Other goals
     ignore both training fields entirely.
     """

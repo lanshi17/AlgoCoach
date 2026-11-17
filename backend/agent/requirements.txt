@@ -11,7 +11,7 @@ python-dotenv==1.2.4
 nanoid==2.0.0
 apscheduler==3.11.3
 
-# /chat agent runtime: AgentScope 2.0.11 + the official ReMe long-term
+# /chat/stream agent runtime: AgentScope 2.0.11 + the official ReMe long-term
 # memory middleware (embedded, in-process; no standalone ReMe service).
 # ReMe 0.4.1.10 is the newest release whose dream pipeline still provides the
 # `dream_topics_step` referenced by AgentScope 2.0.11's embedded ReMe config;

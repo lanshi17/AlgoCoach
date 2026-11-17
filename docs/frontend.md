@@ -134,7 +134,7 @@ frontend/
 - 运行/提交仅在 FOCUS 模式可用；请求期间显示 loading 并阻止重复提交。REVIEW 可继续做题，重试阶段的 FOCUS 时间会累计。
 - Gateway 保存提交后将判题事实、用时和题目标签写入 Agent episodic/semantic 记忆；前端随后发送不含代码的 `review` 阶段消息，启动 OI/xCPC 结构化复盘。
 
-**当前行为**：Agent 回复通过 `/api/agent/chat/stream` 以 SSE 流式呈现；思考状态默认折叠为一行，模型返回思考事件时可展开查看，文本回复也会逐段出现。旧版 Gateway 不支持该路径时自动回退到 JSON `/api/agent/chat`。
+**当前行为**：Agent 回复通过 `/api/agent/chat/stream` 以 SSE 流式呈现；思考状态默认折叠为一行，模型返回思考事件时可展开查看，文本回复也会逐段出现。
 
 ### 3.4 EditorPanel.tsx
 
@@ -183,7 +183,7 @@ frontend/
 - `isFocus = mode === 'FOCUS'`，为 true 时：
   - 输入框替换为锁定提示条（红色边框 + Lock 图标 + "专注解题中，AI 已静默"）
   - 已有消息仍可见（用户可回顾 PREP 阶段的对话），但不可发送
-- 发送：调用 `agentService.chat(content, { mode, problemId })`，返回 `{ content, animationId }`
+- 发送：调用 `agentService.chatStream(content, { mode, problemId })`，返回 `{ content, animationId }`
 - Submit 结束后自动以 `trainingPhase: 'review'` 发送判题状态、通过数、用时和题目标签；提交代码不随复盘请求发送。
 - 消息追加：用户消息立即追加，agent 消息等 API 返回后追加
 - `loading` 时显示三点跳动动画 + "思考中…"
@@ -237,7 +237,7 @@ frontend/
 
 ### 3.9 题库登录只有一个页面
 
-`/settings/cookie` 已删除（原 `CookieSetupPage`）：它只是 `/settings/platforms` 的 LeetCode 子集。旧链接经路由重定向到 `/settings/platforms`，LeetCode 的 Cookie / cURL 粘贴与校验都在该页的 LeetCode 卡片里完成。
+题库登录统一使用 `/settings/platforms`，LeetCode 的 Cookie / cURL 粘贴与校验在该页的 LeetCode 卡片里完成。
 
 ---
 
@@ -347,12 +347,11 @@ interface AppState {
   <Route path="/knowledge" element={<KnowledgeGraphPage />} />
   <Route path="/settings" element={<SettingsPage />} />
   <Route path="/settings/platforms" element={<PlatformLoginPage />} />
-  <Route path="/settings/cookie" element={<Navigate to="/settings/platforms" replace />} />
   <Route path="*" element={<Navigate to="/workspace" replace />} />
 </Routes>
 ```
 
-**登录态控制**：`AppShell` 启动时请求 Gateway `/api/auth/status` 仅确认网关可用；未登录仍进入工作区。LeetCode、AcWing 的 Cookie 在相应题库请求时校验，错误展示在题目面板；HDU 可匿名浏览。Cookie 统一由 `/settings/platforms` 管理，`/settings/cookie` 只做重定向，不再有第二个配置页。
+**登录态控制**：`AppShell` 启动时请求 Gateway `/api/auth/status` 仅确认网关可用；未登录仍进入工作区。LeetCode、AcWing 的 Cookie 在相应题库请求时校验，错误展示在题目面板；HDU 可匿名浏览。Cookie 统一由 `/settings/platforms` 管理。
 
 ---
 
@@ -435,7 +434,7 @@ interface AppState {
 
 `SettingsPage` 提供 OMP 风格的 Provider 预设（Anthropic、OpenAI、OpenAI Responses、OpenCode Go、Command Code GOAT、DeepSeek、Qwen/DashScope、Moonshot/Kimi、MiniMax、Gemini、OpenRouter、Ollama、Volcengine、xAI）和自定义端点。用户可编辑协议、Base URL、模型名和 API key；API key 只放在当前浏览器 `sessionStorage`，每次聊天按请求传给本机 Agent，不进入 SQLite、ReMe、导出文件或 Git。OpenCode Go 预设指向 `https://opencode.ai/inference/go/openai/v1`（Chat Completions），Command Code GOAT 预设指向 `https://api.commandcode.ai/provider/v1`（Responses）；Agent 对 `opencode.ai` 端点自动附加 `x-opencode-session` 请求头，否则 OpenCode Go 在鉴权前就返回 `400 MissingSessionID`。未配置页面 Provider 时，Agent 继续使用服务端 `.env` 的默认 Anthropic 配置。
 
-**AI 教练**：四个偏好，`localStorage` 键 `algocoach.coachPrefs`，随每次 `/chat` 请求发送：
+**AI 教练**：四个偏好，`localStorage` 键 `algocoach.coachPrefs`，随每次 `/chat/stream` 请求发送：
 
 | 偏好 | 请求字段 | 生效位置 |
 |------|----------|----------|

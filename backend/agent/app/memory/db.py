@@ -1,27 +1,12 @@
-"""
-SQLite store for local algorithm-training memories:
-  episodic  : per-problem session records
-  semantic  : knowledge topic mastery graph
-  procedural: user habit/error patterns
-  working   : transient per-session state (in-process dict, not persisted)
+"""SQLite store for local algorithm-training memories.
 
-Operational tables added for P1 scheduled notifications:
-  notifications   : persisted user-facing cron messages
-  review_schedule : durable spaced-repetition due state per problem
-  episodic_archive: cold storage for episodes older than 90 days
-
-P2 self-improve adds:
-  recommendation_log: every problem/topic recommendation + its 7-day score
-
-Schema changes are applied by ``init_db()`` through an additive, rerunnable
-migration instead of relying on ``create_all`` alone. ``create_all`` creates
-new tables; ``_add_missing_columns`` upgrades databases created by an earlier
-revision (for example a ``notifications`` table without ``dedupe_key``).
+The schema is defined entirely by the current SQLAlchemy models. Startup uses
+``create_all`` to create missing tables; the application has one current schema.
 """
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Float, Integer, Text, Boolean, text
+from sqlalchemy import String, Float, Integer, Text, Boolean
 from datetime import datetime, timezone
 
 def _utcnow() -> datetime:
@@ -175,67 +160,11 @@ class RecommendationLog(Base):
     score: Mapped[int | None] = mapped_column(Integer(), nullable=True)  # -1 / 0 / 1
     outcome: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # Reconstructed mastery at ``evaluation_due_at``. Saved so a score can be
-    # audited after later practice has moved the live semantic mastery. NULL
-    # for legacy rows evaluated by an older revision.
+    # audited after later practice has moved the live semantic mastery.
     mastery_after: Mapped[float | None] = mapped_column(Float(), nullable=True)
 
 
-# Columns added after the first notifications schema draft. The migration
-# below is additive and rerunnable, so it is safe to run on every startup.
-_ADDITIVE_COLUMNS: tuple[tuple[str, str, str], ...] = (
-    # (table, column, sqlite DDL)
-    ("notifications", "read", "BOOLEAN NOT NULL DEFAULT 0"),
-    ("notifications", "dedupe_key", "VARCHAR(160)"),
-    # recommendation_log may have been drafted earlier with a smaller schema
-    # (docs/backend-agent.md §3.5 had only id/topic/problem_id/mastery_before/
-    # created_at/evaluated_at/score). Upgrade it in place without touching rows.
-    ("recommendation_log", "strategy", "VARCHAR(32) NOT NULL DEFAULT ''"),
-    ("recommendation_log", "evaluation_due_at", "VARCHAR(32) NOT NULL DEFAULT ''"),
-    ("recommendation_log", "outcome", "VARCHAR(32)"),
-    ("recommendation_log", "mastery_after", "REAL"),
-)
-
-_ADDITIVE_INDEXES: tuple[str, ...] = (
-    "CREATE UNIQUE INDEX IF NOT EXISTS ix_notifications_dedupe_key "
-    "ON notifications (dedupe_key)",
-    # Due scans and monthly reports read these two columns together.
-    "CREATE INDEX IF NOT EXISTS ix_recommendation_log_due "
-    "ON recommendation_log (evaluated_at, evaluation_due_at)",
-    "CREATE INDEX IF NOT EXISTS ix_recommendation_log_created_at "
-    "ON recommendation_log (created_at)",
-)
-
-
-def _table_names(conn) -> set[str]:
-    rows = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
-    return {row[0] for row in rows}
-
-
-def _column_names(conn, table: str) -> set[str]:
-    rows = conn.execute(text(f"PRAGMA table_info({table})"))
-    return {row[1] for row in rows}
-
-
-def _migrate_sync(conn) -> None:
-    """Create missing tables, then apply additive column/index migrations."""
-    Base.metadata.create_all(conn)
-
-    tables = _table_names(conn)
-    for table, column, ddl in _ADDITIVE_COLUMNS:
-        if table in tables and column not in _column_names(conn, table):
-            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
-
-    # Created separately so a database upgraded from an older notifications
-    # table also gets the dedupe guarantee, not just brand-new databases.
-    for statement in _ADDITIVE_INDEXES:
-        conn.execute(text(statement))
-
-
 async def init_db():
-    """Idempotent startup migration.
-
-    Safe to call on every process start and safe to re-run against an existing
-    database: it never drops tables or columns and never rewrites row data.
-    """
+    """Create the current database schema if it does not exist."""
     async with engine.begin() as conn:
-        await conn.run_sync(_migrate_sync)
+        await conn.run_sync(Base.metadata.create_all)

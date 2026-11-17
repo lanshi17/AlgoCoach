@@ -33,7 +33,7 @@ os.environ.setdefault("GATEWAY_BASE_URL", "http://gateway.invalid")
 os.environ.setdefault("ALGOCOACH_CRONS_ENABLED", "false")
 # Animations are opt-in in production (REMOTION_ENABLED defaults to false); the
 # suite enables them so the existing animation tests keep covering the feature.
-# The disabled path is covered explicitly in test_router_compat/test_prompts.
+# The disabled path is covered explicitly in test_agent_routes/test_prompts.
 os.environ.setdefault("REMOTION_ENABLED", "true")
 atexit.register(shutil.rmtree, _TEST_DIR, ignore_errors=True)
 
@@ -142,7 +142,7 @@ class RecordingReMe(ReMeMiddleware):
     """ReMe middleware double that records jobs without starting ReMe.
 
     The real embedded ReMe app is exercised separately; this double lets the
-    /chat tests assert the middleware invocation contract (search on reply,
+    /chat/stream tests assert the middleware invocation contract (search on reply,
     auto_memory write-back, session scoping, close) deterministically.
     """
 

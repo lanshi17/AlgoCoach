@@ -160,14 +160,14 @@ export default function Header() {
       })
       const reviewController = new AbortController()
       reviewRequestRef.current = reviewController
-      void agentService.chat(reviewText, {
+      void agentService.chatStream(reviewText, {
         mode: 'REVIEW',
         problemId: activeProblem.platformId,
         platform: activeProblem.platform,
         goal,
         trainingPhase: 'review',
         provider,
-      }, reviewController.signal).then(reply => {
+      }, {}, reviewController.signal).then(reply => {
         const current = useAppStore.getState()
         if (!canCommitChatReply('REVIEW', current.mode, reviewController.signal.aborted)
           || current.activeProblem?.platform !== activeProblem.platform

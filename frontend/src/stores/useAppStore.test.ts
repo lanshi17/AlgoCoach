@@ -281,43 +281,6 @@ describe('training preferences and focus state', () => {
     expect(restoredStore.getState().theme).toBe('dark')
   })
 
-  it('migrates an existing Command Code GOAT Responses preset to Chat Completions', async () => {
-    localStorage.setItem('algocoach.provider', JSON.stringify({
-      id: 'commandcode-goat',
-      name: 'Command Code GOAT',
-      protocol: 'openai-response',
-      baseUrl: 'https://api.commandcode.ai/provider/v1',
-      model: 'deepseek/deepseek-v4.1-flash',
-    }))
-    sessionStorage.setItem('algocoach.provider.apiKey', 'session-only-key')
-    vi.resetModules()
-    const { useAppStore: restoredStore } = await import('./useAppStore')
-
-    expect(restoredStore.getState().provider.protocol).toBe('openai')
-    expect(restoredStore.getState().provider.apiKey).toBe('session-only-key')
-    expect(JSON.parse(localStorage.getItem('algocoach.provider')!).protocol).toBe('openai')
-    expect(localStorage.getItem('algocoach.provider.apiKey')).toBeNull()
-  })
-
-  it('marks the migration on a fresh profile so a later Responses choice survives', async () => {
-    vi.resetModules()
-    await import('./useAppStore')
-    expect(localStorage.getItem('algocoach.provider.commandcode-protocol-migrated')).toBe('true')
-
-    localStorage.setItem('algocoach.provider', JSON.stringify({
-      id: 'commandcode-goat',
-      name: 'Command Code GOAT',
-      protocol: 'openai-response',
-      baseUrl: 'https://api.commandcode.ai/provider/v1',
-      model: 'deepseek/deepseek-v4.1-flash',
-    }))
-    vi.resetModules()
-    const { useAppStore: restoredStore } = await import('./useAppStore')
-
-    expect(restoredStore.getState().provider.protocol).toBe('openai-response')
-    expect(JSON.parse(localStorage.getItem('algocoach.provider')!).protocol).toBe('openai-response')
-  })
-
   it('persists AI coach preferences and reloads them', async () => {
     useAppStore.getState().setCoachPrefs({ autoReview: false, animations: false, coachStyle: 'socratic' })
 

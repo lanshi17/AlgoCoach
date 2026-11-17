@@ -217,7 +217,7 @@ it('skips the automatic review when the preference is off', async () => {
     id: 'submission-1', status: 'ACCEPTED', runtimeMs: 2, memoryMb: 3,
     passedTests: 1, totalTests: 1, errorMessage: null, durationSec: 1,
   })
-  const chat = vi.spyOn(agentService, 'chat').mockResolvedValue({ content: '不应发送' })
+  const chat = vi.spyOn(agentService, 'chatStream').mockResolvedValue({ content: '不应发送' })
   const element = document.createElement('div')
   document.body.appendChild(element)
   const root = createRoot(element)
@@ -245,7 +245,7 @@ it('sends the post-submit review after leaving focus mode', async () => {
     id: 'submission-1', status: 'ACCEPTED', runtimeMs: 2, memoryMb: 3,
     passedTests: 1, totalTests: 1, errorMessage: null, durationSec: 1,
   })
-  const chat = vi.spyOn(agentService, 'chat').mockResolvedValue({ content: '赛后复盘已完成。' })
+  const chat = vi.spyOn(agentService, 'chatStream').mockResolvedValue({ content: '赛后复盘已完成。' })
   const element = document.createElement('div')
   document.body.appendChild(element)
   const root = createRoot(element)
@@ -280,7 +280,7 @@ it('marks an automatic post-submit review as retryable when the coach fails', as
     id: 'submission-1', status: 'WRONG_ANSWER', runtimeMs: 2, memoryMb: 3,
     passedTests: 0, totalTests: 1, errorMessage: 'wrong answer', durationSec: 1,
   })
-  vi.spyOn(agentService, 'chat').mockRejectedValue({
+  vi.spyOn(agentService, 'chatStream').mockRejectedValue({
     isAxiosError: true,
     response: { data: { detail: {
       code: 'provider_api_key_required',

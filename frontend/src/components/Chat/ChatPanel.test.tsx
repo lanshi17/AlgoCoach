@@ -67,7 +67,7 @@ describe('chat when changing training context', () => {
 
   it('does not send while an IME composition is being confirmed', async () => {
     useAppStore.getState().setActiveProblem(problem)
-    const chat = vi.spyOn(agentService, 'chat').mockResolvedValue({ content: '已收到。' })
+    const chat = vi.spyOn(agentService, 'chatStream').mockResolvedValue({ content: '已收到。' })
     act(() => renderChatPanel(root))
     const textarea = element.querySelector<HTMLTextAreaElement>('textarea[aria-label="发送给 AI 教练的消息"]')!
     act(() => {
@@ -112,7 +112,7 @@ describe('chat when changing training context', () => {
 
   it('unlocks the new conversation even if the old request never settles', async () => {
     let signal: AbortSignal | undefined
-    vi.spyOn(agentService, 'chat').mockImplementation((_message, _ctx, requestSignal) => {
+    vi.spyOn(agentService, 'chatStream').mockImplementation((_message, _ctx, _handlers, requestSignal) => {
       signal = requestSignal
       return new Promise(() => {})
     })
@@ -230,7 +230,7 @@ describe('chat when changing training context', () => {
     useAppStore.getState().enterFocus()
     vi.advanceTimersByTime(5 * 60_000)
     useAppStore.getState().exitFocus()
-    const chat = vi.spyOn(agentService, 'chat').mockResolvedValue({ content: '还剩五分钟。' })
+    const chat = vi.spyOn(agentService, 'chatStream').mockResolvedValue({ content: '还剩五分钟。' })
     act(() => renderChatPanel(root))
 
     const timeInput = element.querySelector<HTMLInputElement>('#chat-time-remaining')!
@@ -244,13 +244,14 @@ describe('chat when changing training context', () => {
     await act(async () => element.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')!.click())
 
     expect(chat).toHaveBeenCalledWith(
-      '还剩多少时间？', expect.objectContaining({ timeRemainingSec: 300 }), expect.any(AbortSignal),
+      '还剩多少时间？', expect.objectContaining({ timeRemainingSec: 300 }),
+      expect.any(Object), expect.any(AbortSignal),
     )
   })
 
   it('offers a direct settings link when the provider has no API key', async () => {
     useAppStore.getState().setActiveProblem(problem)
-    vi.spyOn(agentService, 'chat').mockRejectedValue({
+    vi.spyOn(agentService, 'chatStream').mockRejectedValue({
       isAxiosError: true,
       response: {
         status: 400,
@@ -277,7 +278,7 @@ describe('chat when changing training context', () => {
 
   it('explains endpoint and credential errors before linking to provider settings', async () => {
     useAppStore.getState().setActiveProblem(problem)
-    vi.spyOn(agentService, 'chat').mockRejectedValue({
+    vi.spyOn(agentService, 'chatStream').mockRejectedValue({
       isAxiosError: true,
       response: {
         status: 401,
@@ -299,7 +300,7 @@ describe('chat when changing training context', () => {
 
   it('retries a failed message without duplicating the user turn', async () => {
     useAppStore.getState().setActiveProblem(problem)
-    const chat = vi.spyOn(agentService, 'chat')
+    const chat = vi.spyOn(agentService, 'chatStream')
       .mockRejectedValueOnce(new Error('temporary failure'))
       .mockResolvedValueOnce({ content: '重试成功。' })
     act(() => renderChatPanel(root))
@@ -323,7 +324,7 @@ describe('chat when changing training context', () => {
 
   it('clears a failed retry from the previous problem when the problem changes', async () => {
     useAppStore.getState().setActiveProblem(problem)
-    vi.spyOn(agentService, 'chat').mockRejectedValue(new Error('temporary failure'))
+    vi.spyOn(agentService, 'chatStream').mockRejectedValue(new Error('temporary failure'))
     act(() => renderChatPanel(root))
     const textarea = element.querySelector<HTMLTextAreaElement>('textarea[aria-label="发送给 AI 教练的消息"]')!
     act(() => {
@@ -339,7 +340,7 @@ describe('chat when changing training context', () => {
 
   it('restores the retry action after returning from provider settings', async () => {
     useAppStore.getState().setActiveProblem(problem)
-    const chat = vi.spyOn(agentService, 'chat')
+    const chat = vi.spyOn(agentService, 'chatStream')
       .mockRejectedValueOnce(new Error('missing API key'))
       .mockResolvedValueOnce({ content: '设置后重试成功。' })
     act(() => renderChatPanel(root))
@@ -372,7 +373,7 @@ describe('chat when changing training context', () => {
       id: 'review-error', role: 'system', content: '教练暂时无法连接。', timestamp: 'now',
       retryMessageId: review.id,
     })
-    const chat = vi.spyOn(agentService, 'chat').mockResolvedValue({ content: '自动复盘重试成功。' })
+    const chat = vi.spyOn(agentService, 'chatStream').mockResolvedValue({ content: '自动复盘重试成功。' })
     act(() => renderChatPanel(root))
 
     const retry = element.querySelector<HTMLButtonElement>('button[aria-label="重试发送消息"]')
@@ -380,7 +381,10 @@ describe('chat when changing training context', () => {
     expect(element.querySelector('textarea')?.value).toBe('')
     await act(async () => retry!.click())
 
-    expect(chat).toHaveBeenCalledWith(review.content, expect.objectContaining({ mode: 'REVIEW', trainingPhase: 'review' }), expect.any(AbortSignal))
+    expect(chat).toHaveBeenCalledWith(
+      review.content, expect.objectContaining({ mode: 'REVIEW', trainingPhase: 'review' }),
+      expect.any(Object), expect.any(AbortSignal),
+    )
     expect(useAppStore.getState().messages.filter(message => message.role === 'user')).toHaveLength(1)
     expect(element.textContent).toContain('自动复盘重试成功。')
   })

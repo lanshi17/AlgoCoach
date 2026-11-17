@@ -18,23 +18,21 @@ from app.agent.prompts import (
 
 
 class ChatRequest(BaseModel):
-    """Body of ``POST /chat``.
+    """Body of ``POST /chat/stream``.
 
-    ``trainingPhase`` and ``timeRemainingSec`` are optional additions for the
-    real OI / xCPC training protocol. They are deliberately forgiving: unknown
-    phases fall back to ``auto`` and the field is omitted by old clients, so the
-    existing wire contract keeps working. The response shape is unchanged.
+    ``trainingPhase`` and ``timeRemainingSec`` carry the OI / xCPC training
+    context for the current frontend contract.
     """
 
     message: str
     mode: str                       # IDLE | PREP | FOCUS | REVIEW
     problemId: str | None = None
     platform: str | None = None
-    conversationId: str | None = Field(default=None, min_length=1, max_length=128)
+    conversationId: str = Field(min_length=1, max_length=128)
     goal: str | None = None
     trainingPhase: str = DEFAULT_TRAINING_PHASE.value
     timeRemainingSec: int | None = Field(default=None, ge=0)
-    # UI preferences (设置 → AI 教练). Optional so older clients keep working.
+    # UI preferences (设置 → AI 教练).
     animations: bool = True
     coachStyle: str = "auto"
     provider: "ProviderConfig | None" = None
@@ -42,13 +40,13 @@ class ChatRequest(BaseModel):
     @field_validator("trainingPhase", mode="before")
     @classmethod
     def _known_training_phase(cls, value: object) -> str:
-        """Normalise a phase; unknown values fall back to ``auto``."""
+        """Validate and normalize a training phase."""
         return resolve_training_phase(value).value
 
     @field_validator("coachStyle", mode="before")
     @classmethod
     def _known_coach_style(cls, value: object) -> str:
-        """Unknown styles fall back to ``auto``."""
+        """Validate and normalize the coaching style."""
         return resolve_coach_style(value)
 
     @field_validator("goal", mode="before")
@@ -64,13 +62,6 @@ class ChatRequest(BaseModel):
         if isinstance(value, bool):
             raise ValueError("must be a non-negative integer")
         return value
-
-
-class ChatResponse(BaseModel):
-    """Response of ``POST /chat``."""
-
-    content: str
-    animationId: str | None = None
 
 
 class ProviderConfig(BaseModel):

@@ -6,10 +6,10 @@
 > - **P0 已完成**，并已由负责人独立复核通过：`models/schemas.py` 抽取、`POST /memory/record` 契约与持久化。
 > - **P1 已完成**：`agent/crons.py`、`notifications`、间隔复习、周报（文字 + 1920×1080/60fps 视频）、90 天归档；`memory/vector_store.py` 的题目/知识点/卡点向量记忆及 `fetch_problem_meta` / `get_similar_problems` tools。向量记忆已由负责人独立复核通过；`solution_comment` 仍为 V2。
 > - **P2 Remotion 生成代码沙箱已实现，默认关闭、未上线**：新增 `remotion/codegen.py` 与 `POST /animate/generated`。只有 `REMOTION_CODEGEN_ENABLED=true`、配置 `REMOTION_CODEGEN_TOKEN`、Bearer token 校验通过且真实 Bubblewrap preflight 全部通过时才开放；活动 generated jobs 默认上限 1（clamp 1–2），满时 429。本机开发环境（Ubuntu、bubblewrap 0.11.1、systemd user scope、Chrome）已实测 preflight、离线隔离属性、沙箱内 ffprobe 和一次 1280×720/240 帧真实渲染；不可信 MP4 不在宿主解析。部署环境缺少 bwrap / 非特权 user namespace / systemd cgroup v2 delegation / Node / Chrome 时保持不可用，绝不回退到宿主执行。当前 Docker Compose 未授予这些能力，容器内该项不可用。
-> - **P2 `agent/self_improve.py` 已实现（人工分析型 MVP）**：新增 `recommendation_log` 表及可重跑迁移、`memory.get_mastery`、推荐日志、固定 7 天回测、月度策略汇总、`suggest_next_problem` tool 与两个 cron job。回测按 `[created_at, evaluation_due_at]` 内的事件从 `mastery_before` 重放 ELO 并保存 `mastery_after`，延迟调度不会读入窗口外练习。评估只做记录与人工可读建议，**不自动修改 Soul、prompt、推荐权重或配置**，也没有正式 UI/通知。
-> - **P3 prompt 集中管理与目标变体 API 已实现**：Soul 原文迁至 `agent/prompts.py`，`get_system_prompt(goal)` 支持 `interview_prep` / `contest` / `casual` 三种变体，未知值回退原版；助教式教学原则（先问尝试、解释原因、引导验证、不直接给最终答案或整段成品代码）融入基础 Soul；`coach.chat()` 接收来自设置页的浏览器偏好目标；竞赛阶段显式覆盖该目标。目标保存在当前浏览器，不另建用户配置表。
-> - **contest 训练协议已接入 `/chat`**：`ChatRequest` 新增可选 `trainingPhase`（默认 `auto`，允许 `virtual_contest` / `topic_drill` / `attempt` / `hint` / `review` / `upsolve`，未知回退 `auto`）与 `timeRemainingSec`（可选非负整数）；显式阶段或剩余时间会启用 `contest` 目标与真实 OI/xCPC 训练协议，阶段/剩余时间同时写入 AgentScope 用户消息，ReMe 记忆可见。`ChatResponse`、FOCUS 静默、非 contest 行为与旧客户端均不变，未新增训练 SQLite（详见 §3.3）。
-> - **/chat Agent runtime 已迁移到 AgentScope 2.0.11 + 官方 ReMeMiddleware**：`AlgoCoach` 使用 `Agent`/`AgentState` 替代手写 Claude tool loop 与 `_sessions`；ReMe 进程内单实例，`mode="both"` 自动召回/写回；短期 AgentState 按页面会话与题目隔离，ReMe workspace 跨会话检索，应用关闭时 `await coach.close()`。FOCUS 仍完全静默。`ChatResponse` 与工具 schema 保持不变；请求新增可选 `conversationId` / `platform` 字段以隔离新客户端上下文，同时兼容旧客户端。
+> - **P2 `agent/self_improve.py` 已实现（人工分析型 MVP）**：新增当前 `recommendation_log` 表、`memory.get_mastery`、推荐日志、固定 7 天回测、月度策略汇总、`suggest_next_problem` tool 与两个 cron job。回测按 `[created_at, evaluation_due_at]` 内的事件从 `mastery_before` 重放 ELO 并保存 `mastery_after`，延迟调度不会读入窗口外练习。评估只做记录与人工可读建议，**不自动修改 Soul、prompt、推荐权重或配置**，也没有正式 UI/通知。
+> - **P3 prompt 集中管理与目标变体 API 已实现**：Soul 原文迁至 `agent/prompts.py`，`get_system_prompt(goal)` 支持 `interview_prep` / `contest` / `casual` 三种变体，无效值直接拒绝；助教式教学原则（先问尝试、解释原因、引导验证、不直接给最终答案或整段成品代码）融入基础 Soul；`coach.chat()` 接收来自设置页的浏览器偏好目标；竞赛阶段显式覆盖该目标。目标保存在当前浏览器，不另建用户配置表。
+> - **contest 训练协议已接入 `/chat/stream`**：`ChatRequest` 新增可选 `trainingPhase`（默认 `auto`，允许 `virtual_contest` / `topic_drill` / `attempt` / `hint` / `review` / `upsolve`，无效值拒绝 `auto`）与 `timeRemainingSec`（可选非负整数）；显式阶段或剩余时间会启用 `contest` 目标与真实 OI/xCPC 训练协议，阶段/剩余时间同时写入 AgentScope 用户消息，ReMe 记忆可见。流式 `done` 事件、FOCUS 静默、非 contest 行为与当前客户端契约一致，未新增训练 SQLite（详见 §3.3）。
+> - **/chat/stream Agent runtime 使用 AgentScope 2.0.11 + 官方 ReMeMiddleware**：`AlgoCoach` 使用 `Agent`/`AgentState` 替代手写 Claude tool loop 与 `_sessions`；ReMe 进程内单实例，`mode="both"` 自动召回/写回；短期 AgentState 按页面会话与题目隔离，ReMe workspace 跨会话检索，应用关闭时 `await coach.close()`。FOCUS 仍完全静默。工具 schema 保持稳定；请求新增可选 `conversationId` / `platform` 字段以隔离新客户端上下文，使用当前页面会话契约。
 
 ## 1. 模块职责与边界
 
@@ -35,13 +35,13 @@ backend/agent/
 │   ├── main.py                    # FastAPI 入口，CORS，lifespan: init_db + 启停 crons
 │   ├── agent/
 │   │   ├── coach.py               # ★ AlgoCoach 核心：AgentScope Agent + ReMe 中间件 + TOOLS
-│   │   ├── router.py              # /chat, /animate, /memory/profile/export 等 API 路由
+│   │   ├── router.py              # /chat/stream, /animate, /memory/profile/export 等 API 路由
 │   │   ├── crons.py               # P1 已实现：APScheduler 定时任务 + notify_user；P2 加自改进回测/月报
 │   │   ├── gateway.py             # P1 已实现：GET /api/problems/{slug} 客户端 + 响应归一化
 │   │   ├── self_improve.py        # P2 已实现：推荐记录、7 天回测、月度汇总、suggest_next_problem
 │   │   └── prompts.py             # P3 已实现：集中 Soul + 目标变体（get_system_prompt）
 │   ├── memory/
-│   │   ├── db.py                  # ★ SQLAlchemy 异步引擎 + 记忆/通知/复习/归档/推荐日志表 + 可重跑迁移
+│   │   ├── db.py                  # ★ SQLAlchemy 异步引擎 + 当前记忆/通知/复习/归档/推荐日志表
 │   │   ├── memory_service.py      # ★ 四类记忆 CRUD + ELO + 复习调度 + 周报统计 + 归档 + get_mastery
 │   │   └── vector_store.py        # ★ P1 已实现：本地 chromadb 向量记忆，相似题检索
 │   ├── remotion/
@@ -53,15 +53,15 @@ backend/agent/
 ├── tests/
 │   ├── conftest.py                # 隔离测试数据库与 Chroma 路径，确定性 fake embedding
 │   ├── test_memory_record.py      # /memory/record 契约与持久化
-│   ├── test_router_compat.py      # 既有 /chat、/animate 兼容性
+│   ├── test_agent_routes.py       # 流式对话与动画路由
 │   ├── test_crons.py              # P1：调度器生命周期/四类任务/去重/归档/周报组件
 │   ├── test_vector_store.py       # P1：幂等 upsert、collection 隔离、相似度排序、导出
 │   ├── test_coach_vector_tools.py # P1：fetch/index、error index、top_k 限制
 │   ├── test_gateway_client.py     # P1：题目响应归一化与失败降级
 │   ├── test_remotion_codegen.py   # P2：静态校验、fail-closed、真实 bwrap/Chrome 冒烟与渲染
-│   ├── test_self_improve.py       # P2：推荐记录/迁移/7 天回测/幂等/月报/suggest tool/调度器
-│   ├── test_prompts.py            # P3：默认 Soul 回归、目标变体差异、未知回退、FOCUS 静默
-│   ├── test_coach_agentscope.py   # AgentScope/ReMe：/chat、FOCUS、session、动画 tool、真实 ReMe 生命周期/写回/检索
+│   ├── test_self_improve.py       # P2：推荐记录/7 天回测/幂等/月报/suggest tool/调度器
+│   ├── test_prompts.py            # P3：默认 Soul 回归、目标变体差异、无效值拒绝、FOCUS 静默
+│   ├── test_coach_agentscope.py   # AgentScope/ReMe：/chat/stream、FOCUS、session、动画 tool、真实 ReMe 生命周期/写回/检索
 ├── requirements.txt
 ```
 
@@ -171,19 +171,18 @@ Soul 是 agent 的人格与行为准则，注入 Claude 的 `system` 参数。�
 
 - `SOUL` 保留原 `coach.py` 原文，默认文字、FOCUS 静默、PREP/REVIEW 工具指导与中文风格不变。
 - `UserGoal` 枚举定义 `interview_prep` / `contest` / `casual`；`GOAL_GUIDANCE` 只为每种目标**追加**少量有依据的侧重点（面试：复杂度与边界论证；竞赛：约束、正确性证明与复杂度；日常：逐步理解），基础 Soul 统一采用助教式教学原则，不删除、不覆盖基础规则与 FOCUS 静默。
-- `get_system_prompt(goal)` 返回对应模板；`None`、空串或未知值统一回退到原始 Soul，不抛错。
-- `coach.chat()` 在普通请求中采用前端持久化的目标（竞赛阶段优先），未知值退回 `DEFAULT_GOAL`；自动改写 prompt 不在当前范围。
+- `get_system_prompt(goal)` 返回对应模板；`None` 使用原始 Soul；空串和未知值返回校验错误。
+- `coach.chat()` 在普通请求中采用前端持久化的目标（竞赛阶段优先），未设置目标使用 `DEFAULT_GOAL`；自动改写 prompt 不在当前范围。
 
 **contest 训练协议（OI / xCPC，本轮已实现）：**
 
-`POST /chat` 增加两个可选字段，`ChatResponse` 与旧请求体不变：
+`POST /chat/stream` 使用当前请求体，流式 `done` 事件返回最终内容和动画编号：
 
-`POST /chat/stream` 提供同一请求体的 SSE 版本，按 `thinking`、`text`、`done`
-和 `error` 事件增量返回；旧 `/chat` 保留给兼容客户端。
+`POST /chat/stream` 按 `thinking`、`text`、`done` 和 `error` 事件增量返回。
 
 | 字段 | 类型 | 规则 |
 |------|------|------|
-| `trainingPhase` | str，默认 `auto` | 允许 `virtual_contest` / `topic_drill` / `attempt` / `hint` / `review` / `upsolve`；大小写与首尾空白归一化，未知/空值回退 `auto` |
+| `trainingPhase` | str，默认 `auto` | 允许 `virtual_contest` / `topic_drill` / `attempt` / `hint` / `review` / `upsolve`；大小写与首尾空白归一化，无效值返回 422 |
 | `timeRemainingSec` | int \| null，默认 `null` | 可选非负整数；负数、浮点、布尔值返回 422 |
 
 - 显式阶段**或**提供了剩余时间时，`coach.chat()` 选择 `UserGoal.CONTEST`；`auto` 且无剩余时间时保持原来的默认 Soul 与用户消息，非 contest 行为完全不变。
@@ -229,7 +228,7 @@ Soul 是 agent 的人格与行为准则，注入 Claude 的 `system` 参数。�
 - `review_schedule`：`problem_id` 主键，另有 `due_at, interval_days, mastery, attempts, topics, source_episode_id, notified_on, last_notified_at, updated_at`。选择“最新一条有资格”的 episode 作为到期依据：状态不是 `ACCEPTED`（错题/超时等）或 `sticking_points` 非空；普通 `REVIEWED` 且无卡点不算。初始间隔取 `next_review_interval_days(mastery, attempts, 1)`，到期时间 = `episode.created_at + interval`。因此旧记录通常立即到期，新记录会等待一个间隔；调度表按 problem 去重，seed 可重复执行。
 - `episodic_archive`：保留原 `episodic.id` 作为主键，使归档复制天然幂等；字段与热表一致并增加 `archived_at`。
 
-**迁移：** `init_db()` 不再只依赖 `create_all`。它先建缺失表，然后对既有表执行可重跑的 `ALTER TABLE ... ADD COLUMN`，并用 `CREATE INDEX IF NOT EXISTS`/`CREATE UNIQUE INDEX IF NOT EXISTS` 补索引（含 `notifications.dedupe_key` 唯一索引与推荐日志的 due/created 索引）；不改写、不删除既有行。已有 `data/agent.db` 可直接启动升级。
+**Schema：** `init_db()` 通过当前 SQLAlchemy 模型调用 `create_all`，新部署只创建当前表结构和索引。
 
 **限制：** 调度器按单进程设计；多 worker 部署时每个 worker 都会注册 job，但唯一 `dedupe_key`、每日复习计数与推荐评估的条件更新仍能阻止重复通知/重复评分。周报视频依赖本机 `npx remotion`，渲染失败只记录日志，不会丢失文字周报。
 
@@ -273,7 +272,7 @@ suggest_next_problem ──▶ 做题/复习 ──▶ episodic + semantic maste
 | `outcome` | TEXT NULL | `improved` / `neutral` / `declined` / `abandoned` |
 | `mastery_after` | REAL NULL | 按 due 窗口重建、用于评分的 mastery 快照；旧版已评行可为 `NULL` |
 
-迁移沿用 `init_db()` 的 additive 方式：新库由 `create_all` 建表；若存在早期草案版本的 `recommendation_log`，则用可重跑的 `ALTER TABLE ADD COLUMN` 补齐 `strategy` / `evaluation_due_at` / `outcome` / `mastery_after`，并补 due/created 索引。旧行的 `mastery_after` 保持 `NULL`，迁移不重写、不删除既有数据。历史记录没有外键指向 episodic，因此归档或删除 episodic 不会删除推荐历史。
+`recommendation_log` 由当前模型一次性定义；它与 `episodic` 没有外键，因此归档或删除 episodic 不会删除推荐历史。
 
 **评分规则（窗口固定为推荐后 7 天，UTC naive 时间）：**
 
@@ -317,7 +316,7 @@ suggest_next_problem ──▶ 做题/复习 ──▶ episodic + semantic maste
 - `record_sticking_points` 写入的 REVIEWED episode 目前 `topics=[]`，因此只走复盘、没有 gateway 提交记录的活动可能不会被弃做判断计入；正常做题提交带 topics，不受影响。
 - topic-only 推荐的 `problem_id` 为空，效果只能按 topic mastery 聚合。
 
-**测试：** `tests/test_self_improve.py` 覆盖迁移可重跑与老数据保留（含 `mastery_after` 旧行为 `NULL`）、未知 mastery 默认 0.5、成功/失败/中性/弃做/窗口未到、阈值边界、按时间/id 重放、延迟评估只取前 7 天（第 8–9 天活动与 live mastery 均不得改变分数）、窗口边界事件、并发与重试幂等、批量重跑、topic-only 与具体题推荐、排除当前题、月度样本数与分母、归档行参与窗口增量重建、调度器重复注册/时区与 cron 入口。全部使用隔离临时 SQLite；向量库用确定性 fake，LLM/HTTP 不参与。
+**测试：** `tests/test_self_improve.py` 覆盖 7 天窗口重建（含 `mastery_after`）、未知 mastery 默认 0.5、成功/失败/中性/弃做/窗口未到、阈值边界、按时间/id 重放、延迟评估只取前 7 天（第 8–9 天活动与 live mastery 均不得改变分数）、窗口边界事件、并发与重试幂等、批量重跑、topic-only 与具体题推荐、排除当前题、月度样本数与分母、归档行参与窗口增量重建、调度器重复注册/时区与 cron 入口。全部使用隔离临时 SQLite；向量库用确定性 fake，LLM/HTTP 不参与。
 
 ---
 
@@ -329,7 +328,7 @@ FastAPI 应用入口。注册 CORS（允许 5173、8080），挂载 agent_router
 
 ### `app/agent/coach.py`（核心）
 
-`POST /chat` 的运行时已迁移到 **AgentScope 2.0.11**：
+`POST /chat/stream` 的运行时使用 **AgentScope 2.0.11**：
 
 ```python
 class AlgoCoach:
@@ -367,7 +366,7 @@ class AlgoCoach:
 ### `app/agent/router.py`
 
 三个端点：
-- `POST /chat` → `coach.chat()`，返回 `{content, animationId}`
+- `POST /chat/stream` → `coach.chat_stream()`，返回 `{content, animationId}`
 - `POST /animate` → `animation_service.enqueue()`，返回 `{job_id, status}`
 - `GET /animate/{job_id}` → 轮询渲染状态
 
@@ -385,7 +384,7 @@ SQLAlchemy 异步引擎 + 四类记忆表与运维表 ORM：
 | `episodic_archive` | id (原 episodic id) | 同 episodic + archived_at |
 | `recommendation_log` | id (auto) | strategy, topic, problem_id(NULL), mastery_before, created_at, evaluation_due_at, evaluated_at, score(-1/0/1 NULL), outcome |
 
-`init_db()` 在 startup 调用：`create_all` 建缺失表，随后执行可重跑的 additive 列/索引迁移（见 §3.4），不重写既有行。
+`init_db()` 在 startup 调用 `create_all` 创建当前 schema。
 
 ### `app/memory/memory_service.py`
 
@@ -446,7 +445,7 @@ SQLAlchemy 异步引擎 + 四类记忆表与运维表 ORM：
 
 推题效果评估。完整语义见 §3.5；落地内容：
 
-- `recommendation_log` 表与可重跑迁移（§3.5 表结构）。
+- `recommendation_log` 当前表结构与 7 天回测。
 - `memory.get_mastery(topic)` 单查；未知 topic 返回项目默认 `0.5`。
 - `log_recommendation(strategy, topic, problem_id, mastery_before=None, now=None)`：写推荐基线并计算固定 7 天 due。
 - `evaluate_recommendation(rec_log_id, now=None) -> int | None`：未到窗口返回 `None`；从 `mastery_before` 重放窗口内 `episodic`/`episodic_archive` 事件，得到截至 due 的 mastery 后评分（不读 live mastery）；条件 UPDATE 保证幂等，并保存 `mastery_after`；+1/0/-1 规则见 §3.5。
@@ -567,7 +566,7 @@ await vector_store.count(collection)
 - **metadata**：`id`, `problem_id`, `title`, `topic`（逗号连接）, `platform`, `created_at`；题目可带 `difficulty`。`where` 可直接做等值过滤。
 - **降级**：chromadb 缺失或本地目录打不开时抛 `VectorStoreUnavailable`；coach 的相似题 tool 返回 `{ok: false, error}`，索引是 best-effort，不阻断对话。
 - **安装注意**：Python 3.12 没有 `chroma-hnswlib==0.7.3` 的预编译 wheel，`pip install chromadb==0.5.3` 会从源码构建它（需要 C++ 工具链）；Python 3.11 有现成 wheel。
-- **迁移限制**：同一 collection 内不能混用不同维度的 embedding。更换 embedding 模型/维度后需删除并重建 `CHROMA_PATH` 下的 collection；当前没有自动迁移。
+- **向量维度限制**：同一 collection 内不能混用不同维度的 embedding。更换 embedding 模型/维度后需删除并重建 `CHROMA_PATH` 下的 collection；当前没有自动迁移。
 
 ### 5.5 `models/schemas.py`
 
@@ -582,13 +581,9 @@ class ChatRequest(BaseModel):
     mode: Literal["IDLE", "PREP", "FOCUS", "REVIEW"]
     problemId: Optional[str] = None
     # 允许 auto / virtual_contest / topic_drill / attempt / hint / review /
-    # upsolve；校验器把未知或空值归一化为 auto（旧客户端可省略）。
+    # upsolve；校验器把未知或空值归一化为 auto（请求必须携带页面会话标识）。
     trainingPhase: str = "auto"
     timeRemainingSec: Optional[int] = Field(default=None, ge=0)
-
-class ChatResponse(BaseModel):
-    content: str
-    animationId: Optional[str] = None
 
 class AnimateRequest(BaseModel):
     type: Literal["PRE_EXPLAIN", "SOLUTION_COMPARE", "CONCEPT"]
@@ -614,10 +609,10 @@ class RecordAttemptRequest(BaseModel):
 
 ---
 
-## 6. /chat Agent 流程图（AgentScope + ReMe）
+## 6. /chat/stream Agent 流程图（AgentScope + ReMe）
 
 ```
-POST /chat {message, mode, problemId, trainingPhase?, timeRemainingSec?}
+POST /chat/stream {message, mode, conversationId, problemId?, trainingPhase?, timeRemainingSec?}
         │
         ▼
  mode == "FOCUS"? ──yes──▶ return {content: "", animationId: null}
@@ -637,7 +632,7 @@ POST /chat {message, mode, problemId, trainingPhase?, timeRemainingSec?}
         │    FunctionTool(get_weakness_topics / request_animation /
         │                 record_sticking_points / fetch_problem_meta /
         │                 get_similar_problems / suggest_next_problem)
-        │    → _execute_tool(...)（内部逻辑与迁移前一致）
+        │    → _execute_tool(...)（内部逻辑保持一致）
         │    request_animation 通过 ContextVar 记录 animation_id
         └─ ReMe on_reply finally: auto_memory 按 session_id 写回本轮增量
         │
@@ -719,7 +714,7 @@ attempts += 1
 
 ## 9. Remotion 渲染流水线
 
-> **可选功能，默认关闭（`REMOTION_ENABLED`）**：关闭时 `_build_tools` 不注册 `request_animation`，`get_system_prompt` 去掉 PREP 动画指引与结尾的动画偏好句，`POST /animate` 返回 503 `AnimationDisabled`；渲染流水线本身不启动。这样每次 `/chat` 少一份工具 schema 与提示词 token。设为 `true` 恢复本节全部行为（`REMOTION_CODEGEN_ENABLED` 仍独立控制生成代码沙箱）。
+> **可选功能，默认关闭（`REMOTION_ENABLED`）**：关闭时 `_build_tools` 不注册 `request_animation`，`get_system_prompt` 去掉 PREP 动画指引与结尾的动画偏好句，`POST /animate` 返回 503 `AnimationDisabled`；渲染流水线本身不启动。这样每次 `/chat/stream` 少一份工具 schema 与提示词 token。设为 `true` 恢复本节全部行为（`REMOTION_CODEGEN_ENABLED` 仍独立控制生成代码沙箱）。
 
 ```
   enqueue(kind, topic, title)
@@ -839,18 +834,18 @@ Gateway 需要调 agent 写记忆：
 | Mock | `tests/conftest.py` 的 `FakeChatModel` / `RecordingReMe` | 不调用真实模型；断言工具调用、FOCUS、页面/题目 session 隔离、ReMe search/auto_memory 调用 |
 | 动画 | 手动/冒烟 | 跑通一次 BfsGraph 渲染，验证 mp4 产出 |
 | 生成代码沙箱 | pytest + 真实 bwrap/systemd/Chrome | 静态校验、token/容量、fail-closed、临时目录清理、真实 namespace/cgroup/超时/输出限制、沙箱内 ffprobe 与一次完整 MP4 渲染 |
-| 自我改进 | pytest + 隔离 SQLite + fake 向量库 | 迁移重跑与老数据保留、7 天窗口重建（延迟评估不读窗口外活动）、+1/0/-1/弃做/阈值边界、并发与重试幂等、topic-only/具体题推荐、月度样本分母、归档行参与重放、调度器注册 |
-| Prompt 变体 | pytest（纯单元） | 默认 Soul 逐字回归、三种目标内容差异、未知值回退、FOCUS 模式不调用模型或 tool |
-| 竞赛训练协议 | pytest（纯单元 + fake AgentScope/ReMe） | `trainingPhase` 默认值与六阶段、大小写归一化、未知回退 `auto`、`timeRemainingSec` 非负/布尔校验、router 透传、非 contest 不受影响、剩余时间分档、FOCUS 仍静默、phase 进入 fake 模型的用户消息与 ReMe 写回 |
-| AgentScope/ReMe | pytest + fake 模型 + 真实 ReMe 生命周期 | `/chat` 契约、FOCUS 静默、页面/题目 session 隔离、动画 tool、ReMe search/auto_memory 调用、真实 ReMe app start/close、真实写卡 + reindex + search、lifespan close |
+| 自我改进 | pytest + 隔离 SQLite + fake 向量库 | 7 天窗口重建（延迟评估不读窗口外活动）、+1/0/-1/弃做/阈值边界、并发与重试幂等、topic-only/具体题推荐、月度样本分母、归档行参与重放、调度器注册 |
+| Prompt 变体 | pytest（纯单元） | 默认 Soul 逐字回归、三种目标内容差异、无效值拒绝、FOCUS 模式不调用模型或 tool |
+| 竞赛训练协议 | pytest（纯单元 + fake AgentScope/ReMe） | `trainingPhase` 默认值与六阶段、大小写归一化、无效值返回 422、`timeRemainingSec` 非负/布尔校验、流式路由透传、非 contest 不受影响、剩余时间分档、FOCUS 仍静默、phase 进入 fake 模型的用户消息与 ReMe 写回 |
+| AgentScope/ReMe | pytest + fake 模型 + 真实 ReMe 生命周期 | `/chat/stream` 契约、FOCUS 静默、页面/题目 session 隔离、动画 tool、ReMe search/auto_memory 调用、真实 ReMe app start/close、真实写卡 + reindex + search、lifespan close |
 
 **关键测试用例：**
 
 ```python
 # tests/test_coach_agentscope.py
 async def test_focus_route_returns_before_model_memory_and_tools(client, ...):
-    resp = await client.post("/chat", json={"message": "help", "mode": "FOCUS"})
-    assert resp.json() == {"content": "", "animationId": None}
+    resp = await client.post("/chat/stream", json={"message": "help", "mode": "FOCUS", "conversationId": "test-page"})
+    assert '"type": "done"' in resp.text and '"content": ""' in resp.text
     assert model.calls == [] and reme.jobs == []
 
 async def test_chat_executes_animation_tool_and_returns_job_id(...):
@@ -879,6 +874,6 @@ async def test_real_reme_auto_memory_write_and_search(tmp_path):
 | P1 | `fetch_problem_meta` / `get_similar_problems` tools | ✅ 本轮已实现：gateway 题干抓取 + 索引、本地相似题检索、卡点索引；`solution_comment` 仍为 V2 |
 | P2 | `remotion/codegen.py` | ✅ 已实现并本机实测：bwrap + systemd scope 沙箱、真实 preflight、静态校验、输出限制；默认关闭、未上线，Docker 内保持不可用 |
 | P2 | `agent/self_improve.py` | ✅ 本轮已实现（人工分析型 MVP）：`recommendation_log`、按 due 窗口重建 mastery 的 7 天回测（保存 `mastery_after`）、月度 strategy 汇总、`suggest_next_problem` tool、两个 cron job；自动调权/提示词改写/正式 UI/通知仍未实现 |
-| P3 | `prompts.py` | ✅ 本轮已实现：Soul 集中管理、`UserGoal` + `get_system_prompt(goal)` 变体、未知回退；coach 接收浏览器偏好目标，显式竞赛阶段优先 |
+| P3 | `prompts.py` | ✅ 本轮已实现：Soul 集中管理、`UserGoal` + `get_system_prompt(goal)` 变体、无效值拒绝；coach 接收浏览器偏好目标，显式竞赛阶段优先 |
 | P3 | Provider 配置 | ✅ 设置页提供 OMP 风格主流预设与自定义 OpenAI/Anthropic-compatible 端点；请求级配置只在内存中创建 AgentScope 模型，不持久化 API key |
-| P3 | `/chat` contest 训练协议 | ✅ 本轮已实现：`trainingPhase` / `timeRemainingSec` 可选字段、六阶段指导、OI/xCPC 读题-分类-约束-部分分-补题节奏、剩余时间提醒、phase 进入 AgentScope 消息与 ReMe 记忆；无新 SQLite，`ChatResponse` 不变 |
+| P3 | `/chat/stream` contest 训练协议 | ✅ 本轮已实现：`trainingPhase` / `timeRemainingSec` 可选字段、六阶段指导、OI/xCPC 读题-分类-约束-部分分-补题节奏、剩余时间提醒、phase 进入 AgentScope 消息与 ReMe 记忆；无新 SQLite，流式 `done` 事件不变 |

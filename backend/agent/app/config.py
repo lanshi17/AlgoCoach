@@ -2,9 +2,8 @@
 
 Environment is resolved on demand rather than at import time so a single
 process can be pointed at throw-away paths (tests) or a mounted container
-volume without re-importing modules. The previous revision kept the gateway
-helpers inside ``app/agent/crons.py``; they now live here so the coach tools
-and the cron jobs use one definition.
+volume without re-importing modules. Shared gateway and storage settings live
+here so the coach tools and cron jobs use one definition.
 
 Only local, on-disk state is configured here: the SQLite database lives at
 ``DB_PATH`` (``app/memory/db.py`` keeps its existing import-time default) and
@@ -20,7 +19,7 @@ DEFAULT_GATEWAY_TIMEOUT_SECONDS = 10.0
 # ``backend/agent`` keeps both stores under the repository's ``data/`` folder.
 DEFAULT_CHROMA_PATH = "../../data/chroma"
 
-# ── /chat agent runtime (AgentScope + ReMe) ────────────────────
+# ── /chat/stream agent runtime (AgentScope + ReMe) ────────────────────
 #
 # Prefix used to namespace AgentScope sessions. The router derives per-page,
 # per-problem session ids from this prefix and the browser conversation id.
@@ -61,7 +60,7 @@ def chroma_path() -> str:
 
 
 def chat_session_id() -> str:
-    """Session namespace prefix for ``POST /chat`` (``ALGOCOACH_SESSION_ID``)."""
+    """Session namespace prefix for ``POST /chat/stream`` (``ALGOCOACH_SESSION_ID``)."""
     return (
         os.getenv("ALGOCOACH_SESSION_ID", DEFAULT_SESSION_ID).strip()
         or DEFAULT_SESSION_ID

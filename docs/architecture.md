@@ -109,7 +109,7 @@
 | 预置动画触发 | `animation_service.enqueue` — chat 的 `request_animation`、`POST /animate`、周报 cron 全部调用它；`REMOTION_ENABLED` 只在这里判定，调用方只把 `AnimationDisabled` 映射成自己的返回形态（tool 错误 / 503 / 静默跳过） |
 | 生成代码动画 | `POST /animate/generated` — 开关与 Bearer 鉴权都在端点、早于 body 解析；服务层 `enqueue_generated` 只做容量与沙箱 |
 | 平台 Cookie | `POST /api/platforms/{platform}/cookie` — 设置页与统一登录页共用 |
-| Provider 配置 | `useAppStore.setProvider` — 预设、手填、迁移后的写回都走同一个 setter |
+| Provider 配置 | `useAppStore.setProvider` — 预设与手填都走同一个 setter |
 | 记忆写入 | `memory_service` 的对应方法（`record_attempt` 等） |
 | 题目原文 | `gateway.fetch_problem` — 自带进程内缓存，tool 与路由复用同一结果 |
 
@@ -178,7 +178,7 @@ Java Gateway
 ### 3.3 Agent 对话流程
 
 ```
-前端 POST /api/agent/chat { message, mode, problemId, goal?, trainingPhase?, timeRemainingSec? }
+前端 POST /api/agent/chat/stream { message, mode, conversationId, problemId, goal?, trainingPhase?, timeRemainingSec? }
         │
         ▼
 Java Gateway 固定代理 → FastAPI router.py
@@ -213,7 +213,7 @@ ReMeMiddleware 在共享本地 workspace 自动 search 召回 + 按 session_id a
 返回 { content, animation_id? } → Gateway → 前端
 ```
 
-前端只连接 Gateway；Agent 的 `/chat`、`/memory/record`、`/memory/profile` 和动画端点由 Gateway 通过固定上游地址代理。ReMeMiddleware 随 AgentScope 进程运行，记忆写入本地 `REME_WORKSPACE_DIR`，不需要单独启动 ReMe 服务。
+前端只连接 Gateway；Agent 的 `/chat/stream`、`/memory/record`、`/memory/profile` 和动画端点由 Gateway 通过固定上游地址代理。ReMeMiddleware 随 AgentScope 进程运行，记忆写入本地 `REME_WORKSPACE_DIR`，不需要单独启动 ReMe 服务。
 
 ### 3.4 动画生成流程
 
@@ -227,7 +227,7 @@ animation_service.enqueue(kind, topic, title, problem_id)
         │
         ▼
 返回 { job_id, status="QUEUED" } 给 coach
-coach 把 animation_id 放入 ChatResponse
+coach 把 animation_id 放入流式 done 事件
         │
         ▼
 前端收到 animation_id
@@ -274,14 +274,14 @@ _render 完成：
 
 ### 前端动作与 API 约束
 
-前端按钮按当前模式门控；Gateway 的 Run/Submit 请求本身不携带 `mode`，因此不能在服务端判断 PREP/FOCUS。FOCUS 静默由前端和 Agent `/chat` 双重保证。
+前端按钮按当前模式门控；Gateway 的 Run/Submit 请求本身不携带 `mode`，因此不能在服务端判断 PREP/FOCUS。FOCUS 静默由前端和 Agent `/chat/stream` 双重保证。
 
 | API / 前端动作 | IDLE | PREP | FOCUS | REVIEW |
 |-----|------|------|-------|--------|
 | GET /api/problems | ✅ | ✅ | ✅ | ✅ |
 | POST /api/run（前端按钮） | — | — | ✅ | — |
 | POST /api/submit | ❌ | ❌ | ✅ | ❌ |
-| POST /agent/chat | ✅ | ✅ | ❌(静默) | ✅ |
+| POST /agent/chat/stream | ✅ | ✅ | ❌(静默) | ✅ |
 | POST /agent/animate | ✅ | ✅ | ❌ | ✅ |
 
 ---
