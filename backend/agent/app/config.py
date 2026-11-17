@@ -30,6 +30,7 @@ DEFAULT_CLAUDE_MODEL = "claude-opus-5-5"
 # SQLite/Chroma stores this is local-only; it is never uploaded.
 DEFAULT_REME_WORKSPACE = "../../data/reme"
 DEFAULT_REME_VECTOR_ENABLED = True
+DEFAULT_KNOWLEDGE_DIR = "../../data/knowledge"
 
 
 def gateway_base_url() -> str:
@@ -101,6 +102,11 @@ def reme_vector_enabled() -> bool:
     local ONNX embedding model.
     """
     return os.getenv("REME_VECTOR_ENABLED", "true").strip().lower() != "false"
+
+
+def knowledge_dir() -> str:
+    """Persistent user-managed knowledge sources and configuration."""
+    return os.getenv("KNOWLEDGE_DIR", DEFAULT_KNOWLEDGE_DIR).strip() or DEFAULT_KNOWLEDGE_DIR
 
 
 # ── Generated Remotion code (P2) ────────────────────────────────

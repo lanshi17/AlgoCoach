@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, BarChart3, Loader2, RefreshCw } from 'lucide-react'
+import { AlertCircle, BarChart3, BookOpen, Loader2, RefreshCw } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { agentService } from '@/services/agentService'
 import Button from '@/components/Common/Button'
 import PageHeader from '@/components/Common/PageHeader'
@@ -8,6 +9,7 @@ import { makeGraph } from './graphLayout'
 import type { AgentProfile } from '@/types'
 
 export default function KnowledgeGraphPage() {
+  const navigate = useNavigate()
   const [profile, setProfile] = useState<AgentProfile | null>(null)
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
   const [listView, setListView] = useState(false)
@@ -56,6 +58,7 @@ export default function KnowledgeGraphPage() {
           title="知识图谱"
           icon={<BarChart3 size={18} />}
           actions={<>
+            <Button size="sm" onClick={() => navigate('/knowledge/library')}><BookOpen size={14} />知识库</Button>
             <Segmented
               label="视图"
               value={listView ? 'list' : 'graph'}

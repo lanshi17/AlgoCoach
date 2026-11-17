@@ -870,7 +870,7 @@ async def test_real_reme_auto_memory_write_and_search(tmp_path):
 | P0 | `POST /memory/record` 端点与 Gateway 回调 | ✅ 已完成：终态提交持久化后 best-effort 回调 Agent，传递题目 slug、标签和训练用时；回调失败不影响提交结果 |
 | P1 | `agent/crons.py` | ✅ 已实现：通知、间隔复习、周报、90 天归档 |
 | P1 | Remotion 周报视频 | ✅ 本轮已实现：`WeeklyReport` 1920×1080/60fps 预置 composition |
-| P1 | `memory/vector_store.py` | ✅ 本轮已实现：本地 ChromaDB（`CHROMA_PATH`）、三类 collection、幂等 upsert/query、懒加载本地 embedding、禁用遥测 |
+| P1 | `memory/vector_store.py` | ✅ 本轮已实现：本地 ChromaDB（`CHROMA_PATH`）、训练记忆与用户知识库独立 collection、幂等 upsert/query、可配置本地/兼容接口 embedding、禁用遥测 |
 | P1 | `fetch_problem_meta` / `get_similar_problems` tools | ✅ 本轮已实现：gateway 题干抓取 + 索引、本地相似题检索、卡点索引；`solution_comment` 仍为 V2 |
 | P2 | `remotion/codegen.py` | ✅ 已实现并本机实测：bwrap + systemd scope 沙箱、真实 preflight、静态校验、输出限制；默认关闭、未上线，Docker 内保持不可用 |
 | P2 | `agent/self_improve.py` | ✅ 本轮已实现（人工分析型 MVP）：`recommendation_log`、按 due 窗口重建 mastery 的 7 天回测（保存 `mastery_after`）、月度 strategy 汇总、`suggest_next_problem` tool、两个 cron job；自动调权/提示词改写/正式 UI/通知仍未实现 |

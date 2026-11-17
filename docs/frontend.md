@@ -75,6 +75,7 @@ frontend/
         ├── SettingsPage.tsx        # 目标/AI 教练/Provider/题库登录/导出
         ├── ProgressPage.tsx        # 训练进度
         ├── KnowledgeGraphPage.tsx  # 掌握关系图
+        ├── KnowledgeBasePage.tsx   # 用户知识库、Embedding 与源文件管理
         └── graphLayout.ts          # 图布局算法
 
 题目列表视图内嵌在 `ProblemPanel`；工作区和其他路径由 `AppShell` 管理，没有独立的 `ProblemListPage` / `WorkspacePage` 文件。知识图谱和进度页面已接入本地 Agent profile。
@@ -118,6 +119,7 @@ frontend/
 - `NAV_ITEMS` 使用 `/workspace`、`/progress`、`/knowledge`、`/settings` 路径；`NavLink` 负责切换和当前项高亮。
 - `/` 默认重定向至 `/workspace`，未知路径也回到工作区。
 - `/progress` 与 `/knowledge` 使用 Agent 本地 profile 数据；`/settings` 提供偏好设置，`/settings/platforms` 是 LeetCode / AcWing / 杭电 HDU 三平台登录态的统一入口。
+- `/knowledge/library` 提供用户知识库管理：选择本地 ONNX 或 OpenAI-compatible embedding、上传 TXT/Markdown/JSON/CSV/HTML/PDF/DOCX/ZIP、重建索引和删除源文件。
 - AppShell 启动时只检查 Java Gateway（探测超时后进入离线态）；网关不可用时显示重试入口。LeetCode 未登录不会阻挡工作区，题库请求失败时在题目面板内显示平台错误并提供登录设置入口。
 
 ### 3.3 Header.tsx

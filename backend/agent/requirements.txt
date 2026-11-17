@@ -19,3 +19,5 @@ apscheduler==3.11.3
 # startup, so this pin is intentional.
 agentscope[reme]==2.0.11
 reme-ai==0.4.1.10
+# ReMe's current fastmcp release uses MCP 2.x, matching AgentScope 2.0.11.
+fastmcp==4.2.0

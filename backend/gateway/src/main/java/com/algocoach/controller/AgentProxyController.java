@@ -7,6 +7,12 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -66,6 +72,10 @@ public class AgentProxyController {
     static final String MEMORY_RECORD_PATH = "/memory/record";
     static final String MEMORY_PROFILE_PATH = "/memory/profile";
     static final String MEMORY_EXPORT_PATH = "/memory/export";
+    static final String KNOWLEDGE_CONFIG_PATH = "/knowledge/config";
+    static final String KNOWLEDGE_SOURCES_PATH = "/knowledge/sources";
+    static final String KNOWLEDGE_REINDEX_PATH = "/knowledge/reindex";
+    static final String KNOWLEDGE_STATUS_PATH = "/knowledge/status";
     static final String ANIMATE_PATH = "/animate";
     static final String ANIMATE_GENERATED_PATH = "/animate/generated";
     static final String ANIMATE_STATUS_PATH = "/animate/";
@@ -145,6 +155,61 @@ public class AgentProxyController {
         return forward(HttpMethod.GET, MEMORY_EXPORT_PATH, request, null);
     }
 
+    @GetMapping("/knowledge/config")
+    public Mono<ResponseEntity<byte[]>> knowledgeConfig(HttpServletRequest request) {
+        return forward(HttpMethod.GET, KNOWLEDGE_CONFIG_PATH, request, null);
+    }
+
+    @org.springframework.web.bind.annotation.PutMapping("/knowledge/config")
+    public Mono<ResponseEntity<byte[]>> updateKnowledgeConfig(
+            HttpServletRequest request, @RequestBody(required = false) byte[] body) {
+        return forward(HttpMethod.PUT, KNOWLEDGE_CONFIG_PATH, request, body);
+    }
+
+    @GetMapping("/knowledge/sources")
+    public Mono<ResponseEntity<byte[]>> knowledgeSources(HttpServletRequest request) {
+        return forward(HttpMethod.GET, KNOWLEDGE_SOURCES_PATH, request, null);
+    }
+
+    @PostMapping("/knowledge/sources")
+    public Mono<ResponseEntity<byte[]>> uploadKnowledgeSources(
+            HttpServletRequest request, @RequestPart("files") List<MultipartFile> files) {
+        MultipartBodyBuilder multipart = new MultipartBodyBuilder();
+        for (MultipartFile file : files) {
+            try {
+                byte[] bytes = file.getBytes();
+                String filename = file.getOriginalFilename() == null
+                        ? "source.txt" : file.getOriginalFilename();
+                multipart.part("files", new ByteArrayResource(bytes) {
+                    @Override
+                    public String getFilename() {
+                        return filename;
+                    }
+                });
+            } catch (java.io.IOException ex) {
+                return Mono.error(ex);
+            }
+        }
+        return forwardMultipart(HttpMethod.POST, KNOWLEDGE_SOURCES_PATH, request,
+                multipart.build());
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/knowledge/sources/{sourceId}")
+    public Mono<ResponseEntity<byte[]>> deleteKnowledgeSource(
+            @PathVariable String sourceId, HttpServletRequest request) {
+        return forward(HttpMethod.DELETE, KNOWLEDGE_SOURCES_PATH + "/" + sourceId, request, null);
+    }
+
+    @PostMapping("/knowledge/reindex")
+    public Mono<ResponseEntity<byte[]>> reindexKnowledge(HttpServletRequest request) {
+        return forward(HttpMethod.POST, KNOWLEDGE_REINDEX_PATH, request, null);
+    }
+
+    @GetMapping("/knowledge/status")
+    public Mono<ResponseEntity<byte[]>> knowledgeStatus(HttpServletRequest request) {
+        return forward(HttpMethod.GET, KNOWLEDGE_STATUS_PATH, request, null);
+    }
+
     @PostMapping("/animate")
     public Mono<ResponseEntity<byte[]>> animate(
             HttpServletRequest request,
@@ -180,6 +245,21 @@ public class AgentProxyController {
 
         return requestWithBody.exchangeToMono(response ->
                 response.bodyToMono(byte[].class)
+                        .defaultIfEmpty(new byte[0])
+                        .map(responseBody -> ResponseEntity.status(response.statusCode())
+                                .headers(headers -> copyResponseHeaders(
+                                        response.headers().asHttpHeaders(), headers))
+                                .body(responseBody)));
+    }
+
+    private Mono<ResponseEntity<byte[]>> forwardMultipart(
+            HttpMethod method, String upstreamPath, HttpServletRequest request,
+            MultiValueMap<String, org.springframework.http.HttpEntity<?>> body) {
+        WebClient.RequestBodySpec preparedRequest = agentClient.method(method)
+                .uri(upstreamUri(upstreamPath, request.getQueryString()))
+                .headers(headers -> headers.setContentType(MediaType.MULTIPART_FORM_DATA));
+        return preparedRequest.body(BodyInserters.fromMultipartData(body))
+                .exchangeToMono(response -> response.bodyToMono(byte[].class)
                         .defaultIfEmpty(new byte[0])
                         .map(responseBody -> ResponseEntity.status(response.statusCode())
                                 .headers(headers -> copyResponseHeaders(

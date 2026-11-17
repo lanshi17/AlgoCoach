@@ -45,11 +45,13 @@ from app.config import chroma_path
 COLLECTION_PROBLEM_CONTENT = "problem_content"
 COLLECTION_TOPIC_EXPLANATION = "topic_explanation"
 COLLECTION_ERROR_DESCRIPTION = "error_description"
+COLLECTION_USER_KNOWLEDGE = "user_knowledge"
 
 DOCUMENT_COLLECTIONS: tuple[str, ...] = (
     COLLECTION_PROBLEM_CONTENT,
     COLLECTION_TOPIC_EXPLANATION,
     COLLECTION_ERROR_DESCRIPTION,
+    COLLECTION_USER_KNOWLEDGE,
 )
 
 # Returned results are bounded so a tool call cannot flood the model context.
@@ -335,6 +337,36 @@ class VectorStore:
     async def count(self, collection: str) -> int:
         """Number of documents in a collection (used by tests and diagnostics)."""
         return await asyncio.to_thread(self._count_sync, collection)
+
+    async def delete(self, collection: str, *, where: dict[str, Any] | None = None,
+                     ids: Sequence[str] | None = None) -> int:
+        """Delete records by metadata filter or explicit ids."""
+        if not where and not ids:
+            return 0
+        return await asyncio.to_thread(self._delete_sync, collection, where, ids)
+
+    def _delete_sync(self, collection: str, where: dict[str, Any] | None,
+                     ids: Sequence[str] | None) -> int:
+        target = self._collection(collection)
+        before = int(target.count())
+        target.delete(where=where, ids=list(ids) if ids else None)
+        return max(0, before - int(target.count()))
+
+    async def reset(self) -> None:
+        """Drop the local client so a new embedding function can be used."""
+        await asyncio.to_thread(self._reset_sync)
+
+    def _reset_sync(self) -> None:
+        with self._lock:
+            self._client = None
+            self._collections = {}
+
+    def configure_embedding(self, embedding_function: Any) -> None:
+        """Set an embedding function before the next Chroma client is opened."""
+        with self._lock:
+            if self._client is not None:
+                raise RuntimeError("vector store must be reset before changing embeddings")
+            self._embedding_function = embedding_function
 
     async def export_all(self) -> dict[str, list[dict[str, Any]]]:
         """Return all indexed documents and metadata without embedding vectors."""

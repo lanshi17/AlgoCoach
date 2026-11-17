@@ -25,6 +25,7 @@ function checkAuthStatus(): Promise<unknown> {
 
 const ProgressPage = lazy(() => import('@/pages/ProgressPage'))
 const KnowledgeGraphPage = lazy(() => import('@/pages/KnowledgeGraphPage'))
+const KnowledgeBasePage = lazy(() => import('@/pages/KnowledgeBasePage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const PlatformLoginPage = lazy(() => import('@/pages/PlatformLoginPage'))
 
@@ -124,6 +125,7 @@ export default function AppShell() {
           <Route path="/workspace" element={<Workspace />} />
           <Route path="/progress" element={<ProgressPage />} />
           <Route path="/knowledge" element={<KnowledgeGraphPage />} />
+          <Route path="/knowledge/library" element={<KnowledgeBasePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/platforms" element={<PlatformLoginPage />} />
           <Route path="*" element={<Navigate to="/workspace" replace />} />

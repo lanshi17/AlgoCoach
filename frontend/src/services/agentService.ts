@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { nanoid } from 'nanoid'
-import type { AgentProfile, AnimationJob, CoachStyle, ModelProviderConfig, TrainingGoal, TrainingPhase } from '@/types'
+import type { AgentProfile, AnimationJob, CoachStyle, KnowledgeEmbeddingConfig, KnowledgeSource, KnowledgeStatus, ModelProviderConfig, TrainingGoal, TrainingPhase } from '@/types'
 
 interface ChatReply {
   content: string
@@ -92,6 +92,32 @@ export const agentService = {
 
   async exportMemory(): Promise<Blob> {
     const { data } = await axios.get<Blob>('/api/agent/memory/export', { responseType: 'blob' })
+    return data
+  },
+
+  async getKnowledgeStatus(): Promise<KnowledgeStatus> {
+    const { data } = await axios.get<KnowledgeStatus>('/api/agent/knowledge/status')
+    return data
+  },
+
+  async updateKnowledgeConfig(config: { provider: KnowledgeEmbeddingConfig['provider']; model: string; baseUrl?: string; apiKey?: string; dimensions?: number | null }): Promise<KnowledgeEmbeddingConfig> {
+    const { data } = await axios.put<KnowledgeEmbeddingConfig>('/api/agent/knowledge/config', config)
+    return data
+  },
+
+  async uploadKnowledgeSources(files: File[]): Promise<KnowledgeSource[]> {
+    const body = new FormData()
+    files.forEach(file => body.append('files', file))
+    const { data } = await axios.post<{ sources: KnowledgeSource[] }>('/api/agent/knowledge/sources', body)
+    return data.sources
+  },
+
+  async deleteKnowledgeSource(sourceId: string): Promise<void> {
+    await axios.delete(`/api/agent/knowledge/sources/${encodeURIComponent(sourceId)}`)
+  },
+
+  async reindexKnowledge(): Promise<{ files: number; chunks: number }> {
+    const { data } = await axios.post<{ files: number; chunks: number }>('/api/agent/knowledge/reindex')
     return data
   },
 

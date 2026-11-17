@@ -29,6 +29,7 @@ data/              SQLite 数据库 + 渲染出的 MP4 动画
 - **语义记忆** — 知识点掌握图谱，ELO 式 mastery 评分，SQLite `semantic` 表
 - **程序记忆** — 用户常见错误模式，SQLite `procedural` 表
 - **向量记忆** — 题目题干、知识点解释与卡点 embedding，存本地 ChromaDB（`CHROMA_PATH`），用于相似题推荐与重复错误检索；只写本机，默认使用本地 embedding 模型，不调用云 embedding API
+- **用户知识库** — `/knowledge/library` 支持通过网页配置本地或自定义 OpenAI-compatible embedding，上传 TXT/Markdown/JSON/CSV/HTML/PDF/DOCX/ZIP 源文件并建立独立向量索引；文件和 Provider 密钥只保存在本机 `KNOWLEDGE_DIR`
 - **自我改进回测** — 记录推荐并在 7 天窗口后按训练事件评估效果，提供月度策略汇总；只生成分析结果，不自动修改 prompt 或推荐权重。
 - **Prompt 目标** — 提供 `interview_prep`、`contest`、`casual` 三种系统提示词目标；竞赛训练阶段通过 `/chat/stream` 请求选择。
 - **OI / xCPC 训练协议** — `/chat/stream` 支持 `virtual_contest`、`topic_drill`、`attempt`、`hint`、`review`、`upsolve` 阶段和剩余时间提醒，指导读题建模、约束推导、部分得分、逐级提示与赛后复盘。

@@ -5,7 +5,7 @@ import logging
 from typing import Any
 
 import anthropic
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response, UploadFile, File
 from fastapi.responses import StreamingResponse
 from openai import APIConnectionError as OpenAIAPIConnectionError
 from openai import APIStatusError as OpenAIAPIStatusError
@@ -18,6 +18,7 @@ from app.config import (
     remotion_codegen_token,
 )
 from app.memory.memory_service import memory
+from app.memory import knowledge_base
 from app.models.schemas import (
     AnimateRequest,
     ChatRequest,
@@ -64,6 +65,71 @@ def _provider_error_detail(status_code: int, protocol: str) -> str:
     if status_code >= 500:
         return "模型服务暂时不可用，请稍后重试。"
     return "模型服务请求失败，请检查 Provider 设置后重试。"
+
+
+@router.get("/knowledge/config")
+async def knowledge_config():
+    return knowledge_base.get_config().public()
+
+
+@router.put("/knowledge/config")
+async def update_knowledge_config(request: Request):
+    try:
+        payload = await request.json()
+        config = knowledge_base.configure(payload)
+        await knowledge_base.apply_config(config)
+        return config.public()
+    except knowledge_base.KnowledgeBaseError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(422, detail="embedding 配置格式无效") from exc
+
+
+@router.get("/knowledge/sources")
+async def knowledge_sources():
+    return {"sources": knowledge_base.list_sources()}
+
+
+@router.post("/knowledge/sources")
+async def upload_knowledge_sources(files: list[UploadFile] = File(...)):
+    if len(files) > knowledge_base.MAX_FILES:
+        raise HTTPException(413, detail=f"一次最多上传 {knowledge_base.MAX_FILES} 个文件")
+    total = 0
+    results = []
+    try:
+        for upload in files:
+            data = await upload.read()
+            total += len(data)
+            if total > knowledge_base.MAX_TOTAL_BYTES:
+                raise knowledge_base.KnowledgeBaseError("单次上传总大小不能超过 100 MB")
+            results.append(await knowledge_base.add_source(upload.filename or "source.txt", data))
+        return {"sources": results}
+    except knowledge_base.KnowledgeBaseError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+
+
+@router.delete("/knowledge/sources/{source_id}")
+async def delete_knowledge_source(source_id: str):
+    try:
+        return {"removedChunks": await knowledge_base.remove_source(source_id)}
+    except knowledge_base.KnowledgeBaseError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+
+
+@router.post("/knowledge/reindex")
+async def reindex_knowledge():
+    try:
+        return await knowledge_base.reindex()
+    except knowledge_base.KnowledgeBaseError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
+
+
+@router.get("/knowledge/status")
+async def knowledge_status():
+    try:
+        return await knowledge_base.status()
+    except knowledge_base.KnowledgeBaseError as exc:
+        raise HTTPException(422, detail=str(exc)) from exc
 
 
 def _session_id(req: ChatRequest) -> str:

@@ -166,6 +166,28 @@ export interface AgentProfile {
   }
 }
 
+export interface KnowledgeEmbeddingConfig {
+  provider: 'local' | 'openai-compatible'
+  model: string
+  baseUrl: string
+  hasApiKey: boolean
+  dimensions: number | null
+}
+
+export interface KnowledgeSource {
+  id: string
+  name: string
+  bytes: number
+  updatedAt: number
+  chunks?: number
+}
+
+export interface KnowledgeStatus {
+  config: KnowledgeEmbeddingConfig
+  sources: KnowledgeSource[]
+  indexedChunks: number
+}
+
 // ─── Animation ───
 
 export interface AnimationJob {

@@ -43,6 +43,7 @@ services:
       PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
       GATEWAY_BASE_URL: http://gateway:8080
       REME_VECTOR_ENABLED: "true"
+      KNOWLEDGE_DIR: /data/knowledge
       # Persist Chroma/ReMe's local ONNX embedding model in the shared data
       # volume instead of redownloading it whenever the Agent container is
       # recreated.

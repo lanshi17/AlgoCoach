@@ -852,6 +852,11 @@ CREATE INDEX idx_submission_created ON submission_record(created_at);
 | `POST` | `/api/agent/animate` | `POST /animate` | `{type, topic?, title?, problemId?}` | 上游原始 JSON |
 | `POST` | `/api/agent/animate/generated` | `POST /animate/generated` | `GeneratedAnimationRequest` + `Authorization: Bearer <token>` | 上游原始 JSON |
 | `GET`  | `/api/agent/animate/{jobId}` | `GET /animate/{jobId}` | — | 上游原始 JSON |
+| `GET`  | `/api/agent/knowledge/status` | `GET /knowledge/status` | — | embedding 配置、源文件和索引计数 |
+| `PUT`  | `/api/agent/knowledge/config` | `PUT /knowledge/config` | embedding Provider 配置 | 当前配置（不返回 key） |
+| `POST` | `/api/agent/knowledge/sources` | `POST /knowledge/sources` | multipart `files` | 上传文件和 chunk 数 |
+| `DELETE` | `/api/agent/knowledge/sources/{sourceId}` | `DELETE /knowledge/sources/{sourceId}` | — | 删除源文件及索引 |
+| `POST` | `/api/agent/knowledge/reindex` | `POST /knowledge/reindex` | — | 文件数和 chunk 数 |
 
 代理语义见 §4.8：保留 method、query string 和原始 body，只转发 `Content-Type` 与
 `Authorization`；上游的 HTTP status、body、`Content-Type`、`Retry-After` 和
