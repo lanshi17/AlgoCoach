@@ -30,6 +30,7 @@ DEFAULT_CLAUDE_MODEL = "claude-opus-5-5"
 # Embedded ReMe workspace (memory cards + keyword/vector indexes). Like the
 # SQLite/Chroma stores this is local-only; it is never uploaded.
 DEFAULT_REME_WORKSPACE = "../../data/reme"
+DEFAULT_REME_VECTOR_ENABLED = True
 
 
 def gateway_base_url() -> str:
@@ -91,6 +92,16 @@ def reme_workspace_dir() -> str:
         os.getenv("REME_WORKSPACE_DIR", DEFAULT_REME_WORKSPACE).strip()
         or DEFAULT_REME_WORKSPACE
     )
+
+
+def reme_vector_enabled() -> bool:
+    """Whether ReMe should use the local MiniLM vector index.
+
+    Enabled by default. Set ``REME_VECTOR_ENABLED=false`` to use ReMe's
+    keyword index only, for example on a machine that should not download the
+    local ONNX embedding model.
+    """
+    return os.getenv("REME_VECTOR_ENABLED", "true").strip().lower() != "false"
 
 
 # ── Generated Remotion code (P2) ────────────────────────────────

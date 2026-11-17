@@ -20,6 +20,17 @@
     --sidebar-expanded-w: 220px;
     --problem-w: 420px;
     --header-h: 48px;
+    --accent-rgb: 132 75 60;
+    --accent-hover-rgb: 110 58 46;
+    --accent-soft-rgb: 239 225 216;
+    --accent-dark-soft-rgb: 239 225 216;
+  }
+
+  :root.dark {
+    --accent-rgb: 201 143 121;
+    --accent-hover-rgb: 218 162 140;
+    --accent-soft-rgb: 76 54 46;
+    --accent-dark-soft-rgb: 201 143 121;
   }
 
   html { height: 100%; }
@@ -35,14 +46,24 @@
 
   #root { height: 100%; }
 
-  /* Scrollbar styling — Qwen-like minimal */
-  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
     @apply bg-border rounded-full;
   }
   .dark ::-webkit-scrollbar-thumb {
     @apply bg-border-dark;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--accent-rgb) / 0.75);
+    outline-offset: 2px;
+  }
+
+  input,
+  select,
+  textarea {
+    accent-color: rgb(var(--accent-rgb));
   }
 
   /* Monaco editor container fix */
@@ -52,11 +73,11 @@
 }
 
 @layer components {
-  /* Qwen-style sidebar icon button */
+  /* Quiet navigation keeps the working surface in the foreground. */
   .sidebar-btn {
-    @apply flex items-center justify-center w-10 h-10 rounded-lg
+    @apply flex items-center justify-center w-10 h-10 rounded-md
            text-text-secondary hover:text-text-primary hover:bg-surface-muted
-           transition-all duration-150 cursor-pointer relative;
+           transition-colors duration-150 cursor-pointer relative;
   }
   .dark .sidebar-btn {
     @apply text-text-dark-secondary hover:text-text-dark-primary hover:bg-surface-dark-muted;
@@ -81,24 +102,26 @@
 
   /* Focus mode overlay indicator */
   .focus-mode-bar {
-    @apply fixed top-0 left-0 right-0 h-0.5 bg-focus z-50 animate-pulse-soft;
+    @apply fixed top-0 left-0 right-0 h-0.5 bg-focus z-50;
   }
 
-  /* Chat bubble */
+  /* Message layout follows a reading column instead of chat bubbles. */
   .chat-bubble-user {
-    @apply ml-auto max-w-[80%] px-3.5 py-2.5 rounded-2xl rounded-br-sm
-           bg-accent text-white text-sm leading-relaxed;
+    @apply ml-auto max-w-[80%] px-3.5 py-2.5 rounded-md
+           bg-surface-muted text-text-primary text-sm leading-6;
   }
   .chat-bubble-agent {
-    @apply mr-auto max-w-[90%] px-3.5 py-2.5 rounded-2xl rounded-bl-sm
-           bg-surface-soft border border-border text-sm leading-relaxed;
+    @apply mr-auto max-w-full px-0 py-1
+           bg-transparent border-0 text-sm leading-7;
   }
   .dark .chat-bubble-agent {
-    @apply bg-surface-dark-soft border-border-dark text-text-dark-primary;
+    @apply bg-transparent border-0 text-text-dark-primary;
+  }
+  .dark .chat-bubble-user {
+    @apply bg-surface-dark-muted text-text-dark-primary;
   }
 
-  /* Bubbles live in a flex row: without min-width:0 a wide formula or a long
-     unbroken token grows the bubble past the panel instead of wrapping. */
+  /* Message rows must shrink around wide formulae and long unbroken tokens. */
   .chat-bubble-user,
   .chat-bubble-agent {
     min-width: 0;
@@ -129,6 +152,13 @@
   .chat-bubble-agent pre {
     max-width: 100%;
     overflow-x: auto;
+  }
+
+  .editorial-rule {
+    border-color: rgb(125 102 76 / 0.2);
+  }
+  .dark .editorial-rule {
+    border-color: rgb(196 177 151 / 0.18);
   }
 
   /* Panel divider handle */

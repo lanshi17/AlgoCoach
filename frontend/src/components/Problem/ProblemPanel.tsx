@@ -343,8 +343,11 @@ export default function ProblemPanel() {
   return (
     <div className="flex flex-col h-full">
       {/* Title block */}
-      <div className="flex-shrink-0 px-5 py-4 border-b border-border dark:border-border-dark">
-        <div className="flex justify-end mb-2">
+      <div className="flex-shrink-0 px-5 py-4 border-b editorial-rule">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-text-muted dark:text-text-dark-muted">
+            {activeProblem.platformId}
+          </span>
           <button onClick={() => setShowPicker(true)} disabled={mode === 'FOCUS'}
             title={mode === 'FOCUS' ? '专注解题时不能切换题目' : '更换题目'}
             className="text-xs text-text-muted hover:text-accent disabled:opacity-40">
@@ -357,7 +360,7 @@ export default function ProblemPanel() {
             <span className="badge bg-accent/10 text-accent">每日一题</span>
           )}
         </div>
-        <h1 className="text-lg font-semibold text-text-primary dark:text-text-dark-primary mb-2">
+        <h1 className="mb-2 font-editorial text-xl font-medium tracking-wide text-text-primary dark:text-text-dark-primary">
           {activeProblem.titleCn ?? activeProblem.title}
         </h1>
         {restoredStatementStatus !== 'idle' && (

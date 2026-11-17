@@ -35,6 +35,8 @@ Agent(state=AgentState(session_id=session_id))
 - 回复结束后通过 `auto_memory` 按 `session_id` 自动写回；
 - 记忆卡片存 `REME_WORKSPACE_DIR`（默认 `./data/reme`）；写回按 AgentScope session_id 标记，检索在 workspace 范围内跨会话进行。
 
+**静态算法知识库**：Agent 启动时从仓库根目录的 `01-算法套路.md.zip` 和 `editor/` 幂等生成 Markdown，放到 ReMe 的 `digest/wiki/algorithm-library/`。ReMeMiddleware 同时启用本地 MiniLM 向量模型（384 维，复用 Chroma 的 ONNX `all-MiniLM-L6-v2`）和 BM25 关键词索引，向量索引保存在 ReMe workspace 的 metadata 下；首次创建 ReMeMiddleware 时，Coach 在第一次搜索前显式调用 ReMe `reindex` job，避免后台 watcher 首轮扫描尚未结束造成漏检。检索能同时命中算法套路原文、图像引用、C++/Rust/TypeScript 历史题解和代码模板。设置 `REME_VECTOR_ENABLED=false` 可退回纯关键词模式。导入器只清理自己上次登记的陈旧文件，不改写其他日记、摘要或记忆卡。导入清单和生成结果均位于该知识库子目录。
+
 **用户目标**：设置页将 `contest` / `interview_prep` / `casual` 偏好写入浏览器本地存储，每次 `/chat` 通过 `goal` 字段发送；Agent 不建立额外用户配置表。
 
 **session_id 管理**：
@@ -156,7 +158,7 @@ INSERT INTO semantic_relation VALUES ('滑动窗口', '双指针', 0.6, 'RELATED
 
 #### 2.3.3 chromadb 向量化方案（P1 已实现）
 
-实现位于 `backend/agent/app/memory/vector_store.py`，使用锁定版本 `chromadb==0.5.3`，持久化目录由 `CHROMA_PATH` 指定（默认 `../../data/chroma`，容器内 `/data/chroma`）。所有数据只写本机：不调用云 embedding API，不上传题目或用户卡点；Chroma 匿名遥测通过 `anonymized_telemetry=False` 关闭。
+实现位于 `backend/agent/app/memory/vector_store.py`，使用锁定版本 `chromadb==1.5.9`，持久化目录由 `CHROMA_PATH` 指定（默认 `../../data/chroma`，容器内 `/data/chroma`）。所有数据只写本机：不调用云 embedding API，不上传题目或用户卡点；Chroma 匿名遥测通过 `anonymized_telemetry=False` 关闭。
 
 ```python
 # 三个独立 collection，避免跨类型召回噪声
@@ -177,7 +179,7 @@ def find_similar_problems(problem_text: str, top_k: int = 5):
     return chroma.query(collection="problem_content", query_embeddings=[emb], n_results=top_k)
 ```
 
-- **embedding**：默认使用 Chroma 本地 ONNX `all-MiniLM-L6-v2`（384 维）。模型延迟到首次索引/查询才初始化；第一次使用会把约 80 MB 模型下载到本机 `~/.cache/chroma`，之后可离线使用。测试注入确定性 fake embedding，不下载模型。
+- **embedding**：默认使用 Chroma 本地 ONNX `all-MiniLM-L6-v2`（384 维）。模型延迟到首次索引/查询才初始化；第一次使用会把约 80 MB 模型下载到本机缓存（Compose 中为持久化的 `/data/.cache/chroma`），之后可离线使用。测试注入确定性 fake embedding，不下载模型。
 - **返回边界**：query 默认 `top_k=5`、上限 10，document 截断到 500 字符；coach 的 `get_similar_problems` 进一步限制为最多 5 条。
 - **metadata**：`id` / `problem_id` / `title` / `topic` / `platform` / `created_at`（题目另有 `difficulty`），可用于等值过滤。
 - **降级**：chromadb 缺失或本地目录损坏时，相似题 tool 返回错误而不是让对话失败；索引失败只记日志。

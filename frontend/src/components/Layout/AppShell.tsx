@@ -175,13 +175,13 @@ function Workspace() {
   return (
     <>
       <Header />
-      <nav aria-label="工作区面板" className="flex shrink-0 border-b border-border dark:border-border-dark xl:hidden">
+      <nav aria-label="工作区面板" className="flex shrink-0 border-b border-border bg-surface-soft dark:border-border-dark dark:bg-surface-dark-soft xl:hidden">
         {([
           ['problem', '题目'], ['editor', '编辑器'], ['chat', 'AI 教练'],
         ] as const).map(([value, label]) => (
           <button key={value} type="button" aria-pressed={panel === value}
             onClick={() => setPanel(value)}
-            className={`flex-1 border-b-2 px-2 py-2 text-sm transition-colors ${panel === value
+            className={`flex-1 border-b px-2 py-2.5 text-xs tracking-wide transition-colors ${panel === value
               ? 'border-accent font-medium text-accent'
               : 'border-transparent text-text-secondary dark:text-text-dark-secondary'}`}>
             {label}

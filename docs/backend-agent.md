@@ -7,7 +7,7 @@
 > - **P1 已完成**：`agent/crons.py`、`notifications`、间隔复习、周报（文字 + 1920×1080/60fps 视频）、90 天归档；`memory/vector_store.py` 的题目/知识点/卡点向量记忆及 `fetch_problem_meta` / `get_similar_problems` tools。向量记忆已由负责人独立复核通过；`solution_comment` 仍为 V2。
 > - **P2 Remotion 生成代码沙箱已实现，默认关闭、未上线**：新增 `remotion/codegen.py` 与 `POST /animate/generated`。只有 `REMOTION_CODEGEN_ENABLED=true`、配置 `REMOTION_CODEGEN_TOKEN`、Bearer token 校验通过且真实 Bubblewrap preflight 全部通过时才开放；活动 generated jobs 默认上限 1（clamp 1–2），满时 429。本机开发环境（Ubuntu、bubblewrap 0.11.1、systemd user scope、Chrome）已实测 preflight、离线隔离属性、沙箱内 ffprobe 和一次 1280×720/240 帧真实渲染；不可信 MP4 不在宿主解析。部署环境缺少 bwrap / 非特权 user namespace / systemd cgroup v2 delegation / Node / Chrome 时保持不可用，绝不回退到宿主执行。当前 Docker Compose 未授予这些能力，容器内该项不可用。
 > - **P2 `agent/self_improve.py` 已实现（人工分析型 MVP）**：新增 `recommendation_log` 表及可重跑迁移、`memory.get_mastery`、推荐日志、固定 7 天回测、月度策略汇总、`suggest_next_problem` tool 与两个 cron job。回测按 `[created_at, evaluation_due_at]` 内的事件从 `mastery_before` 重放 ELO 并保存 `mastery_after`，延迟调度不会读入窗口外练习。评估只做记录与人工可读建议，**不自动修改 Soul、prompt、推荐权重或配置**，也没有正式 UI/通知。
-> - **P3 prompt 集中管理与目标变体 API 已实现**：Soul 原文迁至 `agent/prompts.py`，`get_system_prompt(goal)` 支持 `interview_prep` / `contest` / `casual` 三种变体，未知值回退原版；`coach.chat()` 接收来自设置页的浏览器偏好目标；竞赛阶段显式覆盖该目标。目标保存在当前浏览器，不另建用户配置表。
+> - **P3 prompt 集中管理与目标变体 API 已实现**：Soul 原文迁至 `agent/prompts.py`，`get_system_prompt(goal)` 支持 `interview_prep` / `contest` / `casual` 三种变体，未知值回退原版；助教式教学原则（先问尝试、解释原因、引导验证、不直接给最终答案或整段成品代码）融入基础 Soul；`coach.chat()` 接收来自设置页的浏览器偏好目标；竞赛阶段显式覆盖该目标。目标保存在当前浏览器，不另建用户配置表。
 > - **contest 训练协议已接入 `/chat`**：`ChatRequest` 新增可选 `trainingPhase`（默认 `auto`，允许 `virtual_contest` / `topic_drill` / `attempt` / `hint` / `review` / `upsolve`，未知回退 `auto`）与 `timeRemainingSec`（可选非负整数）；显式阶段或剩余时间会启用 `contest` 目标与真实 OI/xCPC 训练协议，阶段/剩余时间同时写入 AgentScope 用户消息，ReMe 记忆可见。`ChatResponse`、FOCUS 静默、非 contest 行为与旧客户端均不变，未新增训练 SQLite（详见 §3.3）。
 > - **/chat Agent runtime 已迁移到 AgentScope 2.0.11 + 官方 ReMeMiddleware**：`AlgoCoach` 使用 `Agent`/`AgentState` 替代手写 Claude tool loop 与 `_sessions`；ReMe 进程内单实例，`mode="both"` 自动召回/写回；短期 AgentState 按页面会话与题目隔离，ReMe workspace 跨会话检索，应用关闭时 `await coach.close()`。FOCUS 仍完全静默。`ChatResponse` 与工具 schema 保持不变；请求新增可选 `conversationId` / `platform` 字段以隔离新客户端上下文，同时兼容旧客户端。
 
@@ -170,7 +170,7 @@ Soul 是 agent 的人格与行为准则，注入 Claude 的 `system` 参数。�
 **P3 已实现（prompt 集中管理与目标变体）：**
 
 - `SOUL` 保留原 `coach.py` 原文，默认文字、FOCUS 静默、PREP/REVIEW 工具指导与中文风格不变。
-- `UserGoal` 枚举定义 `interview_prep` / `contest` / `casual`；`GOAL_GUIDANCE` 只为每种目标**追加**少量有依据的侧重点（面试：复杂度与边界论证；竞赛：约束、正确性证明与复杂度；日常：逐步理解），不删除、不覆盖基础规则与 FOCUS 静默。
+- `UserGoal` 枚举定义 `interview_prep` / `contest` / `casual`；`GOAL_GUIDANCE` 只为每种目标**追加**少量有依据的侧重点（面试：复杂度与边界论证；竞赛：约束、正确性证明与复杂度；日常：逐步理解），基础 Soul 统一采用助教式教学原则，不删除、不覆盖基础规则与 FOCUS 静默。
 - `get_system_prompt(goal)` 返回对应模板；`None`、空串或未知值统一回退到原始 Soul，不抛错。
 - `coach.chat()` 在普通请求中采用前端持久化的目标（竞赛阶段优先），未知值退回 `DEFAULT_GOAL`；自动改写 prompt 不在当前范围。
 

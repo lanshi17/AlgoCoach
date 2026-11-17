@@ -15,6 +15,8 @@ exactly once; shutdown stops it and closes the embedded ReMe app.
 ``ALGOCOACH_CRONS_ENABLED=false`` disables scheduled jobs for tests and local
 runs.
 """
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -24,12 +26,22 @@ from app.agent.coach import coach
 from app.agent.crons import shutdown_crons, start_crons
 from app.agent.router import router as agent_router
 from app.memory.db import init_db
+from app.memory.algorithm_knowledge import seed_algorithm_knowledge
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     await init_db()
     await start_crons()
+    # ReMe's embedded AgentScope configuration indexes Markdown in daily/ and
+    # digest/. Seed the source corpus before the first lazy ReMe startup so its
+    # initial file scan sees the algorithm notes and historical solutions.
+    try:
+        await asyncio.to_thread(seed_algorithm_knowledge)
+    except Exception:  # noqa: BLE001 - local knowledge import must not block API startup
+        logger.exception("Could not seed the ReMe algorithm knowledge library")
     try:
         yield
     finally:

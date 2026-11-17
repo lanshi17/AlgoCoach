@@ -37,8 +37,8 @@ export default function ChatMessage({ message }: { message: Msg }) {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}>
       {!isUser && (
-        <div className="w-6 h-6 rounded-full bg-accent flex items-center justify-center
-                        text-white text-xs flex-shrink-0 mt-0.5 mr-2">AI</div>
+        <div aria-hidden="true" className="mt-1 mr-2 flex h-5 w-5 flex-shrink-0 items-center justify-center
+                        rounded-full bg-accent-soft text-[9px] font-semibold text-accent dark:bg-accent-dark-soft">A</div>
       )}
       <div className={isUser ? 'chat-bubble-user' : 'chat-bubble-agent'}>
         {isUser ? (

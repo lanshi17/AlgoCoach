@@ -39,6 +39,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends fonts-noto-cjk 
 COPY --from=remotion-deps /remotion-compositions/node_modules /remotion-compositions/node_modules
 COPY remotion-compositions /remotion-compositions
 COPY backend/agent/app ./app
+# Source material for the ReMe algorithm library. It is imported as searchable
+# Markdown under the mounted workspace's digest/wiki directory at startup.
+COPY 01-算法套路.md.zip ./algorithm-sources/01-算法套路.md.zip
+COPY editor ./algorithm-sources/editor
+ENV ALGOCOACH_KNOWLEDGE_SOURCE_DIR=/app/algorithm-sources
 
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

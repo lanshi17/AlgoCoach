@@ -48,6 +48,7 @@ from agentscope.credential import (
     XAICredential,
 )
 from agentscope.event import EventType
+from agentscope.embedding import EmbeddingModelBase
 from agentscope.message import Msg, UserMsg
 from agentscope.middleware import ReMeMiddleware
 from agentscope.model import (
@@ -85,8 +86,10 @@ from app.config import (
     anthropic_base_url,
     claude_model,
     reme_workspace_dir,
+    reme_vector_enabled,
     remotion_enabled,
 )
+from app.memory.embedding import create_local_embedding_model
 from app.memory.memory_service import memory
 from app.memory.vector_store import (
     VectorStoreError,
@@ -288,12 +291,19 @@ class AlgoCoach:
         *,
         chat_model: ChatModelBase | None = None,
         reme_middleware: ReMeMiddleware | None = None,
+        embedding_model: EmbeddingModelBase | None = None,
     ) -> None:
         # Construction is lazy: the Anthropic client and the embedded ReMe app
         # are only created on the first non-FOCUS chat. That keeps app startup
         # and FOCUS requests independent from credentials/network.
         self._chat_model = chat_model
         self._memory = reme_middleware
+        self._embedding_model = embedding_model
+        # Injected middleware doubles keep their own lifecycle in tests. The
+        # production middleware is created lazily and needs one deterministic
+        # ReMe index rebuild before its first search can see seeded documents.
+        self._managed_memory = reme_middleware is None
+        self._reme_index_ready = False
         self._agents: dict[str, Agent] = {}
         self._locks: dict[str, asyncio.Lock] = {}
         self._init_lock = asyncio.Lock()
@@ -316,20 +326,26 @@ class AlgoCoach:
                 await middleware.close()
             existing = self._agents.get(session_id)
             if existing is not None:
+                await self._ensure_reme_index()
                 return existing
 
             if self._chat_model is None:
                 self._chat_model = self._build_chat_model(provider)
             self._provider_fingerprint = fingerprint
             if self._memory is None:
+                if self._embedding_model is None and reme_vector_enabled():
+                    self._embedding_model = create_local_embedding_model()
                 self._memory = ReMeMiddleware(
                     workspace_dir=reme_workspace_dir(),
                     parameters=ReMeMiddleware.Parameters(
                         chat_model=self._chat_model,
+                        embedding_model=self._embedding_model,
                         mode="both",
                         top_k=REME_TOP_K,
                     ),
                 )
+
+            await self._ensure_reme_index()
 
             # ReMe's write path is automatic; "both" also exposes the optional
             # memory_search tool, which must be registered explicitly.
@@ -350,6 +366,29 @@ class AlgoCoach:
             self._locks[session_id] = asyncio.Lock()
             return agent
 
+    async def _ensure_reme_index(self) -> None:
+        """Index the current ReMe workspace before the first retrieval.
+
+        AgentScope's ReMeMiddleware exposes automatic search/write-back but no
+        public index warm-up method. The pinned middleware exposes the ReMe
+        lifecycle and job runner used by its own search path; invoking its
+        ``reindex`` job once removes the first-turn race with the background
+        watcher. The operation rebuilds derived indexes only and never edits
+        ReMe Markdown source files.
+        """
+        if not self._managed_memory or self._reme_index_ready or self._memory is None:
+            return
+        try:
+            await self._memory._ensure_started()
+            result = await self._memory._run_job("reindex")
+            if getattr(result, "success", False):
+                self._reme_index_ready = True
+                logger.info("ReMe memory index is ready for the current workspace")
+            else:
+                logger.warning("ReMe index warm-up did not complete: %s", getattr(result, "answer", "unknown error"))
+        except Exception:  # noqa: BLE001 - memory indexing must not block coaching
+            logger.exception("ReMe index warm-up failed; the background index watcher remains active")
+
     async def close(self) -> None:
         """Close the embedded ReMe app (idempotent).
 
@@ -362,6 +401,7 @@ class AlgoCoach:
             self._agents.clear()
             self._locks.clear()
             self._provider_fingerprint = None
+            self._reme_index_ready = False
         if middleware is not None:
             await middleware.close()
 
@@ -564,7 +604,8 @@ class AlgoCoach:
             if is_contest_context(phase, time_remaining_sec)
             else DEFAULT_GOAL
         )
-        training_context = build_training_context(phase, time_remaining_sec)
+        training_context = build_training_context(phase, time_remaining_sec) \
+            if resolved_goal is UserGoal.CONTEST else ""
         user_content = (
             f"{training_context}\n{message}" if training_context else message
         )
@@ -668,7 +709,8 @@ class AlgoCoach:
             if is_contest_context(phase, time_remaining_sec)
             else DEFAULT_GOAL
         )
-        training_context = build_training_context(phase, time_remaining_sec)
+        training_context = build_training_context(phase, time_remaining_sec) \
+            if resolved_goal is UserGoal.CONTEST else ""
         user_content = f"{training_context}\n{message}" if training_context else message
         agent = await self._get_agent(session_id, provider)
         lock = self._locks[session_id]

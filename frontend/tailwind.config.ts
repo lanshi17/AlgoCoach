@@ -6,41 +6,41 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Qwen-inspired palette — clean blue-indigo spectrum
         surface: {
-          DEFAULT: '#ffffff',
-          soft:    '#f7f7f8',
-          muted:   '#efefef',
-          dark:    '#1a1a2e',
-          'dark-soft': '#16213e',
-          'dark-muted': '#0f3460',
+          DEFAULT: '#f6f2e9',
+          soft:    '#fbf9f3',
+          muted:   '#ece5d9',
+          dark:    '#211f1a',
+          'dark-soft': '#2a2721',
+          'dark-muted': '#3a352d',
         },
         accent: {
-          DEFAULT: '#5b6af5',
-          hover:   '#4a57e8',
-          soft:    '#eef0ff',
-          'dark-soft': 'rgba(91,106,245,0.15)',
+          DEFAULT: 'rgb(var(--accent-rgb) / <alpha-value>)',
+          hover:   'rgb(var(--accent-hover-rgb) / <alpha-value>)',
+          soft:    'rgb(var(--accent-soft-rgb) / <alpha-value>)',
+          'dark-soft': 'rgb(var(--accent-dark-soft-rgb) / 0.14)',
         },
         border: {
-          DEFAULT: '#e5e7eb',
-          dark:    '#2a2a3e',
+          DEFAULT: '#ddd5c8',
+          dark:    '#443d33',
         },
         text: {
-          primary:   '#1a1a2e',
-          secondary: '#6b7280',
-          muted:     '#9ca3af',
-          'dark-primary':   '#e8eaf6',
-          'dark-secondary': '#9fa8c0',
-          'dark-muted':     '#5c6480',
+          primary:   '#302b25',
+          secondary: '#6c645a',
+          muted:     '#8a8176',
+          'dark-primary':   '#eee7db',
+          'dark-secondary': '#b7ac9d',
+          'dark-muted':     '#8d8377',
         },
         // Status colors
-        success: '#22c55e',
-        warning: '#f59e0b',
-        danger:  '#ef4444',
-        focus:   '#ef4444',   // Focus mode lock color
+        success: '#627658',
+        warning: '#98713d',
+        danger:  '#a34f43',
+        focus:   'rgb(var(--accent-rgb) / <alpha-value>)',
       },
       fontFamily: {
-        sans: ['PingFang SC', 'Inter', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'PingFang SC', 'system-ui', 'sans-serif'],
+        editorial: ['Noto Serif SC', 'Songti SC', 'STSong', 'serif'],
         mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'monospace'],
       },
       borderRadius: {
@@ -50,9 +50,9 @@ export default {
         '2xl':   '20px',
       },
       boxShadow: {
-        card:   '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-        modal:  '0 20px 60px rgba(0,0,0,0.12)',
-        glow:   '0 0 0 3px rgba(91,106,245,0.2)',
+        card:   '0 1px 2px rgba(45,36,27,0.05)',
+        modal:  '0 16px 40px rgba(34,29,22,0.16)',
+        glow:   '0 0 0 3px rgb(var(--accent-rgb) / 0.18)',
       },
       animation: {
         'fade-in':    'fadeIn 0.2s ease-out',

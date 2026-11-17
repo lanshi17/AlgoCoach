@@ -148,7 +148,7 @@ frontend/
 - PREP 模式下显示半透明蒙层 + "开始做题" 按钮，点击调用 `enterFocus()`
 - Monaco `quickSuggestions` 绑定到 `isEditable`：FOCUS 下显示离线词语联想和六种语言的本地关键字/算法模板补全，不接入 AI 补全
 - 选题后使用当前语言对应的 LeetCode starter code；切换语言只更新 Monaco 语言标识，不覆盖用户编辑内容。
-- `MonacoCodeEditor` 使用 Monaco 树摇入口 `monaco-editor/editor`，只注册 Rust、C++、Python、TypeScript、Go、Java 六种语法定义和本地 `CompletionItemProvider`，并统一使用本地 editor worker；不启动外部语言服务器，保持离线加载。
+- `MonacoCodeEditor` 使用 Monaco 树摇入口 `monaco-editor/editor`，只注册 Rust、C++、Python、TypeScript、Go、Java 六种语法定义和本地 `CompletionItemProvider`，并统一使用本地 editor worker；不启动外部语言服务器，保持离线加载。C++ 补全支持 `std::` 类型/算法，以及已识别 STL 容器的 `. / ->` 成员方法（如 `vector.size`、`priority_queue.top`）。
 
 **Monaco 配置要点**：
 ```typescript

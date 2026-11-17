@@ -44,7 +44,7 @@ export default function EditorPanel() {
           value={code}
           onChange={v => setCode(v ?? '')}
           onMount={handleEditorMount}
-          theme={theme === 'dark' ? 'vs-dark' : 'vs'}
+          theme={theme === 'dark' ? 'algocoach-ink' : 'algocoach-paper'}
           options={{
             ariaLabel: '代码编辑器',
             fontSize: 14,

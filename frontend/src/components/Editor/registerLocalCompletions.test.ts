@@ -39,23 +39,24 @@ vi.mock('monaco-editor/editor', () => ({
   },
 }))
 
-const position = { lineNumber: 1, column: 1 }
-
 function providerFor(language: string): Provider {
   const entry = registrations.find(item => item.language === language)
   if (!entry) throw new Error(`no completion provider registered for ${language}`)
   return entry.provider as Provider
 }
 
-function modelFor(word: string) {
+function modelFor(word: string, line = word) {
   return {
     getWordUntilPosition: () => ({ word, startColumn: 1, endColumn: 1 + word.length }),
+    getLineContent: () => line,
+    getValue: () => line,
   }
 }
 
-function suggestionsFor(language: string, word: string, triggerKind = 0): Suggestion[] {
+function suggestionsFor(language: string, word: string, triggerKind = 0, line = word): Suggestion[] {
+  const position = { lineNumber: 1, column: line.length + 1 }
   return providerFor(language).provideCompletionItems(
-    modelFor(word),
+    modelFor(word, line),
     position,
     { triggerKind },
   ).suggestions
@@ -93,5 +94,25 @@ describe('local completions', () => {
     // `self.` has no word to complete; suggesting `for`/`range` here would
     // insert `self.range(${1:n})`.
     expect(suggestionsFor('python', '', 1)).toHaveLength(0)
+  })
+
+  it('offers C++ STL member methods after a dot', () => {
+    const labels = suggestionsFor('cpp', '', 1, 'vector.').map(item => item.label)
+    expect(labels).toEqual(expect.arrayContaining(['size', 'push_back', 'begin', 'erase']))
+  })
+
+  it('offers C++ STL types and algorithms after std::', () => {
+    const labels = suggestionsFor('cpp', '', 0, 'std::').map(item => item.label)
+    expect(labels).toEqual(expect.arrayContaining(['vector', 'unordered_map', 'sort', 'lower_bound']))
+  })
+
+  it('offers priority queue operations after a member-access arrow', () => {
+    const labels = suggestionsFor('cpp', '', 1, 'priority_queue->').map(item => item.label)
+    expect(labels).toEqual(expect.arrayContaining(['top', 'push', 'pop', 'empty']))
+  })
+
+  it('infers a declared container variable before its member access', () => {
+    const labels = suggestionsFor('cpp', '', 1, 'vector<int> nums; nums.').map(item => item.label)
+    expect(labels).toEqual(expect.arrayContaining(['size', 'push_back', 'begin']))
   })
 })
