@@ -154,6 +154,31 @@ it('deduplicates the initial problem list request under React StrictMode', async
   element.remove()
 })
 
+it('marks solved LeetCode problems and hides them until requested', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  const solved: Problem = { ...first, platformId: 'solved', title: 'Already solved', accepted: true }
+  const todo: Problem = { ...first, platformId: 'todo', title: 'Still to do' }
+  vi.spyOn(leetcodeService, 'listProblems').mockResolvedValue({ problems: [solved, todo], total: 2, pageSize: 50 })
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+
+  await act(async () => {
+    root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><ProblemPanel /></MemoryRouter>)
+    await new Promise(resolve => setTimeout(resolve, 0))
+  })
+
+  expect(element.textContent).toContain('Still to do')
+  expect(element.textContent).not.toContain('Already solved')
+  const toggle = element.querySelector<HTMLInputElement>('input[type="checkbox"]')!
+  await act(async () => { toggle.click() })
+  expect(element.textContent).toContain('Already solved')
+  expect(element.textContent).toContain('已 AC')
+  await act(async () => root.unmount())
+  element.remove()
+})
+
 it('shows a single request error with retry instead of a misleading empty state', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   useAppStore.setState(useAppStore.getInitialState(), true)

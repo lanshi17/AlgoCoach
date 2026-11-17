@@ -52,10 +52,11 @@ export const leetcodeService = {
     })
     const result = data?.data?.problemsetQuestionList ?? data?.problemsetQuestionList ?? data
     const problems = (result?.questions ?? []).map((item: Record<string, unknown>) => ({
-      id: String(item.questionId ?? item.frontendQuestionId ?? item.titleSlug ?? ''),
+      id: String(item.questionId ?? item.questionFrontendId ?? item.id ?? item.titleSlug ?? ''),
       platform: 'LEETCODE' as const,
       platformId: String(item.titleSlug ?? ''),
       title: String(item.title ?? item.titleSlug ?? '未命名题目'),
+      titleCn: typeof item.translatedTitle === 'string' ? item.translatedTitle : undefined,
       difficulty: normalizeDifficulty(item.difficulty),
       contentHtml: '',
       topics: Array.isArray(item.topicTags)
@@ -63,6 +64,7 @@ export const leetcodeService = {
         : [],
       codeSnippets: [],
       sampleTestCases: '',
+      accepted: isAcceptedStatus(item.status),
     })) as Problem[]
     const hasMore = result?.hasMore === true
     const fallbackTotal = hasMore ? Number(params.page ?? 1) * 50 + 1 : ((Number(params.page ?? 1) - 1) * 50 + problems.length)
@@ -92,6 +94,7 @@ export const leetcodeService = {
         return { lang: normalizeLanguage(value.langSlug ?? value.lang ?? ''), code: value.code ?? '' }
       }),
       sampleTestCases: String(data.sampleTestCase ?? ''),
+      accepted: isAcceptedStatus(data.status),
     } as Problem
   },
 
@@ -120,6 +123,11 @@ export const leetcodeService = {
   async setCookie(session: string, csrf: string) {
     await axios.post('/api/auth/cookie', { session, csrf })
   },
+}
+
+function isAcceptedStatus(value: unknown): boolean {
+  const status = String(value ?? '').trim().toUpperCase()
+  return status === 'SOLVED' || status === 'ACCEPTED'
 }
 
 function normalizeDifficulty(value: unknown): Problem['difficulty'] {

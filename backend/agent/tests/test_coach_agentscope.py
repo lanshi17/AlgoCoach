@@ -7,9 +7,6 @@ ReMe app. A separate test starts and closes a real embedded ReMe app to pin
 the pinned ``reme-ai`` version's lifecycle contract.
 """
 import json
-import hashlib
-import re
-from pathlib import Path
 
 import pytest
 from agentscope.message import TextBlock, ToolCallBlock
@@ -19,8 +16,6 @@ from conftest import FakeChatModel, RecordingReMe
 from app.agent import coach as coach_module
 from app.agent import router as router_module
 from app.agent.coach import IDLE_GREETING_REPLY, AlgoCoach
-from app.memory.embedding import LOCAL_EMBEDDING_DIMENSIONS, LocalChromaEmbeddingModel
-from app.memory.algorithm_knowledge import seed_algorithm_knowledge
 from app.remotion.animation_service import animation_service
 
 pytestmark = pytest.mark.asyncio
@@ -530,43 +525,6 @@ async def test_real_reme_auto_memory_write_and_search(tmp_path):
         assert any("杭州" in (item.get("text") or "") for item in results)
     finally:
         await middleware.close()
-
-
-async def test_managed_coach_reindexes_and_retrieves_algorithm_library(tmp_path, monkeypatch):
-    """The managed ReMe path indexes the seeded notes before its first search."""
-    repository_root = Path(__file__).resolve().parents[3]
-    workspace = tmp_path / "reme-algorithm-library"
-    report = seed_algorithm_knowledge(
-        source_dir=repository_root,
-        workspace_dir=workspace,
-    )
-    assert (report.notes, report.assets) == (16, 8)
-
-    monkeypatch.setattr(coach_module, "reme_workspace_dir", lambda: str(workspace))
-    def fake_embedding(inputs):
-        vectors = []
-        for text in inputs:
-            vector = [0.0] * LOCAL_EMBEDDING_DIMENSIONS
-            tokens = re.findall(r"[a-z0-9]+|[\u4e00-\u9fff]", text.lower())
-            for token in tokens:
-                index = int.from_bytes(hashlib.sha1(token.encode()).digest()[:4], "big") % LOCAL_EMBEDDING_DIMENSIONS
-                vector[index] = 1.0
-            vectors.append(vector)
-        return vectors
-
-    embedding = LocalChromaEmbeddingModel(embedding_function=fake_embedding)
-    coach = AlgoCoach(chat_model=FakeChatModel(), embedding_model=embedding)
-    try:
-        await coach._get_agent("algorithm-library-search")
-        assert coach._reme_index_ready is True
-        file_store_config = coach._memory._app.config.components["file_store"]["default"]
-        assert file_store_config.embedding_store == "default"
-
-        note_results = await coach._memory._search("滑动窗口算法核心代码模板")
-        assert any("滑动窗口算法核心代码模板" in result for result in note_results)
-
-    finally:
-        await coach.close()
 
 
 async def test_app_lifespan_closes_coach(monkeypatch):

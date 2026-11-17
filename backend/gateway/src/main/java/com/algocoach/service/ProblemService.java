@@ -23,7 +23,7 @@ public class ProblemService {
     private static final String PROBLEM_DETAIL_QUERY = """
         query questionData($titleSlug: String!) {
           question(titleSlug: $titleSlug) {
-            questionId questionFrontendId title titleSlug
+            questionId questionFrontendId title titleSlug status
             difficulty content translatedTitle translatedContent
             topicTags { name translatedName slug }
             codeSnippets { lang langSlug code }
@@ -36,7 +36,7 @@ public class ProblemService {
         query questionOfToday {
           todayRecord {
             question {
-              questionId title titleSlug difficulty
+              questionId title titleSlug difficulty status
               topicTags { name translatedName slug }
             }
           }
@@ -57,7 +57,7 @@ public class ProblemService {
             hasMore
             totalLength
             questions {
-              id questionFrontendId title translatedTitle titleSlug
+              id questionFrontendId title translatedTitle titleSlug status
               difficulty topicTags { name nameTranslated slug } paidOnly
             }
           }

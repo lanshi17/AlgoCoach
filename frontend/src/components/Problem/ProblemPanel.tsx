@@ -45,6 +45,7 @@ export default function ProblemPanel() {
   const [difficulty, setDifficulty] = useState('')
   const [topic, setTopic] = useState('')
   const [search, setSearch] = useState('')
+  const [showAccepted, setShowAccepted] = useState(false)
   const selectedTopic = useMemo(() => findTrainingTopic(topic), [topic])
   const selectedAcWingTopic = useMemo(() => findAcWingTopic(topic), [topic])
   const topicSlugs = useMemo(() => selectedTopic?.slugs ?? [], [selectedTopic])
@@ -186,8 +187,10 @@ export default function ProblemPanel() {
     }
   }, [activeProblem?.platform, activeProblem?.platformId, showPicker, refreshRestoredProblem])
 
-  const visibleProblems = problems.filter(problem =>
-    `${problem.title} ${problem.platformId}`.toLowerCase().includes(search.trim().toLowerCase()))
+  const matchingProblems = problems.filter(problem =>
+    `${problem.title} ${problem.titleCn ?? ''} ${problem.platformId}`.toLowerCase().includes(search.trim().toLowerCase()))
+  const acceptedCount = matchingProblems.filter(problem => problem.accepted).length
+  const visibleProblems = matchingProblems.filter(problem => showAccepted || !problem.accepted)
 
   const choosePlatform = (next: PickerPlatform) => {
     if (next === platform) return
@@ -200,6 +203,7 @@ export default function ProblemPanel() {
     setTopic('')
     setPage(1)
     setSearch('')
+    setShowAccepted(false)
     setError('')
     if (next !== 'LEETCODE') {
       setDifficulty('')
@@ -273,6 +277,12 @@ export default function ProblemPanel() {
             <input value={search} onChange={event => setSearch(event.target.value)}
               aria-label="搜索当前页题目" placeholder="搜索当前页题名或题号"
               className="w-full rounded-md border border-border bg-surface-soft px-2 py-1.5 text-xs outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft" />
+            {platform === 'LEETCODE' && (
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-text-muted dark:text-text-dark-muted">
+                <input type="checkbox" checked={showAccepted} onChange={event => setShowAccepted(event.target.checked)} />
+                显示已 AC 题{acceptedCount ? `（当前页 ${acceptedCount} 题）` : ''}
+              </label>
+            )}
           </div>
         </div>
         {error && visibleProblems.length > 0 && <div role="alert" className="mx-4 mt-3 rounded-md bg-red-50 p-3 text-xs text-danger dark:bg-red-900/10">{error}</div>}
@@ -297,7 +307,10 @@ export default function ProblemPanel() {
                     <span className="truncate text-sm text-text-primary dark:text-text-dark-primary">{problem.title}</span>
                     {loadingSlug === problem.platformId
                       ? <Loader2 size={14} className="shrink-0 animate-spin" />
-                      : <Badge difficulty={problem.difficulty} />}
+                      : <span className="flex shrink-0 items-center gap-1.5">
+                        {problem.accepted && <span className="rounded px-1.5 py-0.5 text-[10px] font-medium text-success bg-success/10">已 AC</span>}
+                        <Badge difficulty={problem.difficulty} />
+                      </span>}
                   </span>
                   <span className="mt-1 block truncate text-[11px] text-text-muted dark:text-text-dark-muted">
                     {problem.platformId}{problem.topics.length ? ` · ${problem.topics.join('、')}` : ''}
@@ -328,6 +341,8 @@ export default function ProblemPanel() {
             <AlertCircle size={24} />
             <p>{search.trim()
               ? '当前页没有匹配的题目。可以换个关键词，或切换到其他页面继续搜索。'
+              : acceptedCount && !showAccepted
+                ? '当前页的题目都已 AC。可以打开“显示已 AC 题”，或翻到下一页继续训练。'
               : platform === 'LEETCODE'
                 ? '暂时没有题目可显示。请检查 LeetCode Cookie 和网关连接。'
                 : '暂时没有题目可显示。请检查平台 Cookie（设置页）和网关连接。'}</p>
@@ -356,6 +371,9 @@ export default function ProblemPanel() {
         </div>
         <div className="flex items-center gap-2 mb-2 flex-wrap">
           <Badge difficulty={activeProblem.difficulty} />
+          {activeProblem.accepted && (
+            <span className="badge bg-success/10 text-success">已 AC</span>
+          )}
           {activeProblem.dailyQuestion && (
             <span className="badge bg-accent/10 text-accent">每日一题</span>
           )}

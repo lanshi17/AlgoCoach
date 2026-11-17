@@ -54,6 +54,8 @@ export interface Problem {
   sampleTestCases: string
   contestNumber?: number
   dailyQuestion?: boolean
+  /** True when the platform confirms the user has an accepted solution. */
+  accepted?: boolean
 }
 
 export interface CodeSnippet {

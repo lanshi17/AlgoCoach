@@ -161,7 +161,13 @@ def configure(payload: dict[str, Any]) -> KnowledgeConfig:
     if not api_key and provider != "local":
         api_key = current.api_key
     dimensions_raw = payload.get("dimensions", current.dimensions)
-    dimensions = int(dimensions_raw) if dimensions_raw not in (None, "") else None
+    if dimensions_raw in (None, ""):
+        dimensions = None
+    else:
+        try:
+            dimensions = int(str(dimensions_raw))
+        except (TypeError, ValueError) as exc:
+            raise KnowledgeBaseError("向量维度必须是整数") from exc
     if provider not in {"local", "openai-compatible"}:
         raise KnowledgeBaseError("只支持 local 或 openai-compatible embedding Provider")
     if not model:

@@ -57,7 +57,13 @@ def _repository_root() -> Path:
 
 def _source_root(value: str | Path | None) -> Path:
     configured = value or os.getenv("ALGOCOACH_KNOWLEDGE_SOURCE_DIR")
-    return Path(configured).expanduser().resolve() if configured else _repository_root()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    try:
+        return _repository_root()
+    except IndexError:
+        # The installed container has no repository-root source tree.
+        return Path.cwd().resolve()
 
 
 def _yaml_string(value: str) -> str:
@@ -196,10 +202,16 @@ def seed_algorithm_knowledge(
         Counts of imported notes, assets and filesystem changes.
     """
     source_root = _source_root(source_dir)
+    workspace = Path(workspace_dir or reme_workspace_dir()).expanduser().resolve()
+    # The notes archive is an optional local source. Container images and fresh
+    # installs do not carry repository documents; startup should stay quiet and
+    # usable when the user has not configured this source.
+    if not (source_root / _SOURCE_ARCHIVE).is_file():
+        logger.info("Algorithm notes archive not configured; skipping import")
+        return ImportReport(workspace_dir=str(workspace), skipped=True)
     note_outputs, note_count = _read_archive(source_root)
     generated = note_outputs
 
-    workspace = Path(workspace_dir or reme_workspace_dir()).expanduser().resolve()
     target_root = workspace / _OUTPUT_SUBTREE
     target_root.mkdir(parents=True, exist_ok=True)
     manifest_path = target_root / _MANIFEST_NAME
