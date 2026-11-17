@@ -41,7 +41,8 @@ class FakeStore:
 async def test_upload_extracts_text_formats_and_indexes_chunks(tmp_path, monkeypatch):
     monkeypatch.setattr(kb, "knowledge_dir", lambda: str(tmp_path / "knowledge"))
     store = FakeStore()
-    monkeypatch.setattr(kb, "vector_store", store)
+    monkeypatch.setattr(kb, "knowledge_store", store)
+    monkeypatch.setattr(kb, "_configured_signature", None)
 
     archive = tmp_path / "sources.zip"
     with zipfile.ZipFile(archive, "w") as output:
@@ -60,7 +61,8 @@ async def test_upload_extracts_text_formats_and_indexes_chunks(tmp_path, monkeyp
 async def test_custom_embedding_config_is_local_and_reconfigures_store(tmp_path, monkeypatch):
     monkeypatch.setattr(kb, "knowledge_dir", lambda: str(tmp_path / "knowledge"))
     store = FakeStore()
-    monkeypatch.setattr(kb, "vector_store", store)
+    monkeypatch.setattr(kb, "knowledge_store", store)
+    monkeypatch.setattr(kb, "_configured_signature", None)
 
     config = kb.configure({
         "provider": "openai-compatible",

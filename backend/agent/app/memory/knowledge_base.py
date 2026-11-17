@@ -21,8 +21,8 @@ import httpx
 from app.config import knowledge_dir
 from app.memory.vector_store import (
     COLLECTION_USER_KNOWLEDGE,
+    VectorStore,
     VectorRecord,
-    vector_store,
 )
 
 MAX_FILE_BYTES = 20 * 1024 * 1024
@@ -107,6 +107,10 @@ class KnowledgeConfig:
         }
 
 
+knowledge_store = VectorStore()
+_configured_signature: tuple[str, str, str, bool] | None = None
+
+
 def _root() -> Path:
     path = Path(knowledge_dir()).expanduser().resolve()
     path.mkdir(parents=True, exist_ok=True)
@@ -179,8 +183,17 @@ def _embedding_for(config: KnowledgeConfig) -> Any:
 
 
 async def apply_config(config: KnowledgeConfig) -> None:
-    await vector_store.reset()
-    vector_store.configure_embedding(_embedding_for(config))
+    global _configured_signature
+    await knowledge_store.reset()
+    knowledge_store.configure_embedding(_embedding_for(config))
+    _configured_signature = (config.provider, config.model, config.base_url, bool(config.api_key))
+
+
+async def _ensure_configured() -> None:
+    config = _read_config()
+    signature = (config.provider, config.model, config.base_url, bool(config.api_key))
+    if signature != _configured_signature:
+        await apply_config(config)
 
 
 def _safe_name(name: str) -> str:
@@ -275,6 +288,7 @@ def list_sources() -> list[dict[str, Any]]:
 
 
 async def add_source(name: str, data: bytes) -> dict[str, Any]:
+    await _ensure_configured()
     name = _safe_name(name)
     suffix = Path(name).suffix.lower()
     if suffix not in ALLOWED_SUFFIXES:
@@ -295,14 +309,15 @@ async def add_source(name: str, data: bytes) -> dict[str, Any]:
             ))
     if not records:
         raise KnowledgeBaseError("文件中没有可索引的文本")
-    await vector_store.upsert(COLLECTION_USER_KNOWLEDGE, records)
+    await knowledge_store.upsert(COLLECTION_USER_KNOWLEDGE, records)
     return {"id": source_id, "name": name, "bytes": len(data), "chunks": len(records)}
 
 
 async def remove_source(source_id: str) -> int:
+    await _ensure_configured()
     if not re.fullmatch(r"[0-9a-f]{24}", source_id):
         raise KnowledgeBaseError("知识库源标识无效")
-    removed = await vector_store.delete(COLLECTION_USER_KNOWLEDGE,
+    removed = await knowledge_store.delete(COLLECTION_USER_KNOWLEDGE,
                                         where={"source_id": source_id})
     for path in (_root() / "sources").glob(f"{source_id}--*"):
         path.unlink(missing_ok=True)
@@ -310,7 +325,8 @@ async def remove_source(source_id: str) -> int:
 
 
 async def reindex() -> dict[str, int]:
-    await vector_store.delete(COLLECTION_USER_KNOWLEDGE, where={"source_type": "user_knowledge"})
+    await _ensure_configured()
+    await knowledge_store.delete(COLLECTION_USER_KNOWLEDGE, where={"source_type": "user_knowledge"})
     chunks = 0
     files = 0
     for path in sorted((_root() / "sources").iterdir()):
@@ -325,13 +341,14 @@ async def reindex() -> dict[str, int]:
                  "source_type": "user_knowledge", "chunk": index})
                 for index, chunk in enumerate(_chunks(text))]
             if records:
-                await vector_store.upsert(COLLECTION_USER_KNOWLEDGE, records)
+                await knowledge_store.upsert(COLLECTION_USER_KNOWLEDGE, records)
                 chunks += len(records)
         files += 1
     return {"files": files, "chunks": chunks}
 
 
 async def status() -> dict[str, Any]:
+    await _ensure_configured()
     config = _read_config()
     return {"config": config.public(), "sources": list_sources(),
-            "indexedChunks": await vector_store.count(COLLECTION_USER_KNOWLEDGE)}
+            "indexedChunks": await knowledge_store.count(COLLECTION_USER_KNOWLEDGE)}
