@@ -13,6 +13,7 @@ import org.springframework.web.reactive.function.client.WebClientRequestExceptio
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.concurrent.TimeoutException;
 
@@ -37,6 +38,7 @@ public class GlobalExceptionHandler {
     static final String SUBMISSION_TIMEOUT_CODE = "SUBMISSION_TIMEOUT";
     static final String VALIDATION_ERROR_CODE = "VALIDATION_ERROR";
     static final String NOT_FOUND_CODE = "NOT_FOUND";
+    static final String UPLOAD_TOO_LARGE_CODE = "UPLOAD_TOO_LARGE";
     static final String INTERNAL_ERROR_CODE = "INTERNAL_ERROR";
 
     static final String COOKIE_MISSING_MESSAGE = "LeetCode Cookie 未设置，请在设置页面粘贴 Cookie";
@@ -47,6 +49,7 @@ public class GlobalExceptionHandler {
     static final String SUBMISSION_TIMEOUT_MESSAGE = "提交结果获取超时，请到 LeetCode 官网查看";
     static final String VALIDATION_ERROR_MESSAGE = "请求参数校验失败，请检查后重试";
     static final String NOT_FOUND_MESSAGE = "请求的资源不存在";
+    static final String UPLOAD_TOO_LARGE_MESSAGE = "上传文件过大，单文件最多 20 MB、单次最多 100 MB";
     static final String INTERNAL_ERROR_MESSAGE = "服务器内部错误，请稍后再试";
 
     @ExceptionHandler(CookieMissingException.class)
@@ -133,6 +136,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleNoResource(NoResourceFoundException e) {
         log.debug("Static resource not found");
         return error(HttpStatus.NOT_FOUND, NOT_FOUND_CODE, NOT_FOUND_MESSAGE);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleUploadTooLarge(MaxUploadSizeExceededException e) {
+        log.warn("Knowledge upload exceeded the configured multipart limit");
+        return error(HttpStatus.PAYLOAD_TOO_LARGE, UPLOAD_TOO_LARGE_CODE, UPLOAD_TOO_LARGE_MESSAGE);
     }
 
     @ExceptionHandler(Exception.class)

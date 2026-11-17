@@ -70,15 +70,23 @@ class RemoteEmbeddingFunction:
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-        with self._lock, httpx.Client(timeout=60.0) as client:
-            response = client.post(endpoint, headers=headers, json={
-                "model": self.model, "input": input,
-            })
+        try:
+            with self._lock, httpx.Client(timeout=60.0) as client:
+                response = client.post(endpoint, headers=headers, json={
+                    "model": self.model, "input": input,
+                })
+        except httpx.TimeoutException as exc:
+            raise KnowledgeBaseError("embedding Provider 请求超时，请检查网络或稍后重试") from exc
+        except httpx.HTTPError as exc:
+            raise KnowledgeBaseError("embedding Provider 网络请求失败，请检查 Base URL") from exc
         if response.status_code >= 400:
             raise KnowledgeBaseError(
                 f"embedding Provider 返回 HTTP {response.status_code}"
             )
-        payload = response.json()
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            raise KnowledgeBaseError("embedding Provider 返回了无效 JSON") from exc
         data = payload.get("data") if isinstance(payload, dict) else None
         if not isinstance(data, list) or not data:
             raise KnowledgeBaseError("embedding Provider 返回缺少 data")
@@ -108,7 +116,7 @@ class KnowledgeConfig:
 
 
 knowledge_store = VectorStore()
-_configured_signature: tuple[str, str, str, bool] | None = None
+_configured_signature: tuple[str, str, str, bool, int | None] | None = None
 
 
 def _root() -> Path:
@@ -188,18 +196,46 @@ def _embedding_for(config: KnowledgeConfig) -> Any:
     return RemoteEmbeddingFunction(config.base_url, config.model, config.api_key)
 
 
+def _collection_for(config: KnowledgeConfig) -> str:
+    """Return the Chroma collection owned by one embedding configuration.
+
+    Chroma persists the embedding function on a collection. Reusing the local
+    collection after switching to a remote provider therefore raises a
+    configuration-conflict error (and could mix vectors with different
+    dimensions). Local keeps the historical collection name; each remote
+    endpoint/model/dimension tuple gets a stable, separate collection.
+    """
+    if config.provider == "local":
+        return COLLECTION_USER_KNOWLEDGE
+    signature = json.dumps({
+        "provider": config.provider,
+        "model": config.model,
+        "baseUrl": config.base_url,
+        "dimensions": config.dimensions,
+    }, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+    suffix = hashlib.sha256(signature.encode("utf-8")).hexdigest()[:16]
+    return f"{COLLECTION_USER_KNOWLEDGE}_{suffix}"
+
+
 async def apply_config(config: KnowledgeConfig) -> None:
     global _configured_signature
     await knowledge_store.reset()
     knowledge_store.configure_embedding(_embedding_for(config))
-    _configured_signature = (config.provider, config.model, config.base_url, bool(config.api_key))
+    _configured_signature = (
+        config.provider, config.model, config.base_url,
+        bool(config.api_key), config.dimensions,
+    )
 
 
-async def _ensure_configured() -> None:
+async def _ensure_configured() -> KnowledgeConfig:
     config = _read_config()
-    signature = (config.provider, config.model, config.base_url, bool(config.api_key))
+    signature = (
+        config.provider, config.model, config.base_url,
+        bool(config.api_key), config.dimensions,
+    )
     if signature != _configured_signature:
         await apply_config(config)
+    return config
 
 
 def _safe_name(name: str) -> str:
@@ -294,7 +330,8 @@ def list_sources() -> list[dict[str, Any]]:
 
 
 async def add_source(name: str, data: bytes) -> dict[str, Any]:
-    await _ensure_configured()
+    config = await _ensure_configured()
+    collection = _collection_for(config)
     name = _safe_name(name)
     suffix = Path(name).suffix.lower()
     if suffix not in ALLOWED_SUFFIXES:
@@ -315,24 +352,30 @@ async def add_source(name: str, data: bytes) -> dict[str, Any]:
             ))
     if not records:
         raise KnowledgeBaseError("文件中没有可索引的文本")
-    await knowledge_store.upsert(COLLECTION_USER_KNOWLEDGE, records)
+    await knowledge_store.upsert(collection, records)
     return {"id": source_id, "name": name, "bytes": len(data), "chunks": len(records)}
 
 
 async def remove_source(source_id: str) -> int:
-    await _ensure_configured()
+    config = await _ensure_configured()
+    collection = _collection_for(config)
     if not re.fullmatch(r"[0-9a-f]{24}", source_id):
         raise KnowledgeBaseError("知识库源标识无效")
-    removed = await knowledge_store.delete(COLLECTION_USER_KNOWLEDGE,
-                                        where={"source_id": source_id})
+    removed = await knowledge_store.delete(
+        collection, where={"source_id": source_id}
+    )
     for path in (_root() / "sources").glob(f"{source_id}--*"):
         path.unlink(missing_ok=True)
     return removed
 
 
 async def reindex() -> dict[str, int]:
-    await _ensure_configured()
-    await knowledge_store.delete(COLLECTION_USER_KNOWLEDGE, where={"source_type": "user_knowledge"})
+    config = await _ensure_configured()
+    collection = _collection_for(config)
+    existing_ids = set(await knowledge_store.ids(
+        collection, where={"source_type": "user_knowledge"}
+    ))
+    all_records: list[VectorRecord] = []
     chunks = 0
     files = 0
     for path in sorted((_root() / "sources").iterdir()):
@@ -347,14 +390,21 @@ async def reindex() -> dict[str, int]:
                  "source_type": "user_knowledge", "chunk": index})
                 for index, chunk in enumerate(_chunks(text))]
             if records:
-                await knowledge_store.upsert(COLLECTION_USER_KNOWLEDGE, records)
+                all_records.extend(records)
                 chunks += len(records)
         files += 1
+    if all_records:
+        # Embed the complete rebuilt set before deleting stale records. If the
+        # remote provider is unavailable, the previous index remains usable.
+        await knowledge_store.upsert(collection, all_records)
+    current_ids = {record.id for record in all_records}
+    stale_ids = existing_ids - current_ids
+    if stale_ids:
+        await knowledge_store.delete(collection, ids=sorted(stale_ids))
     return {"files": files, "chunks": chunks}
 
 
 async def status() -> dict[str, Any]:
-    await _ensure_configured()
-    config = _read_config()
+    config = await _ensure_configured()
     return {"config": config.public(), "sources": list_sources(),
-            "indexedChunks": await knowledge_store.count(COLLECTION_USER_KNOWLEDGE)}
+            "indexedChunks": await knowledge_store.count(_collection_for(config))}

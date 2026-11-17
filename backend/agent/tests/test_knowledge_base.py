@@ -30,6 +30,10 @@ class FakeStore:
     async def count(self, _collection):
         return len(self.records)
 
+    async def ids(self, _collection, *, where=None):
+        return [record_id for record_id, record in self.records.items()
+                if not where or all(record.metadata.get(key) == value for key, value in where.items())]
+
     async def reset(self):
         self.embedding = None
 
@@ -74,6 +78,7 @@ async def test_custom_embedding_config_is_local_and_reconfigures_store(tmp_path,
     await kb.apply_config(config)
 
     assert config.public()["hasApiKey"] is True
+    assert kb._collection_for(config) != kb._collection_for(kb.KnowledgeConfig())
     persisted = json.loads((tmp_path / "knowledge/config.json").read_text())
     assert persisted["apiKey"] == "secret-value"
     assert store.embedding is not None

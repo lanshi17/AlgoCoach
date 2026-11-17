@@ -69,6 +69,13 @@ async def test_collections_are_isolated(store):
     assert await store.count(COLLECTION_ERROR_DESCRIPTION) == 1
 
 
+async def test_embedding_specific_user_knowledge_collections_are_supported(store):
+    collection = "user_knowledge_0123456789abcdef"
+    await store.upsert(collection, [VectorRecord("doc", "remote embedding document")])
+
+    assert await store.count(collection) == 1
+
+
 async def test_similar_search_orders_by_distance_and_keeps_metadata(store):
     await store.index_problem(
         "two-sum",

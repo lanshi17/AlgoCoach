@@ -46,6 +46,7 @@ COLLECTION_PROBLEM_CONTENT = "problem_content"
 COLLECTION_TOPIC_EXPLANATION = "topic_explanation"
 COLLECTION_ERROR_DESCRIPTION = "error_description"
 COLLECTION_USER_KNOWLEDGE = "user_knowledge"
+USER_KNOWLEDGE_COLLECTION_PREFIX = f"{COLLECTION_USER_KNOWLEDGE}_"
 
 DOCUMENT_COLLECTIONS: tuple[str, ...] = (
     COLLECTION_PROBLEM_CONTENT,
@@ -202,7 +203,10 @@ class VectorStore:
             return self._client
 
     def _collection(self, name: str):
-        if name not in DOCUMENT_COLLECTIONS:
+        if (
+            name not in DOCUMENT_COLLECTIONS
+            and not name.startswith(USER_KNOWLEDGE_COLLECTION_PREFIX)
+        ):
             raise VectorStoreError(f"unknown vector collection: {name!r}")
         with self._lock:
             collection = self._collections.get(name)
@@ -338,6 +342,10 @@ class VectorStore:
         """Number of documents in a collection (used by tests and diagnostics)."""
         return await asyncio.to_thread(self._count_sync, collection)
 
+    async def ids(self, collection: str, *, where: dict[str, Any] | None = None) -> list[str]:
+        """Return ids matching an optional metadata filter."""
+        return await asyncio.to_thread(self._ids_sync, collection, where)
+
     async def delete(self, collection: str, *, where: dict[str, Any] | None = None,
                      ids: Sequence[str] | None = None) -> int:
         """Delete records by metadata filter or explicit ids."""
@@ -398,6 +406,10 @@ class VectorStore:
 
     def _count_sync(self, collection: str) -> int:
         return int(self._collection(collection).count())
+
+    def _ids_sync(self, collection: str, where: dict[str, Any] | None) -> list[str]:
+        result = self._collection(collection).get(where=where, include=["metadatas"])
+        return [str(record_id) for record_id in (result.get("ids") or [])]
 
     # ── Domain helpers ───────────────────────────────────────
 
