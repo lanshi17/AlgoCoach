@@ -39,7 +39,7 @@ export default function KnowledgeBasePage() {
       setMessage('Embedding 配置已保存；已有源文件需要重新建立索引。')
       setStatus(current => current ? { ...current, config } : current)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Embedding 配置保存失败。')
+      setError(getKnowledgeErrorMessage(cause, 'Embedding 配置保存失败。'))
     } finally { setBusy(false) }
   }
 
@@ -51,7 +51,7 @@ export default function KnowledgeBasePage() {
       setMessage(`已上传 ${files.length} 个源文件并完成索引。`)
       await load()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '源文件上传失败。')
+      setError(getKnowledgeErrorMessage(cause, '源文件上传失败。'))
     } finally { setBusy(false) }
   }
 
@@ -62,7 +62,7 @@ export default function KnowledgeBasePage() {
       setMessage(`索引完成：${result.files} 个文件，${result.chunks} 个文本片段。`)
       await load()
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '索引重建失败。')
+      setError(getKnowledgeErrorMessage(cause, '索引重建失败。'))
     } finally { setBusy(false) }
   }
 
@@ -70,7 +70,7 @@ export default function KnowledgeBasePage() {
     if (!window.confirm(`删除「${source.name}」及其索引？`)) return
     setBusy(true); setError('')
     try { await agentService.deleteKnowledgeSource(source.id); await load(); setMessage('源文件和对应索引已删除。') }
-    catch { setError('删除源文件失败。') }
+    catch (cause) { setError(getKnowledgeErrorMessage(cause, '删除源文件失败。')) }
     finally { setBusy(false) }
   }
 
@@ -134,4 +134,13 @@ function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
   return `${(value / 1024 / 1024).toFixed(1)} MB`
+}
+
+function getKnowledgeErrorMessage(cause: unknown, fallback: string): string {
+  if (typeof cause === 'object' && cause !== null && 'response' in cause) {
+    const response = (cause as { response?: { data?: { detail?: unknown; message?: unknown } } }).response
+    if (typeof response?.data?.detail === 'string' && response.data.detail.trim()) return response.data.detail
+    if (typeof response?.data?.message === 'string' && response.data.message.trim()) return response.data.message
+  }
+  return cause instanceof Error && cause.message ? cause.message : fallback
 }
