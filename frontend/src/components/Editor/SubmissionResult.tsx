@@ -6,7 +6,7 @@ export default function SubmissionResult() {
   const lastSubmission = useAppStore(state => state.lastSubmission)
 
   if (!lastSubmission) return (
-    <div className="flex items-center justify-center h-full text-xs text-text-muted dark:text-text-dark-muted">
+    <div className="code-output-panel flex items-center justify-center text-xs code-muted">
       本次练习没有提交结果，可以在教练面板自主复盘。
     </div>
   )
@@ -14,7 +14,7 @@ export default function SubmissionResult() {
   const ok = lastSubmission.status === 'ACCEPTED'
 
   return (
-    <div className="flex flex-col gap-3 p-4 h-full overflow-auto text-xs">
+    <div className="code-output-panel flex flex-col gap-3 overflow-auto p-4 text-xs">
       {/* Status */}
       <div className={`flex items-center gap-2 font-semibold text-sm ${ok ? 'text-success' : 'text-danger'}`}>
         {ok ? <CheckCircle size={18} /> : <XCircle size={18} />}
@@ -24,18 +24,18 @@ export default function SubmissionResult() {
       {/* Stats */}
       <div className="flex gap-6">
         {lastSubmission.runtimeMs && (
-          <div className="flex items-center gap-1.5 text-text-secondary dark:text-text-dark-secondary">
+          <div className="flex items-center gap-1.5 code-muted">
             <Clock size={13} />
             {lastSubmission.runtimeMs} ms
           </div>
         )}
         {lastSubmission.memoryMb && (
-          <div className="flex items-center gap-1.5 text-text-secondary dark:text-text-dark-secondary">
+          <div className="flex items-center gap-1.5 code-muted">
             <Cpu size={13} />
             {lastSubmission.memoryMb} MB
           </div>
         )}
-        <div className="text-text-muted dark:text-text-dark-muted">
+        <div className="code-muted">
           用时 {Math.floor(lastSubmission.durationSec / 60)}分
           {lastSubmission.durationSec % 60}秒
         </div>
@@ -43,8 +43,7 @@ export default function SubmissionResult() {
 
       {/* Error */}
       {lastSubmission.errorMessage && (
-        <pre className="text-xs font-mono text-danger bg-red-50 dark:bg-red-900/10 p-3 rounded-lg
-                        overflow-auto whitespace-pre-wrap border border-red-200 dark:border-red-900/30">
+        <pre className="code-error-box text-xs font-mono overflow-auto whitespace-pre-wrap">
           {lastSubmission.errorMessage}
         </pre>
       )}

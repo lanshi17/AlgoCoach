@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/stores/useAppStore'
-import { MONACO_LANGUAGES } from '@/services/languages'
+import { LANGUAGE_OPTIONS, MONACO_LANGUAGES } from '@/services/languages'
 import TestCasePanel from './TestCasePanel'
 import SubmissionResult from './SubmissionResult'
 
@@ -14,8 +14,10 @@ const MonacoEditor = lazy(() => import('./MonacoCodeEditor'))
  * IDLE / PREP: editor is read-only until user clicks "Start".
  */
 export default function EditorPanel() {
-  const { code, setCode, lang, theme, mode, submitLoading } = useAppStore(useShallow(state => ({
+  const { activeProblem, code, codeEdited, setCode, lang, theme, mode, submitLoading } = useAppStore(useShallow(state => ({
+    activeProblem: state.activeProblem,
     code: state.code,
+    codeEdited: state.codeEdited,
     setCode: state.setCode,
     lang: state.lang,
     theme: state.theme,
@@ -30,14 +32,28 @@ export default function EditorPanel() {
   }
 
   const isEditable = !submitLoading && (mode === 'FOCUS' || mode === 'REVIEW')
+  const languageLabel = LANGUAGE_OPTIONS.find(option => option.value === lang)?.label ?? lang
+  const fileName = activeProblem ? `${activeProblem.platformId}.${fileExtension(lang)}` : '未命名代码'
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="code-workbench flex h-full flex-col">
+      <div className="code-toolbar" aria-label="代码工作区状态">
+        <div className="code-toolbar-title">
+          <span className="code-toolbar-dots" aria-hidden="true"><i /><i /><i /></span>
+          <span>代码工作区</span>
+          <span className="code-file" title={fileName}>{fileName}</span>
+        </div>
+        <div className="code-toolbar-meta">
+          <span>{languageLabel}</span>
+          <span className="code-toolbar-status">{codeEdited ? '草稿已保存' : '题面模板'}</span>
+          <span className="hidden sm:inline">{isEditable ? '可编辑' : '只读'}</span>
+        </div>
+      </div>
       {/* Editor area */}
-      <div className="flex-1 min-h-0 relative">
-        {submitLoading && <div role="status" className="absolute right-3 top-2 z-10 rounded bg-surface px-2 py-1 text-xs text-text-muted shadow dark:bg-surface-dark">提交中，编辑器暂时只读</div>}
+      <div className="code-surface">
+        {submitLoading && <div role="status" className="code-submit-notice">提交中，编辑器暂时只读</div>}
 
-        <Suspense fallback={<div className="grid h-full place-items-center text-xs text-text-muted dark:text-text-dark-muted">正在打开编辑器…</div>}>
+        <Suspense fallback={<div className="grid h-full place-items-center text-xs" style={{ color: 'var(--code-muted)' }}>正在打开编辑器…</div>}>
         <MonacoEditor
           height="100%"
           language={MONACO_LANGUAGES[lang]}
@@ -71,10 +87,15 @@ export default function EditorPanel() {
       </div>
 
       {/* Bottom tabs: test cases or submission result */}
-      <div className="flex-shrink-0 border-t border-border dark:border-border-dark"
-           style={{ height: '200px' }}>
+      <div className="code-output-shell flex-shrink-0" style={{ height: '200px' }}>
         {mode === 'REVIEW' ? <SubmissionResult /> : <TestCasePanel />}
       </div>
     </div>
   )
+}
+
+function fileExtension(language: string): string {
+  return ({
+    cpp: 'cpp', python3: 'py', rust: 'rs', typescript: 'ts', golang: 'go', java: 'java',
+  } as Record<string, string>)[language] ?? 'txt'
 }

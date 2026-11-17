@@ -166,4 +166,174 @@
     @apply w-1 cursor-col-resize hover:bg-accent/40 transition-colors
            flex-shrink-0 bg-transparent;
   }
+
+  /*
+   * The coding surface has its own visual language. The reading surfaces keep
+   * their warm paper palette, while code uses a cool slate canvas with a quiet
+   * cyan focus signal. This keeps syntax and cursor feedback legible during
+   * long sessions without turning the whole product into an IDE.
+   */
+  .code-workbench {
+    --code-bg: #f7f9fc;
+    --code-panel: #eef2f7;
+    --code-panel-raised: #ffffff;
+    --code-rule: #d4dde8;
+    --code-ink: #1f2d3d;
+    --code-muted: #718096;
+    --code-focus: #16708a;
+    --code-focus-soft: #d9eef4;
+    background: var(--code-bg);
+    color: var(--code-ink);
+  }
+
+  .dark .code-workbench {
+    --code-bg: #0f1724;
+    --code-panel: #141f30;
+    --code-panel-raised: #19273a;
+    --code-rule: #2b3b52;
+    --code-ink: #e3edf7;
+    --code-muted: #8798ad;
+    --code-focus: #72d3ee;
+    --code-focus-soft: #1a3a4a;
+  }
+
+  .code-toolbar {
+    @apply flex shrink-0 items-center justify-between gap-3 px-3;
+    min-height: 36px;
+    border-bottom: 1px solid var(--code-rule);
+    background: var(--code-panel);
+    color: var(--code-muted);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+  }
+
+  .code-toolbar-title {
+    @apply flex min-w-0 items-center gap-2;
+    color: var(--code-ink);
+    font-weight: 600;
+  }
+
+  .code-toolbar-dots {
+    @apply flex items-center gap-1;
+  }
+
+  .code-toolbar-dots i {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--code-rule);
+  }
+
+  .code-toolbar-dots i:first-child { background: #d08b78; }
+  .code-toolbar-dots i:nth-child(2) { background: #d1a95f; }
+  .code-toolbar-dots i:last-child { background: #7ca58a; }
+
+  .code-file {
+    @apply truncate rounded px-1.5 py-0.5 font-mono;
+    background: var(--code-bg);
+    color: var(--code-muted);
+  }
+
+  .code-toolbar-meta {
+    @apply flex shrink-0 items-center gap-2;
+  }
+
+  .code-toolbar-status {
+    @apply rounded px-1.5 py-0.5;
+    background: var(--code-focus-soft);
+    color: var(--code-focus);
+  }
+
+  .code-toolbar kbd {
+    @apply rounded border px-1 font-mono;
+    border-color: var(--code-rule);
+    background: var(--code-panel-raised);
+    color: var(--code-muted);
+  }
+
+  .code-surface {
+    @apply relative min-h-0 flex-1;
+    background: var(--code-bg);
+  }
+
+  .code-submit-notice {
+    @apply absolute right-3 top-2 z-10 rounded px-2 py-1 text-xs;
+    border: 1px solid var(--code-rule);
+    background: var(--code-panel-raised);
+    color: var(--code-muted);
+  }
+
+  .code-output-shell {
+    border-top: 1px solid var(--code-rule);
+    background: var(--code-panel);
+  }
+
+  .code-output-panel {
+    @apply flex h-full flex-col font-mono text-xs;
+    color: var(--code-ink);
+  }
+
+  .code-tabbar {
+    @apply flex shrink-0 items-center gap-1 overflow-x-auto px-3;
+    min-height: 36px;
+    border-bottom: 1px solid var(--code-rule);
+    background: var(--code-panel);
+  }
+
+  .code-tab {
+    @apply shrink-0 rounded px-2.5 py-1 text-xs transition-colors;
+    color: var(--code-muted);
+  }
+
+  .code-tab:hover { background: var(--code-focus-soft); color: var(--code-focus); }
+  .code-tab[aria-pressed='true'] {
+    background: var(--code-focus);
+    color: #fff;
+  }
+
+  .code-add-tab {
+    @apply ml-auto shrink-0 p-1 transition-colors;
+    color: var(--code-muted);
+  }
+
+  .code-add-tab:hover { color: var(--code-focus); }
+
+  .code-output-body {
+    @apply flex min-h-0 flex-1;
+  }
+
+  .code-pane {
+    @apply min-w-0 flex-1 overflow-auto p-3;
+  }
+
+  .code-pane + .code-pane { border-left: 1px solid var(--code-rule); }
+
+  .code-label {
+    @apply mb-1 block text-[11px] uppercase tracking-wide;
+    color: var(--code-muted);
+  }
+
+  .code-input {
+    @apply h-[calc(100%-1rem)] min-h-16 w-full resize-none whitespace-pre-wrap bg-transparent font-mono outline-none;
+    color: var(--code-ink);
+    caret-color: var(--code-focus);
+  }
+
+  .code-input::placeholder { color: var(--code-muted); opacity: 0.8; }
+
+  .code-output-panel pre { color: var(--code-ink); }
+  .code-output-panel .code-muted { color: var(--code-muted); }
+  .code-output-panel .code-error { color: #c45a56; }
+  .dark .code-output-panel .code-error { color: #f19a91; }
+  .code-error-box {
+    @apply rounded-lg border p-3;
+    border-color: rgb(196 90 86 / 0.28);
+    background: rgb(196 90 86 / 0.08);
+    color: #b34f4b;
+  }
+  .dark .code-error-box {
+    border-color: rgb(241 154 145 / 0.28);
+    background: rgb(241 154 145 / 0.08);
+    color: #f19a91;
+  }
 }

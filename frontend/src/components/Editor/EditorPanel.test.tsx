@@ -33,6 +33,29 @@ it('stays silent when no problem is selected', async () => {
   element.remove()
 })
 
+it('shows the active file and draft state in the coding toolbar', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.getState().setActiveProblem({
+    id: '1', platform: 'LEETCODE', platformId: 'two-sum', title: 'Two Sum', difficulty: 'EASY',
+    contentHtml: '', topics: [], sampleTestCases: '', codeSnippets: [],
+  })
+  useAppStore.getState().setLang('cpp')
+  useAppStore.getState().enterFocus()
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root: Root = createRoot(element)
+  await act(async () => root.render(<EditorPanel />))
+
+  expect(element.querySelector('[aria-label="代码工作区状态"]')?.textContent).toContain('two-sum.cpp')
+  expect(element.textContent).toContain('C++')
+  expect(element.textContent).toContain('题面模板')
+  expect(element.textContent).toContain('可编辑')
+
+  act(() => root.unmount())
+  element.remove()
+})
+
 it('does not rerender Monaco for unrelated store updates', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   useAppStore.setState(useAppStore.getInitialState(), true)
