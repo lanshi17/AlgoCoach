@@ -15,6 +15,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - run: bun install --frozen-lockfile
+        working-directory: remotion-compositions
       - run: python -m pip install -r backend/agent/requirements.txt
       - run: python -m pip install pytest==9.2.0 pytest-asyncio==1.5.0 mypy==1.18.2 ruff==0.15.17
       - run: ruff check --isolated app tests
