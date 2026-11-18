@@ -134,7 +134,7 @@ frontend/
 - `onSubmit` 调用 `leetcodeService.submit()`，提交累计 FOCUS 用时；返回终态后保存结果并切换 REVIEW。
 - `mode === 'FOCUS'` 时 mode 徽章显示红色 `Lock` 图标
 - 运行/提交仅在 FOCUS 模式可用；请求期间显示 loading 并阻止重复提交。REVIEW 可继续做题，重试阶段的 FOCUS 时间会累计。
-- Gateway 保存提交后将判题事实、用时和题目标签写入 Agent episodic/semantic 记忆；前端随后发送不含代码的 `review` 阶段消息，启动 OI/xCPC 结构化复盘。
+- Gateway 保存提交后将判题事实、用时和题目标签写入 Agent episodic/semantic 记忆；前端随后发送 `review` 阶段消息，并附上当前编辑器代码与语言，让 Agent 可以检查本轮实际提交。
 
 **当前行为**：Agent 回复通过 `/api/agent/chat/stream` 以 SSE 流式呈现；思考状态默认折叠为一行，模型返回思考事件时可展开查看，文本回复也会逐段出现。
 
@@ -191,7 +191,7 @@ frontend/
 - `loading` 时显示三点跳动动画 + "思考中…"
 - `activeAnimation` 存在时在消息流末尾渲染 `<AnimationCard>`
 
-**当前行为**：对话按题目保存在进程内 Zustand 状态，切换题目后可返回原对话；刷新页面会清空，避免把用户粘贴的代码写入浏览器存储。Submit 结束后发送不含代码的判题摘要启动赛后复盘；动画生成期间加入 system 状态消息。聊天文本和可用的 thinking block 通过 SSE 流式到达。
+**当前行为**：对话按题目保存在进程内 Zustand 状态，切换题目后可返回原对话；刷新页面会清空，避免把用户代码写入浏览器存储。Submit 结束后发送判题摘要和当前代码的临时上下文启动赛后复盘；代码不写入 ReMe 长期记忆。动画生成期间加入 system 状态消息。聊天文本和可用的 thinking block 通过 SSE 流式到达。
 
 ### 3.6 ChatMessage.tsx
 
@@ -780,7 +780,7 @@ describe('主题切换', () => {
 
 ### 11.3 浏览器闭环验证
 
-Playwright 浏览器冒烟脚本位于 `e2e/training_flow.py`，通过 route mock 验证免登录进入工作区、题目搜索、题干净化与公式排版、语言切换、FOCUS 静默与计时、Run、Submit、不包含代码的 REVIEW，以及设置偏好持久化。运行方式：先启动 `bun run dev -- --port 5174`，安装 `python -m pip install -r e2e/requirements.txt` 和 Chromium，再执行 `ALGOCOACH_FRONTEND_URL=http://localhost:5174 python e2e/training_flow.py`。可用 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 指向本机 Chrome。脚本 mock LeetCode 与 Agent API，不使用真实账号或提交。
+Playwright 浏览器冒烟脚本位于 `e2e/training_flow.py`，通过 route mock 验证免登录进入工作区、题目搜索、题干净化与公式排版、语言切换、FOCUS 静默与计时、Run、Submit、带代码上下文的 REVIEW，以及设置偏好持久化。运行方式：先启动 `bun run dev -- --port 5174`，安装 `python -m pip install -r e2e/requirements.txt` 和 Chromium，再执行 `ALGOCOACH_FRONTEND_URL=http://localhost:5174 python e2e/training_flow.py`。可用 `PLAYWRIGHT_CHROMIUM_EXECUTABLE` 指向本机 Chrome。脚本 mock LeetCode 与 Agent API，不使用真实账号或提交。
 
 ---
 

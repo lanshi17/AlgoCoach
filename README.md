@@ -1,6 +1,43 @@
 # AlgoCoach — OI / xCPC 算法训练教练
 
-围绕 LeetCode 训练闭环构建：Python AgentScope 负责训练对话，AgentScope 的 ReMeMiddleware 负责长期对话记忆；Java Gateway 仅处理 LeetCode 登录态、题目与提交代理。训练按 PREP、FOCUS、REVIEW 进行，FOCUS 中 Agent 保持静默。
+AlgoCoach 是一个本地优先的算法训练工作台。它把题目、编辑器、判题、AI 教练、训练记忆和知识库放进同一条闭环：先读题建模，再进入安静的 FOCUS 解题，提交后按判题事实、训练记录和当前代码进行 REVIEW。
+
+项目当前适合个人本地使用和持续迭代，默认不托管账号数据，也不要求单独部署向量数据库或 ReMe 服务。前端只连接 Java Gateway，AI 逻辑运行在 Python Agent，平台 Cookie 留在 Gateway 的本地 SQLite 中。
+
+## 当前实现状态
+
+| 能力 | 状态 | 入口 |
+|------|------|------|
+| LeetCode CN 题目、运行、提交 | 已实现 | 工作区 / Gateway |
+| AcWing、HDU 题库浏览 | 已实现 | 工作区题目选择器 |
+| PREP / FOCUS / REVIEW 训练阶段 | 已实现 | 工作区 |
+| REVIEW 读取当前提交代码 | 已实现 | 提交后自动复盘、聊天面板 |
+| AgentScope 2.0.11 + ReMe 长期记忆 | 已实现 | Python Agent |
+| 本地 Chroma 向量检索 | 已实现 | 相似题、错误和知识库 |
+| 网页知识库与自定义 Embedding | 已实现 | `/knowledge/library` |
+| Monaco 本地代码补全 | 已实现 | 编辑器 |
+| 预置 Remotion 动画 | 可选，默认关闭 | `REMOTION_ENABLED=true` |
+| 生成式动画沙箱 | 可选，默认关闭 | 需要额外安全运行环境 |
+
+## 五分钟了解项目
+
+1. 在设置页配置模型 Provider；需要使用 LeetCode、AcWing 时再粘贴对应 Cookie。
+2. 在题目选择器中按平台、专项、难度或关键词选题。已 AC 的 LeetCode 题默认隐藏，可随时打开显示。
+3. PREP 阶段让教练解释概念、约束和建模方向。
+4. 点击开始做题进入 FOCUS。教练保持静默，编辑器继续提供本地语法和常用结构补全。
+5. 运行样例或提交代码。提交成功后进入 REVIEW，教练会读取当前语言和代码，结合判题结果分析正确性、边界、复杂度和下一步。
+
+## 仓库结构
+
+```text
+frontend/                 React + Vite 工作区、题目面板、Monaco、AI 聊天
+backend/gateway/          Java 21 + Spring Boot Gateway
+backend/agent/            Python 3.12 + FastAPI + AgentScope + ReMe
+remotion-compositions/    预置算法动画和周报动画
+docs/                     架构、后端、前端、记忆和动画设计文档
+data/                     本地运行时数据（SQLite、Chroma、ReMe、MP4）
+.github/workflows/ci.yml  Agent、Gateway、Frontend、Remotion 四组 CI
+```
 
 ## 架构概览
 
@@ -12,6 +49,29 @@ backend/
 remotion-compositions/  15 种 Remotion 算法 / 解法对比动画
 data/              SQLite 数据库 + 渲染出的 MP4 动画
 ```
+
+## 服务入口与主要 API
+
+| 服务 | 地址 | 负责内容 |
+|------|------|----------|
+| Frontend | `http://localhost:5173` | 浏览器工作区和设置页 |
+| Gateway | `http://localhost:8080` | LeetCode、AcWing、HDU 代理与本地提交记录 |
+| Agent | `http://localhost:8000` | AgentScope 对话、训练记忆和知识库；通常只通过 Gateway 访问 |
+
+常用路由如下：
+
+| 路由 | 作用 |
+|------|------|
+| `GET /api/problems` | LeetCode 题目列表和筛选 |
+| `GET /api/problems/{titleSlug}` | 题面、代码模板和样例 |
+| `POST /api/run` / `POST /api/submit` | 运行样例、提交并轮询判题 |
+| `GET /api/submissions` | 本地提交历史 |
+| `POST /api/agent/chat/stream` | 流式 AI 教练对话；REVIEW 可携带当前代码 |
+| `GET/PUT /api/agent/knowledge/config` | 读取或保存知识库 Embedding 配置 |
+| `POST /api/agent/knowledge/sources` | 上传知识库源文件 |
+| `POST /api/agent/knowledge/reindex` | 重建用户知识库向量索引 |
+
+前端始终访问 Gateway 的 `/api` 路径。直接访问 Agent 端口主要用于本地调试和健康检查。
 
 ## 核心设计原则
 
@@ -36,7 +96,7 @@ data/              SQLite 数据库 + 渲染出的 MP4 动画
 - **模型 Provider** — 设置页提供 OMP 风格的主流 Provider 预设与自定义 OpenAI/Anthropic-compatible 端点；API key 仅在当前浏览器会话中使用，不写入训练导出或 Git。
 - **题库与专项训练** — LeetCode 按专项（动态规划、图论、二分……）和难度筛选，列表与题面来自 GraphQL；AcWing 作为额外渠道，专项映射到其算法标签（走站内搜索），打开题目附六语言 starter 模板，需要配置 Cookie；杭电 HDU 提供题单浏览与题面，可匿名浏览。运行/提交仍只支持 LeetCode。
 
-Submit 后只把判题事实、用时和题目标签发给 Agent；提交源码发往 LeetCode，不会自动转发给模型。因此当前复盘不声称已检查用户代码。
+提交后，Gateway 会把判题事实、用时和题目标签写入 Agent 记忆；进入 REVIEW 时，前端还会把当前编辑器代码和语言作为本轮临时上下文发送给 Agent。代码用于当次复盘，不写入 ReMe 长期记忆；Agent 会区分能从代码直接验证的问题和需要测试确认的风险。
 
 ## Remotion 动画组件
 
@@ -74,6 +134,21 @@ docker-compose 设置 `ANIMATIONS_LOCATION=file:/data/animations/`，与 agent �
 
 实现与限制见 `backend/agent/app/remotion/codegen.py`、`docs/backend-agent.md` §5.3 与 `docs/remotion.md` §5。
 
+## 配置要点
+
+| 环境变量 | 默认值 | 用途 |
+|----------|--------|------|
+| `ANTHROPIC_API_KEY` | 无 | 默认 Anthropic Provider 的 API key |
+| `CLAUDE_MODEL` | `claude-opus-5-5` | 默认教练模型 |
+| `GATEWAY_BASE_URL` | `http://localhost:8080` | Agent 访问 Gateway 的地址 |
+| `DB_PATH` | `./data/agent.db` | Agent SQLite 路径 |
+| `CHROMA_PATH` | `./data/chroma` | 训练向量存储路径 |
+| `REME_WORKSPACE_DIR` | `./data/reme` | ReMe 本地 workspace |
+| `KNOWLEDGE_DIR` | `./data/knowledge` | 用户知识库源文件和配置 |
+| `REMOTION_ENABLED` | `false` | 是否启用预置动画工具 |
+
+完整变量和注释见 [.env.example](.env.example)。API key、Cookie 和用户知识库文件都属于本地运行时数据，不应提交到 Git。
+
 ## 快速启动
 
 ```bash
@@ -99,6 +174,16 @@ cd ../gateway && mvn test  # 需要 Java 21
 
 CI 定义在 `.github/workflows/ci.yml`：Agent 使用 Python 3.12（pytest 9.2.0、pytest-asyncio 1.5.0、Ruff 0.15.17、Mypy 1.18.2），Gateway 使用 Java 21（Maven test），前端与 Remotion 使用 Bun 1.4.4（Vitest coverage、TypeScript/Vite build、Remotion typecheck/bundle）。
 
+## 提交代码前
+
+- 先确认工作区只包含与当前改动相关的文件，`data/` 中的本地数据库、Cookie、向量索引和 MP4 不应提交。
+- 后端改动至少运行 Agent 测试、Ruff、Mypy；Gateway 改动运行 Java 21 的 `mvn test`。
+- 前端改动运行 Vitest 和生产构建；编辑器、聊天、设置等交互改动应补充对应组件测试。
+- 修改 API 请求体时同步更新 Pydantic schema、TypeScript 类型、Gateway 代理文档和 README 的 API 表。
+- 涉及记忆或知识库时确认数据边界：训练记忆、用户知识库和提交源码不能意外混入同一 collection 或长期记忆。
+
+提交信息使用简短的动作描述，例如 `fix: keep review code ephemeral` 或 `feat: add solved problem marker`。
+
 Compose 镜像构建检查（不启动服务，也不调用 LeetCode 或模型 API）：
 
 ```bash
@@ -119,11 +204,24 @@ docker compose build
 
 Cookie 明文只存在本机 Gateway 的 SQLite；Gateway 只把它附加到发往 `leetcode.cn` 的请求，不会发送给 Agent 或 AI 服务。
 
-## 当前范围
+## 当前边界
 
-当前只接入 LeetCode CN；多平台适配、多账号与 OAuth 尚未纳入实现。代码执行与提交必须由用户在工作区主动触发。设置页支持语言/教练目标/主题偏好和本地数据导出。
+- LeetCode CN 支持题面、运行、提交和提交历史；AcWing、HDU 当前用于题库浏览和题面阅读。
+- 运行与提交必须由用户在工作区主动触发；Agent 不会代替用户提交代码。
+- 单用户本地部署是当前数据模型，多账号、OAuth、团队协作和云端同步不在当前范围内。
+- 代码执行由题库平台负责；Agent 不在宿主机执行用户代码。
+- 生成式动画保持默认关闭；当前 Compose 没有授予 Bubblewrap/cgroup 所需能力，容器内该路径会保持不可用。
 
-进度、知识图谱、间隔复习、周报动画、本地向量检索、自我改进回测与 OI/xCPC 训练阶段均已进入当前实现。生成式动画保持默认关闭，且容器未授予运行所需的 Bubblewrap/cgroup 能力。
+进度、知识图谱、间隔复习、周报动画、本地向量检索、自我改进回测与 OI/xCPC 训练阶段均已进入当前实现。
+
+## 文档索引
+
+- [系统架构](docs/architecture.md) — 服务边界、数据流和运行时职责
+- [Agent 设计](docs/backend-agent.md) — AgentScope、ReMe、记忆和动画端点
+- [Gateway 设计](docs/backend-gateway.md) — LeetCode 代理、Cookie、提交和缓存
+- [前端设计](docs/frontend.md) — 工作区状态、编辑器和交互约束
+- [记忆系统](docs/memory-system.md) — SQLite、Chroma 和 ReMe 的数据模型
+- [Remotion 设计](docs/remotion.md) — 预置动画和生成式沙箱
 
 ## 参考开源项目
 

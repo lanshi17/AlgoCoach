@@ -84,7 +84,7 @@
 
 **不能做**：
 - ❌ 直接调用 LeetCode API（通过 gateway 中转）
-- ❌ 存储用户代码（gateway 负责）
+- ❌ 持久化用户代码（提交源码由 LeetCode 处理；REVIEW 代码只作为 Agent 本轮临时上下文）
 - ❌ 在 FOCUS 模式下发送任何消息
 
 ### 2.3 React Frontend（:5173）— 只做界面和状态
@@ -178,7 +178,7 @@ Java Gateway
 ### 3.3 Agent 对话流程
 
 ```
-前端 POST /api/agent/chat/stream { message, mode, conversationId, problemId, goal?, trainingPhase?, timeRemainingSec? }
+前端 POST /api/agent/chat/stream { message, mode, conversationId, problemId, goal?, trainingPhase?, timeRemainingSec?, code?, codeLanguage? }
         │
         ▼
 Java Gateway 固定代理 → FastAPI router.py
@@ -446,7 +446,7 @@ log.error("submit.timeout submissionId={}", id);
 - ✅ OI/xCPC 六阶段指导、赛后复盘、定时复习、周报和推荐效果回测
 - ✅ 15 种预置 Remotion 动画与受限生成式渲染接口；生成式接口默认关闭，当前 Compose 未开放其所需的沙箱能力
 
-FOCUS 期间当前只累计专注用时，不保存编辑轨迹。Submit 后只把判题事实、用时与题目标签交给 Agent，不自动转发源码；因此复盘不能声称已经检查用户代码。
+FOCUS 期间当前只累计专注用时，不保存编辑轨迹。Submit 后把判题事实、用时与题目标签交给 Agent；进入 REVIEW 时，前端把当前代码和语言作为临时请求上下文发送给 Agent。代码不写入 ReMe 长期记忆，复盘可以检查本轮实际提供的代码。
 
 ### 明确不在当前范围
 

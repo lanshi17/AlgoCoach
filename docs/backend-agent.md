@@ -612,7 +612,7 @@ class RecordAttemptRequest(BaseModel):
 ## 6. /chat/stream Agent 流程图（AgentScope + ReMe）
 
 ```
-POST /chat/stream {message, mode, conversationId, problemId?, trainingPhase?, timeRemainingSec?}
+POST /chat/stream {message, mode, conversationId, problemId?, trainingPhase?, timeRemainingSec?, code?, codeLanguage?}
         │
         ▼
  mode == "FOCUS"? ──yes──▶ return {content: "", animationId: null}

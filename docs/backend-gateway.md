@@ -847,7 +847,7 @@ CREATE INDEX idx_submission_created ON submission_record(created_at);
 
 | Method | Path | 上游 | Request | Response |
 |--------|------|------|---------|----------|
-| `POST` | `/api/agent/chat/stream` | `POST /chat/stream` | `{message, mode, conversationId, problemId?, trainingPhase?, timeRemainingSec?}` | `text/event-stream`（thinking/text/done/error） |
+| `POST` | `/api/agent/chat/stream` | `POST /chat/stream` | `{message, mode, conversationId, problemId?, trainingPhase?, timeRemainingSec?, code?, codeLanguage?}` | `text/event-stream`（thinking/text/done/error） |
 | `POST` | `/api/agent/memory/record` | `POST /memory/record` | `MemoryRecordRequest` | 上游原始 JSON |
 | `POST` | `/api/agent/animate` | `POST /animate` | `{type, topic?, title?, problemId?}` | 上游原始 JSON |
 | `POST` | `/api/agent/animate/generated` | `POST /animate/generated` | `GeneratedAnimationRequest` + `Authorization: Bearer <token>` | 上游原始 JSON |
