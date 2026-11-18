@@ -159,6 +159,8 @@ async def chat_stream(req: ChatRequest):
                 "message": req.message,
                 "mode": req.mode,
                 "problem_id": req.problemId,
+                "code": req.code,
+                "code_language": req.codeLanguage,
                 "goal": req.goal,
                 "training_phase": req.trainingPhase,
                 "time_remaining_sec": req.timeRemainingSec,

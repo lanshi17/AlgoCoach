@@ -146,7 +146,7 @@ export default function Header() {
         `判题结果：${result.status}；${passedSummary}。`,
         `FOCUS 用时：${formatDuration(result.durationSec)}。知识点：${topicSummary}。`,
         result.errorMessage ? `判题信息：${result.errorMessage}` : '',
-        '请按 OI/xCPC 的赛后复盘流程，先根据题目、判题事实与我的训练记录复盘建模、正确性、复杂度和下一步。你看不到我的提交代码；若要定位实现层面的具体错误，请先让我贴出相关代码片段并说明自己的判断，不要假装检查过代码。',
+        '请按 OI/xCPC 的赛后复盘流程，结合题目、判题事实、训练记录和本轮附带的提交代码，分析建模、正确性、边界条件、复杂度及下一步。指出代码中能从实现直接验证的问题，并解释原因；区分确定的 bug 与需要更多测试确认的风险。',
       ].filter(Boolean).join('\n')
       const reviewTimestamp = new Date().toISOString()
       const reviewMessageId = nanoid()
@@ -164,6 +164,8 @@ export default function Header() {
         mode: 'REVIEW',
         problemId: activeProblem.platformId,
         platform: activeProblem.platform,
+        code,
+        codeLanguage: lang,
         goal,
         trainingPhase: 'review',
         provider,

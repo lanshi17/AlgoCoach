@@ -13,6 +13,8 @@ async def test_chat_stream_emits_thinking_text_and_done_events(client, monkeypat
     async def fake_stream(**kwargs):
         assert kwargs["session_id"] != "default"
         assert kwargs["platform"] == "LEETCODE"
+        assert kwargs["code"] == "int answer = 42;"
+        assert kwargs["code_language"] == "cpp"
         yield {"type": "thinking", "delta": "先确认约束。"}
         yield {"type": "text", "delta": "复杂度是 O(n)。"}
         yield {"type": "done", "content": "复杂度是 O(n)。", "animation_id": None}
@@ -23,6 +25,7 @@ async def test_chat_stream_emits_thinking_text_and_done_events(client, monkeypat
         json={
             "message": "怎么做？", "mode": "PREP", "problemId": "two-sum",
             "platform": "LEETCODE", "conversationId": "test-page",
+            "code": "int answer = 42;", "codeLanguage": "cpp",
         },
     )
 

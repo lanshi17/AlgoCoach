@@ -64,6 +64,8 @@ interface ChatCtx {
   mode: string
   problemId?: string
   platform?: string
+  code?: string
+  codeLanguage?: string
   goal?: TrainingGoal
   trainingPhase?: TrainingPhase
   timeRemainingSec?: number

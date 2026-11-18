@@ -240,6 +240,8 @@ it('sends the post-submit review after leaving focus mode', async () => {
     id: '1', platform: 'LEETCODE', platformId: 'one', title: 'One', difficulty: 'EASY',
     contentHtml: '', topics: ['Array'], sampleTestCases: '', codeSnippets: [],
   })
+  useAppStore.getState().setLang('cpp')
+  useAppStore.getState().setCode('int answer = 42;')
   useAppStore.getState().enterFocus()
   vi.spyOn(leetcodeService, 'submit').mockResolvedValue({
     id: 'submission-1', status: 'ACCEPTED', runtimeMs: 2, memoryMb: 3,
@@ -258,6 +260,7 @@ it('sends the post-submit review after leaving focus mode', async () => {
   expect(chat).toHaveBeenCalledTimes(1)
   expect(chat.mock.calls[0][1]).toMatchObject({
     mode: 'REVIEW', problemId: 'one', platform: 'LEETCODE', trainingPhase: 'review',
+    code: 'int answer = 42;', codeLanguage: 'cpp',
   })
   await act(async () => {
     await Promise.resolve()

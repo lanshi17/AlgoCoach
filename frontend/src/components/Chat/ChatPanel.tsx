@@ -128,10 +128,14 @@ export default function ChatPanel() {
 
     try {
       const timeRemainingSec = toRemainingSeconds(timeInput, getFocusDurationSec())
+      const currentEditor = useAppStore.getState()
       const reply = await agentService.chatStream(userMsg.content, {
         mode: requestMode,
         problemId: activeProblem?.platformId,
         platform: activeProblem?.platform,
+        ...(requestMode === 'REVIEW' && currentEditor.code.trim()
+          ? { code: currentEditor.code, codeLanguage: currentEditor.lang }
+          : {}),
         goal,
         provider,
         trainingPhase: userMsg.trainingPhase ?? trainingPhase,
