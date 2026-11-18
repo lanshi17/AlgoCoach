@@ -8,6 +8,33 @@
  * list per character, so Chinese text finds a CJK family while Latin keeps the
  * original mono look. The renderer image installs `fonts-noto-cjk`.
  */
+import { useEffect, useState } from 'react'
+import { useDelayRender } from 'remotion'
+
 export const MONO_FONT_STACK =
   "'JetBrains Mono', monospace, 'Noto Sans CJK SC', 'Noto Sans Mono CJK SC', " +
   "'PingFang SC', 'Microsoft YaHei', 'WenQuanYi Zen Hei'"
+
+/**
+ * Hold the first frame until the document's font set is resolved.
+ *
+ * Chromium can paint a frame while a CJK fallback is still being matched; on a
+ * cold renderer that shows up as blank Chinese labels for the first frames. The
+ * delay handle is released on `document.fonts.ready`, which costs nothing once
+ * the system fonts are warm.
+ */
+export const useFontGate = () => {
+  const { delayRender, continueRender, cancelRender } = useDelayRender()
+  const [handle] = useState(() => delayRender('Waiting for fonts'))
+
+  useEffect(() => {
+    const fonts = typeof document === 'undefined' ? undefined : document.fonts
+    if (!fonts) {
+      continueRender(handle)
+      return
+    }
+    fonts.ready
+      .then(() => continueRender(handle))
+      .catch((error: unknown) => cancelRender(error instanceof Error ? error : new Error(String(error))))
+  }, [handle, continueRender, cancelRender])
+}

@@ -46,7 +46,11 @@ class GeneratedJobLimitExceeded(Exception):
     """Raised when the small generated-job admission cap is full."""
 
 RENDER_BIN = os.getenv("REMOTION_BIN", "npx")  # or path to local remotion CLI
-RENDER_TIMEOUT = 120
+# MainComp duration comes from calculateMetadata (3-30s). A 17.5s scene takes
+# ~39s at --concurrency 2 on a 20-core host, so 30s needs headroom on the
+# slower agent container; 240s keeps that margin without parking a failed job
+# for long.
+RENDER_TIMEOUT = 240
 OUTPUT_DIR = os.getenv("OUTPUT_DIR", "../../data/animations")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 

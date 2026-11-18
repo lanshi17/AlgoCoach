@@ -47,7 +47,10 @@ const C = {
 }
 ```
 
-- 动画节奏公式：`const stepIdx = Math.min(Math.floor(frame / framesPerStep), steps.length - 1)`
+- 配色统一由 `src/theme.ts` 的 `C` 提供，组件不再各自定义色板
+- 动画节奏由 `src/motion.ts` 统一：`useStepSequence(count)` 返回 `{ index, progress, eased, revealed }`，`sequenceDurationInFrames(count, fps)` 计算 `intro + count × 1s + outro`（3–30s 夹取）
+- 时长不写死：`Root.tsx` 用 `calculateMetadata` 调 `catalog.ts` 的 `mainDurationInFrames(component, data, fps)`，agent 传 3 步就渲 4.5s，传 20 步就渲 21.5s
+- 入场/高亮用 `springIn`（无过冲）与 `popIn`（轻微过冲），窗口/指针在步骤间用 `Easing.out(Easing.cubic)` 插值，不硬切
 
 ---
 
@@ -68,10 +71,10 @@ interface BfsGraphProps {
 
 **帧逻辑**：
 1. 对 nodes/edges/startNode 执行 BFS，得到访问顺序数组 `order`
-2. `framesPerStep = durationInFrames / (order.length + 1)`
-3. 第 `stepIdx` 步：将 `order[0..stepIdx)` 标记为已访问，`order[stepIdx-1]` 为当前节点（蓝色高亮）
-4. 底部展示访问顺序 badge 序列（逐步追加）
-5. 已访问的边变色
+2. 场景时长 = `bfsGraphFrames({...}, 30)`，每步 30 帧（intro 18 帧、outro 27 帧）
+3. 第 `index` 步：`order[0..index]` 标记已访问，`order[index]` 为当前节点（蓝色高亮 + 光环脉冲）
+4. 底部展示访问顺序 badge 序列，每个 badge 在对应步起点用 `popIn` 弹入
+5. 已访问的边变色；节点/边在开场用 `springIn` 逐个进入
 
 **默认数据**：6 节点树形图（S, 1-5）
 
@@ -176,8 +179,10 @@ interface WeeklyReportProps {
 
 | id | 分辨率 | 帧率 | 时长 | 用途 |
 |----|--------|------|------|------|
-| `MainComp` | 1280×720 | 30fps | 240 帧 | 聊天内嵌动画，按 `{component, data}` 路由 |
+| `MainComp` | 1280×720 | 30fps | 90–900 帧（3–30s，按数据计算） | 聊天内嵌动画，按 `{component, data}` 路由 |
 | `WeeklyReport` | **1920×1080** | **60fps** | 600 帧 | 周报视频，props 直接是周报数据 |
+
+`MainComp` 通过 `calculateMetadata` 把 `{component, data}` 交给 `catalog.ts`：步数少的场景（TwoPointer 默认 4 步）渲 5.5s，步数多的场景（HeapSort 默认 16 步）渲 17.5s，最长夹到 30s；`useStepSequence` 反向从真实 `durationInFrames` 还原步网格，所以 Studio 预览、聊天播放器和后端渲染的节奏一致。
 
 `MainComp` 的 REGISTRY 同时注册 `WeeklyReport`，便于聊天里用 `{component: 'WeeklyReport', data: {...}}` 预览；后台周报任务则使用独立的 `WeeklyReport` composition。预置组件只消费后端传入的 JSON props，不生成也不执行任何 JSX；生成式动画走单独的沙箱路径（§5 Mode B），默认关闭。
 
@@ -192,12 +197,16 @@ interface WeeklyReportProps {
 ```
 1. 创建文件 src/compositions/MyComp.tsx
 2. 定义 Props interface（所有字段可选，提供 DEFAULT_* 常量）
-3. 实现组件，使用统一配色 C = {...}
-4. 在 MainComp.tsx 的 REGISTRY 中注册：
-     MyComp: ({ data }) => <MyComp {...(data as any)} />,
-5. 在 animation_service.py 的 PREBUILT 中注册关键词映射：
+3. 用 src/theme.ts 的 C、src/fonts.ts 的 MONO_FONT_STACK，
+   节奏用 src/motion.ts 的 useStepSequence / springIn / popIn
+4. 导出 MyCompFrames = (props: MyCompProps, fps: number) =>
+     sequenceDurationInFrames(stepCount, fps)
+5. 在 MainComp.tsx 的 REGISTRY 中注册：MyComp: scene(MyComp)
+6. 在 catalog.ts 的 DURATIONS 中登记同一份计数：
+     MyComp: (data, fps) => myCompFrames(props<MyCompProps>(data), fps)
+7. 在 animation_service.py 的 PREBUILT 中注册关键词映射：
      'MY_KEYWORD': 'MyComp',
-6. 更新本文档的"现有组件"节
+8. 更新本文档的"现有组件"节
 ```
 
 ### Props 约定
@@ -206,9 +215,10 @@ interface WeeklyReportProps {
 |------|------|
 | 全部可选 | 组件必须能在 `props = {}` 时用默认数据正常渲染 |
 | 扁平化 | 避免深层嵌套，agent 填 props 时 JSON 要简单 |
-| steps 数组 | 所有逐步动画都用 `steps: Step[]`，每步一帧组 |
+| steps 数组 | 所有逐步动画都用 `steps: Step[]`，每步按 1s 播放 |
 | note 字段 | `Step` 中可选 `note: string`，显示在画面底部 |
-| 配色统一 | 不硬编码颜色值，使用局部 `C` 对象 |
+| 配色统一 | 从 `src/theme.ts` 导入 `C`，不写裸色值 |
+| 时长 | 在 `catalog.ts` 登记 `*Frames`，不要依赖 Composition 的静态 240 帧 |
 
 ---
 
@@ -270,7 +280,20 @@ job.status = "READY", job.video_url = "/animations/{id}.mp4"
 }
 ```
 
-P1 同时补齐了渲染所需依赖：`react-dom@^18.3.1`（Remotion peer 依赖）与 `remotion@4.0.543` + devDependency `@remotion/cli@4.0.543`（提供 `npx remotion` 可执行文件，两者版本必须一致）。缺少 CLI 时 `npx remotion render` 会报 “could not determine executable to run”。
+P1 同时补齐了渲染所需依赖：`react-dom@^18.3.1`（Remotion peer 依赖）与 `remotion@4.0.545` + devDependency `@remotion/cli@4.0.545`（提供 `npx remotion` 可执行文件，两者版本必须一致）。缺少 CLI 时 `npx remotion render` 会报 “could not determine executable to run”。
+
+**升级记录（2026-11，4.0.543 → 4.0.545）**：
+
+| 项目 | 变更 |
+|------|------|
+| `remotion` / `@remotion/cli` / 前端 `@remotion/player` | 统一到 `4.0.545`；`npx remotion versions` 校验全部同版本 |
+| 时长 | `Root.tsx` 增加 `calculateMetadata`，场景按 `catalog.ts` 的步数计算 3–30s |
+| 布局 | `MainComp` 用 1280×720 设计台，按 composition 尺寸等比缩放（默认 scale=1） |
+| 字体 | `fonts.ts` 增加 `useFontGate()`：`document.fonts.ready` 前不抓帧，避免冷启动中文空白 |
+| 主题/节奏 | 新增 `theme.ts` 与 `motion.ts`，各组件内联色板和逐帧硬切全部移除 |
+| 渲染 | `RENDER_TIMEOUT` 120s → 240s，匹配 30s 成片上限 |
+
+4.0.545 新增的 motion blur（`@remotion/motion-blur`）面向镜头/转场运动，本项目的教学动画是平面状态切换，未引入该依赖。
 
 **中文字体**：渲染发生在无界面 Chromium 中，可用字体只来自宿主（Docker 渲染器即 `backend/agent/Dockerfile` 镜像）。镜像里除了 `fonts-liberation` 还必须安装 `fonts-noto-cjk`，否则中文标题、节点标签、周报正文会整段渲染成空白（数字和英文仍然正常，很容易被误判成布局问题）。Dockerfile 在安装后用 `test -n "$(fc-list :lang=zh)"` 做构建期断言；组件里的 `fontFamily` 统一取 `src/fonts.ts` 的 `MONO_FONT_STACK`（`monospace` 在前保证拉丁字符外观不变，CJK 家族在后做逐字兜底），不要在组件里再写裸 `monospace`。在宿主机直接跑 Remotion 时需自行安装 Noto Sans CJK；macOS 自带 PingFang，无需额外处理。
 
@@ -308,6 +331,8 @@ cmd = [
 ```
 
 **当前实现（P1）**：`AnimationJob` 增加 `composition_id`，`_render()` 用 `job.composition_id` 替换上例的 `MainComp`，并省略 `--frames`（渲染 composition 全时长）。`composition_id == 'MainComp'` 时 props 为 `{component, data}`；`WeeklyReport` 等独立 composition 的 `--props` 直接是数据对象。周报仍走异步渲染，不阻塞 FastAPI 请求。
+
+**动态时长与超时**：`--frames` 必须省略——`calculateMetadata` 已按数据算出 90–900 帧，显式传帧区间会截断场景。实测 17.5s / 525 帧在 `--concurrency 2` 下耗时约 39s（本机 20 核），30s 上限留出约 2 倍余量后 `RENDER_TIMEOUT` 取 240s。复杂度只看步数，不看题目内容。
 
 **分辨率方案**：
 
@@ -367,11 +392,13 @@ npm install @remotion/player
 ```tsx
 import { Player } from '@remotion/player'
 import { MainComp } from '../../../remotion-compositions/src/compositions/MainComp'
+import { mainDurationInFrames } from '../../../remotion-compositions/src/catalog'
 
 // 注意：Remotion Player 在 Web 中直接渲染 React 组件（无需渲染 MP4）
 // 两种模式：
 // 1. 直接用 Player 组件播放（无需后端渲染）——适合实时预览
 // 2. 用 <video> 播放已渲染的 MP4——适合分享/离线
+// Player 不会执行 calculateMetadata，时长要自己从 catalog 取同一份计算。
 
 function AnimationPlayer({ job }: { job: AnimationJob }) {
   if (job.status === 'READY' && job.videoUrl) {
@@ -384,7 +411,7 @@ function AnimationPlayer({ job }: { job: AnimationJob }) {
     <Player
       component={MainComp}
       inputProps={{ component: job.component, data: job.props }}
-      durationInFrames={240}
+      durationInFrames={mainDurationInFrames(job.component, job.props, 30)}
       fps={30}
       compositionWidth={1280}
       compositionHeight={720}

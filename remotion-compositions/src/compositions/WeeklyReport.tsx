@@ -11,7 +11,8 @@
  */
 import React from 'react'
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from 'remotion'
-import { MONO_FONT_STACK } from '../fonts'
+import { MONO_FONT_STACK, useFontGate } from '../fonts'
+import { C } from '../theme'
 
 interface TopicCount {
   name: string
@@ -53,17 +54,6 @@ export const DEFAULT_WEEKLY_REPORT: Required<WeeklyReportProps> = {
   stickingPoints: ['状态转移方程写错', '边界条件遗漏'],
 }
 
-const C = {
-  bg: '#0d1117',
-  bg2: '#161b22',
-  border: '#30363d',
-  text: '#e6edf3',
-  muted: '#8b949e',
-  accent: '#58a6ff',
-  visited: '#1f6feb',
-  success: '#3fb950',
-  warning: '#d29922',
-}
 
 export const WeeklyReport: React.FC<WeeklyReportProps> = ({
   weekStart = DEFAULT_WEEKLY_REPORT.weekStart,
@@ -75,6 +65,7 @@ export const WeeklyReport: React.FC<WeeklyReportProps> = ({
   weakTopics = DEFAULT_WEEKLY_REPORT.weakTopics,
   stickingPoints = DEFAULT_WEEKLY_REPORT.stickingPoints,
 }) => {
+  useFontGate()
   const frame = useCurrentFrame()
   const { width, height, durationInFrames } = useVideoConfig()
   // Design canvas is 1920x1080; s scales every dimension for the chat preview.

@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
-    "@remotion/player": "^4.0.0",
+    "@remotion/player": "^4.0.545",
     "axios": "^1.7.0",
     "clsx": "^2.1.1",
     "d3-force": "^3.0.1",

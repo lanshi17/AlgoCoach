@@ -1,6 +1,18 @@
-import { Composition } from 'remotion'
-import { MainComp } from './compositions/MainComp'
+import { type CalculateMetadataFunction, Composition } from 'remotion'
+import { mainDurationInFrames } from './catalog'
+import { MainComp, type MainCompProps } from './compositions/MainComp'
 import { DEFAULT_WEEKLY_REPORT, WeeklyReport } from './compositions/WeeklyReport'
+
+const MAIN_FPS = 30
+
+/**
+ * MainComp duration follows the agent's data: a 3-step DFS and a 20-state heap
+ * sort no longer share the old fixed 240 frames. Every scene exposes its step
+ * count through `catalog.ts`, and the timeouts/limits live in `motion.ts`.
+ */
+const calculateMainMetadata: CalculateMetadataFunction<MainCompProps> = ({ props }) => ({
+  durationInFrames: mainDurationInFrames(props.component, props.data ?? {}, MAIN_FPS),
+})
 
 /**
  * Root — registers all compositions.
@@ -16,10 +28,11 @@ export function RemotionRoot() {
         id="MainComp"
         component={MainComp}
         durationInFrames={240}
-        fps={30}
+        fps={MAIN_FPS}
         width={1280}
         height={720}
         defaultProps={{ component: 'BfsGraph', data: {} }}
+        calculateMetadata={calculateMainMetadata}
       />
       <Composition
         id="WeeklyReport"
