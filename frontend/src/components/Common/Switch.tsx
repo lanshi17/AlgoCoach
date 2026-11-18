@@ -29,7 +29,7 @@ export default function Switch({ checked, onChange, label, disabled = false }: P
                       : 'justify-start bg-text-muted/45 ring-1 ring-inset ring-border dark:bg-text-dark-muted/55 dark:ring-border-dark'
                   }`}
     >
-      <span className="h-4 w-4 rounded-full bg-white shadow-sm ring-1 ring-black/5" />
+      <span className="h-4 w-4 rounded-full bg-white ring-1 ring-black/5" />
     </button>
   )
 }

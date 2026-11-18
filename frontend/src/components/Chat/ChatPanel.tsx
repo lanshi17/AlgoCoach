@@ -216,15 +216,15 @@ export default function ChatPanel() {
   }
 
   return (
-    <div className="relative flex flex-col h-full bg-surface dark:bg-surface-dark">
+    <div className="relative flex h-full flex-col bg-surface dark:bg-surface-dark">
       {/* Panel header */}
-      <div className="flex h-[48px] flex-shrink-0 items-center gap-2 border-b editorial-rule px-4">
-        <Sparkles size={16} className="text-accent" />
-        <span className="shrink-0 font-editorial text-base font-medium tracking-wide text-text-primary dark:text-text-dark-primary">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-5 dark:border-border-dark">
+        <Sparkles size={18} className="text-accent" />
+        <span className="shrink-0 text-lg font-semibold tracking-title text-text-primary dark:text-text-dark-primary">
           AI 教练
         </span>
         <span
-          className="ml-auto max-w-[48%] truncate text-[11px] text-text-muted dark:text-text-dark-muted"
+          className="ml-auto max-w-[48%] truncate text-xs tracking-cn text-text-muted dark:text-text-dark-muted"
           title={`${provider.name} · ${provider.model || '未配置模型'}`}
         >
           {provider.name} · {provider.model || '未配置模型'}
@@ -234,12 +234,11 @@ export default function ChatPanel() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {!isFocus && messages.length === 0 && !loading && !animation && (
-          <div className="mx-1 my-8 border-y editorial-rule py-6">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-accent">训练札记</div>
-            <h2 className="mt-2 font-editorial text-lg font-medium tracking-wide text-text-primary dark:text-text-dark-primary">
+          <div className="mx-1 my-8 border-y border-border py-6 dark:border-border-dark">
+            <h2 className="text-lg font-semibold tracking-title text-text-primary dark:text-text-dark-primary">
               先写下你的观察
             </h2>
-            <p className="mt-2 max-w-[30ch] text-xs leading-6 text-text-secondary dark:text-text-dark-secondary">
+            <p className="mt-2 max-w-[30ch] text-sm leading-5 tracking-cn text-text-secondary dark:text-text-dark-secondary">
               从题意、算法猜想或卡住的地方开始。教练会按竞赛训练的节奏陪你逐步验证。
             </p>
           </div>
@@ -319,15 +318,15 @@ export default function ChatPanel() {
       {/* Input box */}
       <div className="flex-shrink-0 border-t border-border dark:border-border-dark p-3">
         {isFocus ? (
-          <div className="flex items-center justify-center gap-2 py-2 text-xs text-text-muted
-                          dark:text-text-dark-muted bg-focus/5 rounded-lg border border-focus/20">
+          <div className="flex h-9 items-center justify-center gap-2 rounded-full border border-border px-3 text-sm tracking-cn text-text-muted
+                          dark:border-border-dark dark:text-text-dark-muted">
             <Lock size={13} className="text-focus" />
             专注解题中，AI 已静默
           </div>
         ) : (
           <div className="space-y-2">
             {errorAction && (
-              <div role="group" aria-label="模型配置帮助" className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface-soft px-3 py-2 text-xs dark:border-border-dark dark:bg-surface-dark-soft">
+              <div role="group" aria-label="模型配置帮助" className="flex items-center justify-between gap-3 rounded-card border border-border bg-surface px-4 py-3 text-sm dark:border-border-dark dark:bg-surface-dark-soft">
                 <span className="text-text-secondary dark:text-text-dark-secondary">
                   {errorAction.label === '检查模型 Provider'
                     ? '检查模型名、Base URL 或 API key 后即可继续对话。'
@@ -339,7 +338,7 @@ export default function ChatPanel() {
               </div>
             )}
             {retryMessage && !loading && (
-              <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-xs">
+              <div role="alert" className="flex items-center justify-between gap-3 rounded-card border border-border px-4 py-3 text-sm">
                 <span className="text-text-secondary dark:text-text-dark-secondary">
                   这条消息没有送达，输入内容已保留。
                 </span>
@@ -363,8 +362,7 @@ export default function ChatPanel() {
                   id="chat-training-phase"
                   value={trainingPhase}
                   onChange={e => setChatPhase(e.target.value as TrainingPhase)}
-                  className="rounded-md border border-border dark:border-border-dark
-                             bg-surface-soft dark:bg-surface-dark-soft px-2 py-1 text-xs
+                  className="h-9 rounded-full border border-border bg-surface px-3 text-sm tracking-cn dark:border-border-dark
                              text-text-primary dark:text-text-dark-primary outline-none
                              transition-colors focus:border-accent dark:focus:border-accent"
                 >
@@ -390,8 +388,7 @@ export default function ChatPanel() {
                   }}
                   placeholder="不限"
                   aria-describedby="chat-time-remaining-help"
-                  className="w-16 rounded-md border border-border dark:border-border-dark
-                             bg-surface-soft dark:bg-surface-dark-soft px-2 py-1 text-xs
+                    className="h-9 w-16 rounded-full border border-border bg-surface px-3 text-sm tracking-cn dark:border-border-dark
                              text-text-primary dark:text-text-dark-primary outline-none
                              transition-colors focus:border-accent dark:focus:border-accent
                              placeholder:text-text-muted dark:placeholder:text-text-dark-muted"
@@ -419,7 +416,7 @@ export default function ChatPanel() {
                 placeholder="问 AI 教练…（Shift+Enter 换行）"
                 aria-label="发送给 AI 教练的消息"
                 rows={2}
-                className="flex-1 resize-none text-sm px-3 py-2 rounded-lg bg-surface-soft
+                className="h-12 flex-1 resize-none rounded-card bg-surface px-4 py-3 text-sm tracking-cn
                            dark:bg-surface-dark-soft border border-border dark:border-border-dark
                            text-text-primary dark:text-text-dark-primary outline-none
                            focus:border-accent dark:focus:border-accent transition-colors
@@ -431,8 +428,8 @@ export default function ChatPanel() {
                 aria-busy={loading}
                 title={loading ? '正在等待教练回复' : '发送消息（Enter）'}
                 aria-label={loading ? '正在等待教练回复' : '发送消息'}
-                className="p-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white
-                           disabled:opacity-40 transition-colors flex-shrink-0"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#111317] text-white transition-opacity duration-150 hover:opacity-90
+                           disabled:opacity-40"
               >
                 <Send size={16} />
               </button>

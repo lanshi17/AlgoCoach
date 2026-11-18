@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { AgentMode, Problem, ChatMessage, AnimationJob, RunResult, TrainingGoal, TrainingPhase, ModelProviderConfig, CodeLanguage, CoachPrefs } from '@/types'
 import { CODE_LANGUAGES } from '@/services/languages'
+import { appendLocalPracticeRecord, readLocalPracticeRecords, type LocalPracticeRecord } from '@/services/localProgress'
 
 const GOALS: TrainingGoal[] = ['contest', 'interview_prep', 'casual']
 const DRAFTS_KEY = 'algocoach.problemDrafts'
@@ -211,6 +212,7 @@ const INITIAL_CODE = INITIAL_DRAFT?.code
 const INITIAL_TEST_INPUT = INITIAL_DRAFT?.testInput
   ?? INITIAL_ACTIVE_PROBLEM?.sampleTestCases.split('\n---\n')[0]
   ?? ''
+const INITIAL_LOCAL_PRACTICE_RECORDS = readLocalPracticeRecords()
 
 function initialProvider(): ModelProviderConfig {
   try {
@@ -314,6 +316,9 @@ interface AppState {
   setRunError: (error: string | null) => void
   runLoading: boolean
   setRunLoading: (loading: boolean) => void
+
+  // ─── Local practice ledger ───
+  localPracticeRecords: LocalPracticeRecord[]
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -329,12 +334,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     set(state => {
       const focusElapsedSec = state.focusElapsedSec + elapsed
       if (!activeProblem) return { mode: 'REVIEW', focusStartTs: null, focusElapsedSec }
+      const localPracticeRecords = appendLocalPracticeRecord({
+        problemId: problemKey(activeProblem),
+        title: activeProblem.titleCn ?? activeProblem.title,
+        topics: activeProblem.topics,
+        durationSec: focusElapsedSec,
+        codeLength: state.code.length,
+        endedAt: new Date().toISOString(),
+      })
       const problemFocusElapsed = {
         ...state.problemFocusElapsed,
         [problemKey(activeProblem)]: focusElapsedSec,
       }
       persistProblemFocusTimes(problemFocusElapsed)
-      return { mode: 'REVIEW', focusStartTs: null, focusElapsedSec, problemFocusElapsed }
+      return { mode: 'REVIEW', focusStartTs: null, focusElapsedSec, problemFocusElapsed, localPracticeRecords }
     })
   },
   checkpointFocusDuration: (nowMs = Date.now()) => {
@@ -538,4 +551,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setRunError: error => set({ runError: error }),
   runLoading: false,
   setRunLoading: loading => set({ runLoading: loading }),
+
+  localPracticeRecords: INITIAL_LOCAL_PRACTICE_RECORDS,
 }))

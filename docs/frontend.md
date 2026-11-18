@@ -8,7 +8,7 @@
 ## 1. 模块职责和边界
 
 ### 职责
-- 渲染三栏工作区 UI（题目描述 / 代码编辑器 / AI 对话）
+- 渲染 OpenTutor 风格的 Block 学习空间与三栏编码工作区（题目描述 / 代码编辑器 / AI 对话）
 - 维护 `AgentMode` 状态机，强制执行 FOCUS 模式下的 AI 静默约束
 - 通过 Java 网关 (`/api/*`) 拉取题目、提交代码、管理 Cookie 认证
 - 通过 Java 网关 (`/api/agent/*`) 与 Python Agent 对话、请求动画
@@ -72,13 +72,14 @@ frontend/
     │       ├── Button.tsx          # 唯一按钮原语（primary/secondary/ghost）
     │       └── PageHeader.tsx      # 唯一页面标题（图标 + 标题 + 右侧操作）
     └── pages/
+        ├── LearningSpacePage.tsx    # Block 学习空间：摘要、练习、复盘、计划、洞察
         ├── SettingsPage.tsx        # 目标/AI 教练/Provider/题库登录/导出
         ├── ProgressPage.tsx        # 训练进度
         ├── KnowledgeGraphPage.tsx  # 掌握关系图
         ├── KnowledgeBasePage.tsx   # 用户知识库、Embedding 与源文件管理
         └── graphLayout.ts          # 图布局算法
 
-题目列表视图内嵌在 `ProblemPanel`；工作区和其他路径由 `AppShell` 管理，没有独立的 `ProblemListPage` / `WorkspacePage` 文件。知识图谱和进度页面已接入本地 Agent profile。
+题目列表视图内嵌在 `ProblemPanel`；工作区和其他路径由 `AppShell` 管理，没有独立的 `ProblemListPage` / `WorkspacePage` 文件。`/home` 复用 OpenTutor 的学习模式和 Block 思路，编码练习仍由现有 Agent 工作区承载。知识图谱和进度页面已接入本地 Agent profile。
 ```
 
 ---
@@ -120,7 +121,7 @@ frontend/
 - `/` 默认重定向至 `/workspace`，未知路径也回到工作区。
 - `/progress` 与 `/knowledge` 使用 Agent 本地 profile 数据；`/settings` 提供偏好设置，`/settings/platforms` 是 LeetCode / AcWing / 杭电 HDU 三平台登录态的统一入口。
 - `/knowledge/library` 提供用户知识库管理：选择本地 ONNX 或 OpenAI-compatible embedding、上传 TXT/Markdown/JSON/CSV/HTML/PDF/DOCX/ZIP、重建索引和删除源文件。
-- AppShell 启动时只检查 Java Gateway（探测超时后进入离线态）；网关不可用时显示重试入口。LeetCode 未登录不会阻挡工作区，题库请求失败时在题目面板内显示平台错误并提供登录设置入口。
+- AppShell 启动时只检查 Java Gateway（探测超时后进入离线态）；网关不可用时保留完整桌面工作区并显示重试入口，本地练习本仍可打开。LeetCode 未登录不会阻挡工作区，题库请求失败时在题目面板内显示平台错误并提供登录设置入口。
 
 ### 3.3 Header.tsx
 
@@ -169,6 +170,8 @@ frontend/
 
 **当前边界**：
 - LeetCode Run 不会提供测试 case 的期望输出时，结果区域按实际回包显示，不推算缺失字段。
+
+本地练习本提供两道不依赖平台 Cookie 的算法题。题目、语言 starter、代码草稿和专注时长保存在浏览器本地；结束一次 FOCUS 会写入本地练习账本，进度页在 Agent 不可达时以此账本作为离线视图。
 
 ### 3.5 ChatPanel.tsx
 

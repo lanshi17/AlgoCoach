@@ -7,6 +7,7 @@ import { leetcodeService } from '@/services/leetcodeService'
 import { acwingService } from '@/services/acwingService'
 import { hduService } from '@/services/hduService'
 import { ACWING_TOPICS, findAcWingTopic, TRAINING_TOPICS, findTrainingTopic } from '@/services/trainingTopics'
+import { isLocalPracticeProblem, LOCAL_PRACTICE_PROBLEMS } from '@/services/localPractice'
 import type { Problem } from '@/types'
 import DOMPurify from 'dompurify'
 import renderMathInElement from 'katex/contrib/auto-render'
@@ -174,6 +175,11 @@ export default function ProblemPanel() {
   useEffect(() => {
     const problem = activeProblemRef.current
     if (!problem || showPicker || !restoredProblemKey.current) return
+    if (isLocalPracticeProblem(problem)) {
+      restoredProblemKey.current = null
+      setRestoredStatementStatus('idle')
+      return
+    }
     const key = `${problem.platform}:${problem.platformId}`
     if (key !== restoredProblemKey.current) {
       restoredProblemKey.current = null
@@ -284,6 +290,28 @@ export default function ProblemPanel() {
               </label>
             )}
           </div>
+          <section className="mt-4 rounded-card border border-border bg-surface p-4" aria-labelledby="local-practice-title">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">本地练习本</p>
+                <h3 id="local-practice-title" className="mt-1 font-editorial text-sm text-text-primary dark:text-text-dark-primary">先写一遍，再看提示</h3>
+                <p className="mt-1 text-[11px] leading-5 text-text-secondary dark:text-text-dark-secondary">无需 Cookie，草稿和专注时间只保存在这台电脑。</p>
+              </div>
+              <span className="shrink-0 rounded-full border border-accent/30 px-2 py-0.5 text-[10px] text-accent">离线可用</span>
+            </div>
+            <div className="mt-3 grid gap-1.5">
+              {LOCAL_PRACTICE_PROBLEMS.map(problem => (
+                <button key={problem.id} type="button" onClick={() => { restoredProblemKey.current = null; setActiveProblem(problem); setShowPicker(false) }}
+                  className="group flex items-center justify-between gap-3 rounded-full px-3 py-2 text-left transition-[background-color,color] duration-150 hover:bg-surface-muted dark:hover:bg-surface-dark-muted">
+                  <span className="min-w-0">
+                    <span className="block truncate text-xs font-medium text-text-primary dark:text-text-dark-primary">{problem.titleCn}</span>
+                    <span className="mt-0.5 block truncate text-[10px] text-text-muted dark:text-text-dark-muted">{problem.topics.join(' · ')}</span>
+                  </span>
+                  <span className="shrink-0 font-mono text-[10px] text-accent">打开 →</span>
+                </button>
+              ))}
+            </div>
+          </section>
         </div>
         {error && visibleProblems.length > 0 && <div role="alert" className="mx-4 mt-3 rounded-md bg-red-50 p-3 text-xs text-danger dark:bg-red-900/10">{error}</div>}
         {loadingList ? (
@@ -378,7 +406,7 @@ export default function ProblemPanel() {
             <span className="badge bg-accent/10 text-accent">每日一题</span>
           )}
         </div>
-        <h1 className="mb-2 font-editorial text-xl font-medium tracking-wide text-text-primary dark:text-text-dark-primary">
+        <h1 className="mb-2 font-editorial text-xl font-semibold tracking-title text-text-primary dark:text-text-dark-primary">
           {activeProblem.titleCn ?? activeProblem.title}
         </h1>
         {restoredStatementStatus !== 'idle' && (
@@ -405,9 +433,8 @@ export default function ProblemPanel() {
         )}
         <div className="flex flex-wrap gap-1">
           {activeProblem.topics.map(t => (
-            <span key={t} className="badge bg-surface-muted dark:bg-surface-dark-muted
-                                     text-text-secondary dark:text-text-dark-secondary">
-              {t}
+            <span key={t} className="text-sm tracking-cn text-text-secondary dark:text-text-dark-secondary">
+              {t}{t !== activeProblem.topics[activeProblem.topics.length - 1] && <span className="mx-2 text-text-muted">·</span>}
             </span>
           ))}
         </div>
@@ -431,9 +458,8 @@ export default function ProblemPanel() {
                         bg-surface-soft dark:bg-surface-dark-soft">
           <button
             onClick={enterFocus}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg
-                       bg-accent hover:bg-accent-hover text-white text-sm font-medium
-                       transition-colors"
+            className="flex h-9 w-full items-center justify-center gap-2 rounded-full bg-[#111317] px-[18px]
+                       text-sm font-medium tracking-cn text-white transition-opacity duration-150 hover:opacity-90"
           >
             <Play size={14} /> 开始做题
           </button>

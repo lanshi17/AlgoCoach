@@ -1,0 +1,44 @@
+{
+  "name": "algo-coach-desktop",
+  "version": "0.2.0",
+  "private": true,
+  "description": "算法练习室的 macOS / Linux 桌面壳",
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "dev": "electron .",
+    "build:frontend": "npm --prefix ../frontend run build",
+    "start": "npm run build:frontend && electron .",
+    "package:mac": "npm run build:frontend && npm run prepare-dist && electron-builder --mac",
+    "package:linux": "npm run build:frontend && npm run prepare-dist && electron-builder --linux",
+    "prepare-dist": "node scripts/prepare-dist.mjs"
+  },
+  "devDependencies": {
+    "electron": "^39.2.7",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.algocoach.desktop",
+    "productName": "算法练习室",
+    "files": [
+      "main.mjs",
+      "server.mjs",
+      "package.json",
+      "embedded-dist/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "linux": {
+      "category": "Development",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    }
+  }
+}

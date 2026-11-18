@@ -24,6 +24,7 @@ function checkAuthStatus(): Promise<unknown> {
 }
 
 const ProgressPage = lazy(() => import('@/pages/ProgressPage'))
+const LearningSpacePage = lazy(() => import('@/pages/LearningSpacePage'))
 const KnowledgeGraphPage = lazy(() => import('@/pages/KnowledgeGraphPage'))
 const KnowledgeBasePage = lazy(() => import('@/pages/KnowledgeBasePage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
@@ -93,19 +94,38 @@ export default function AppShell() {
     </div>
   }
   if (authState === 'offline') {
-    return <main className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-      <AlertCircle size={28} className="text-danger" />
-      <h1 className="text-base font-semibold text-text-primary dark:text-text-dark-primary">无法连接 Java 网关</h1>
-      <p className="text-sm text-text-secondary dark:text-text-dark-secondary">请启动 backend/gateway 后重试。</p>
-      <button onClick={() => void checkAuth()} className="inline-flex items-center gap-2 text-sm text-accent hover:underline">
-        <RefreshCw size={14} /> 重新连接
-      </button>
-    </main>
+    return <div className="flex h-full w-full flex-col overflow-hidden bg-canvas dark:bg-[#0B0C0F]">
+      <div role="alert" className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4 py-2 text-xs text-text-secondary dark:border-border-dark dark:bg-surface-dark-soft dark:text-text-dark-secondary">
+        <div className="flex min-w-0 items-center gap-2">
+          <AlertCircle size={15} className="shrink-0" />
+          <span className="truncate"><strong className="font-medium">无法连接 Java 网关。</strong> 题库和判题暂不可用，本地练习仍可用。</span>
+        </div>
+        <button onClick={() => void checkAuth()} className="inline-flex shrink-0 items-center gap-1.5 text-accent hover:underline">
+          <RefreshCw size={13} /> 重新连接
+        </button>
+      </div>
+      <div className="flex min-h-0 flex-1">
+        <Sidebar />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Suspense fallback={<PageLoading />}><Routes>
+            <Route path="/" element={<Navigate to="/home" replace />} />
+            <Route path="/home" element={<LearningSpacePage />} />
+            <Route path="/workspace" element={<Workspace />} />
+            <Route path="/progress" element={<ProgressPage />} />
+            <Route path="/knowledge" element={<KnowledgeGraphPage />} />
+            <Route path="/knowledge/library" element={<KnowledgeBasePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings/platforms" element={<PlatformLoginPage />} />
+            <Route path="*" element={<Navigate to="/home" replace />} />
+          </Routes></Suspense>
+        </div>
+      </div>
+    </div>
   }
   return (
-    <div className="flex h-full w-full overflow-hidden bg-surface dark:bg-surface-dark">
+    <div className="flex h-full w-full overflow-hidden bg-canvas dark:bg-[#0B0C0F]">
       {cookieInvalid && (
-        <div role="alert" className="fixed bottom-4 left-1/2 z-[100] flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 rounded-lg border border-warning/30 bg-surface px-3 py-2 text-xs text-text-primary shadow-lg dark:bg-surface-dark dark:text-text-dark-primary">
+        <div role="alert" className="fixed bottom-4 left-1/2 z-[100] flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 rounded-card border border-warning/30 bg-surface px-3 py-2 text-sm text-text-primary dark:bg-surface-dark dark:text-text-dark-primary">
           <span>LeetCode 登录态已失效，题目列表和提交可能无法使用。</span>
           <Link to="/settings/platforms" className="shrink-0 font-medium text-accent hover:underline">重新配置</Link>
           <button type="button" aria-label="关闭 Cookie 失效提示" onClick={() => setCookieInvalid(false)} className="shrink-0 text-text-muted hover:text-text-primary dark:text-text-dark-muted dark:hover:text-text-dark-primary">×</button>
@@ -119,16 +139,17 @@ export default function AppShell() {
       <Sidebar />
 
       {/* Main workspace */}
-      <div className="flex flex-col flex-1 min-w-0">
+      <div className="flex min-w-0 flex-1 flex-col">
         <Suspense fallback={<PageLoading />}><Routes>
-          <Route path="/" element={<Navigate to="/workspace" replace />} />
+          <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route path="/home" element={<LearningSpacePage />} />
           <Route path="/workspace" element={<Workspace />} />
           <Route path="/progress" element={<ProgressPage />} />
           <Route path="/knowledge" element={<KnowledgeGraphPage />} />
           <Route path="/knowledge/library" element={<KnowledgeBasePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/platforms" element={<PlatformLoginPage />} />
-          <Route path="*" element={<Navigate to="/workspace" replace />} />
+          <Route path="*" element={<Navigate to="/home" replace />} />
         </Routes></Suspense>
       </div>
     </div>
@@ -176,29 +197,29 @@ function Workspace() {
   return (
     <>
       <Header />
-      <nav aria-label="工作区面板" className="flex shrink-0 border-b border-border bg-surface-soft dark:border-border-dark dark:bg-surface-dark-soft xl:hidden">
+      <nav aria-label="工作区面板" className="flex shrink-0 gap-1 bg-canvas px-3 py-2 dark:bg-[#0B0C0F] xl:hidden">
         {([
           ['problem', '题目'], ['editor', '编辑器'], ['chat', 'AI 教练'],
         ] as const).map(([value, label]) => (
           <button key={value} type="button" aria-pressed={panel === value}
             onClick={() => setPanel(value)}
-            className={`flex-1 border-b px-2 py-2.5 text-xs tracking-wide transition-colors ${panel === value
-              ? 'border-accent font-medium text-accent'
-              : 'border-transparent text-text-secondary dark:text-text-dark-secondary'}`}>
+            className={`flex-1 rounded-full px-2 py-2 text-sm tracking-cn transition-[background-color,color,font-weight] ${panel === value
+              ? 'bg-border font-medium text-accent dark:bg-surface-dark-muted'
+              : 'text-text-secondary hover:bg-surface-muted dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted'}`}>
             {label}
           </button>
         ))}
       </nav>
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="flex flex-1 min-h-0 gap-3 overflow-hidden bg-canvas px-3 pb-3 dark:bg-[#0B0C0F] xl:gap-3">
         <div
-          className={`${panel === 'problem' ? 'flex' : 'hidden'} w-full min-w-0 flex-col overflow-hidden border-r border-border dark:border-border-dark xl:flex xl:w-[var(--problem-w)] xl:shrink-0`}
+          className={`${panel === 'problem' ? 'flex' : 'hidden'} w-full min-w-0 flex-col overflow-hidden bg-surface xl:rounded-card xl:border xl:border-border xl:shadow-none dark:bg-surface-dark xl:flex xl:w-[var(--problem-w)] xl:shrink-0`}
         >
           {(isWide || panel === 'problem') && <ProblemPanel />}
         </div>
-        <div className={`${panel === 'editor' ? 'flex' : 'hidden'} flex-col flex-1 min-w-0 overflow-hidden border-r border-border dark:border-border-dark xl:flex`}>
+        <div className={`${panel === 'editor' ? 'flex' : 'hidden'} flex min-w-0 flex-1 flex-col overflow-hidden bg-surface xl:rounded-card xl:border xl:border-border xl:shadow-none dark:bg-surface-dark xl:flex`}>
           {(isWide || panel === 'editor') && <EditorPanel />}
         </div>
-        <div className={`${panel === 'chat' ? 'block' : 'hidden'} w-full min-w-0 overflow-hidden xl:block xl:w-[360px] xl:shrink-0`}>
+        <div className={`${panel === 'chat' ? 'block' : 'hidden'} w-full min-w-0 overflow-hidden bg-surface xl:rounded-card xl:border xl:border-border xl:shadow-none dark:bg-surface-dark xl:block xl:w-[360px] xl:shrink-0`}>
           {/* Keep the chat mounted on narrow screens while it is hidden. A
               pending coach reply must survive a panel switch; ChatPanel
               already aborts requests when its problem or mode changes. */}

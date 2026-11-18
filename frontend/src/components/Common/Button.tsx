@@ -8,7 +8,7 @@ const BASE =
   'transition-colors disabled:cursor-not-allowed disabled:opacity-40'
 
 const VARIANT: Record<Variant, string> = {
-  primary: 'bg-accent text-white hover:bg-accent-hover',
+  primary: 'bg-[#111317] text-white transition-opacity hover:opacity-90',
   secondary:
     'border border-border text-text-secondary hover:bg-surface-muted ' +
     'dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted',

@@ -16,32 +16,33 @@
 
 @layer base {
   :root {
-    --sidebar-w: 56px;
-    --sidebar-expanded-w: 220px;
+    --sidebar-w: 72px;
+    --sidebar-expanded-w: 272px;
     --problem-w: 420px;
-    --header-h: 48px;
-    --accent-rgb: 132 75 60;
-    --accent-hover-rgb: 110 58 46;
-    --accent-soft-rgb: 239 225 216;
-    --accent-dark-soft-rgb: 239 225 216;
+    --header-h: 84px;
+    --accent-rgb: 91 88 255;
+    --accent-hover-rgb: 75 72 224;
+    --accent-soft-rgb: 242 243 255;
+    --accent-dark-soft-rgb: 91 88 255;
   }
 
   :root.dark {
-    --accent-rgb: 201 143 121;
-    --accent-hover-rgb: 218 162 140;
-    --accent-soft-rgb: 76 54 46;
-    --accent-dark-soft-rgb: 201 143 121;
+    --accent-rgb: 135 132 255;
+    --accent-hover-rgb: 160 158 255;
+    --accent-soft-rgb: 35 35 62;
+    --accent-dark-soft-rgb: 135 132 255;
   }
 
   html { height: 100%; }
 
   body {
-    @apply h-full bg-surface text-text-primary font-sans antialiased;
+    @apply h-full bg-canvas text-text-primary font-sans antialiased;
+    letter-spacing: 0.4px;
     overflow: hidden;
   }
 
   .dark body {
-    @apply bg-surface-dark text-text-dark-primary;
+    @apply bg-[#0B0C0F] text-text-dark-primary;
   }
 
   #root { height: 100%; }
@@ -73,17 +74,17 @@
 }
 
 @layer components {
-  /* Quiet navigation keeps the working surface in the foreground. */
+  /* Qwen navigation rows are pills on the canvas, not bordered buttons. */
   .sidebar-btn {
-    @apply flex items-center justify-center w-10 h-10 rounded-md
+    @apply flex items-center justify-center h-9 rounded-full
            text-text-secondary hover:text-text-primary hover:bg-surface-muted
-           transition-colors duration-150 cursor-pointer relative;
+           transition-[background-color,font-weight,color] duration-150 cursor-pointer relative;
   }
   .dark .sidebar-btn {
     @apply text-text-dark-secondary hover:text-text-dark-primary hover:bg-surface-dark-muted;
   }
   .sidebar-btn.active {
-    @apply text-accent bg-accent-soft;
+    @apply font-medium text-accent bg-border;
   }
   .dark .sidebar-btn.active {
     @apply text-accent bg-accent-dark-soft;
@@ -93,12 +94,10 @@
   .badge {
     @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
   }
-  .badge-easy   { @apply bg-green-50  text-green-700; }
-  .badge-medium { @apply bg-amber-50  text-amber-700; }
-  .badge-hard   { @apply bg-red-50    text-red-700;   }
-  .dark .badge-easy   { @apply bg-green-900/30  text-green-400; }
-  .dark .badge-medium { @apply bg-amber-900/30  text-amber-400; }
-  .dark .badge-hard   { @apply bg-red-900/30    text-red-400;   }
+  .badge-easy   { @apply bg-surface-muted text-text-secondary; }
+  .badge-medium { @apply bg-surface-muted text-text-secondary; }
+  .badge-hard   { @apply bg-surface-muted text-text-secondary; }
+  .dark .badge-easy, .dark .badge-medium, .dark .badge-hard { @apply bg-surface-dark-muted text-text-dark-secondary; }
 
   /* Focus mode overlay indicator */
   .focus-mode-bar {
@@ -155,10 +154,10 @@
   }
 
   .editorial-rule {
-    border-color: rgb(125 102 76 / 0.2);
+    border-color: #E6E9EF;
   }
   .dark .editorial-rule {
-    border-color: rgb(196 177 151 / 0.18);
+    border-color: #2A2E38;
   }
 
   /* Panel divider handle */
@@ -168,43 +167,41 @@
   }
 
   /*
-   * The coding surface has its own visual language. The reading surfaces keep
-   * their warm paper palette, while code uses a cool slate canvas with a quiet
-   * cyan focus signal. This keeps syntax and cursor feedback legible during
-   * long sessions without turning the whole product into an IDE.
+   * The coding surface is a white Qwen-style panel with a quiet indigo signal.
+   * Syntax remains dense, while surrounding chrome stays neutral and light.
    */
   .code-workbench {
-    --code-bg: #f7f9fc;
-    --code-panel: #eef2f7;
-    --code-panel-raised: #ffffff;
-    --code-rule: #d4dde8;
-    --code-ink: #1f2d3d;
-    --code-muted: #718096;
-    --code-focus: #16708a;
-    --code-focus-soft: #d9eef4;
+    --code-bg: #FFFFFF;
+    --code-panel: #F9FAFD;
+    --code-panel-raised: #FFFFFF;
+    --code-rule: #E6E9EF;
+    --code-ink: #111317;
+    --code-muted: #8E96A7;
+    --code-focus: #5B58FF;
+    --code-focus-soft: #F2F3FF;
     background: var(--code-bg);
     color: var(--code-ink);
   }
 
   .dark .code-workbench {
-    --code-bg: #0f1724;
-    --code-panel: #141f30;
-    --code-panel-raised: #19273a;
-    --code-rule: #2b3b52;
-    --code-ink: #e3edf7;
-    --code-muted: #8798ad;
-    --code-focus: #72d3ee;
-    --code-focus-soft: #1a3a4a;
+    --code-bg: #111317;
+    --code-panel: #171A21;
+    --code-panel-raised: #1D222B;
+    --code-rule: #2A2E38;
+    --code-ink: #F8F9FC;
+    --code-muted: #8E96A7;
+    --code-focus: #8784FF;
+    --code-focus-soft: #23233E;
   }
 
   .code-toolbar {
     @apply flex shrink-0 items-center justify-between gap-3 px-3;
-    min-height: 36px;
+    min-height: 48px;
     border-bottom: 1px solid var(--code-rule);
     background: var(--code-panel);
     color: var(--code-muted);
-    font-size: 11px;
-    letter-spacing: 0.02em;
+    font-size: 13px;
+    letter-spacing: 0.4px;
   }
 
   .code-toolbar-title {
@@ -224,13 +221,12 @@
     background: var(--code-rule);
   }
 
-  .code-toolbar-dots i:first-child { background: #d08b78; }
-  .code-toolbar-dots i:nth-child(2) { background: #d1a95f; }
-  .code-toolbar-dots i:last-child { background: #7ca58a; }
+  .code-toolbar-dots i:first-child { background: var(--code-focus); }
+  .code-toolbar-dots i:nth-child(2),
+  .code-toolbar-dots i:last-child { background: var(--code-rule); }
 
   .code-file {
-    @apply truncate rounded px-1.5 py-0.5 font-mono;
-    background: var(--code-bg);
+    @apply truncate rounded-full bg-surface-muted px-2 py-1 font-mono text-xs;
     color: var(--code-muted);
   }
 
@@ -239,7 +235,7 @@
   }
 
   .code-toolbar-status {
-    @apply rounded px-1.5 py-0.5;
+    @apply rounded-full px-2 py-1 text-xs;
     background: var(--code-focus-soft);
     color: var(--code-focus);
   }

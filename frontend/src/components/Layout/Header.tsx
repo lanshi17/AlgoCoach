@@ -6,6 +6,7 @@ import { Badge } from '@/components/Common/Badge'
 import { leetcodeService } from '@/services/leetcodeService'
 import { agentService, canCommitChatReply, getAgentErrorAction, getAgentErrorMessage } from '@/services/agentService'
 import { LANGUAGE_OPTIONS } from '@/services/languages'
+import { isLocalPracticeProblem } from '@/services/localPractice'
 import type { CodeLanguage } from '@/types'
 import { nanoid } from 'nanoid'
 
@@ -80,7 +81,7 @@ export default function Header() {
   }, [])
 
   // Only LeetCode exposes run/submit through the gateway.
-  const judgeRunnable = activeProblem?.platform === 'LEETCODE'
+  const judgeRunnable = activeProblem?.platform === 'LEETCODE' && !isLocalPracticeProblem(activeProblem)
 
   const onRun = async () => {
     if (!activeProblem || !judgeRunnable || useAppStore.getState().runLoading || useAppStore.getState().submitLoading) return
@@ -209,17 +210,20 @@ export default function Header() {
     ? undefined
     : Math.max(0, problemTimeLimitSec - focusDurationSec)
   const judgeCapabilityNote = activeProblem && mode === 'FOCUS' && !judgeRunnable
-    ? `${activeProblem.platform === 'ACWING' ? 'AcWing' : 'HDU'} 暂不支持站内运行和提交，请回对应平台完成判题。`
+    ? isLocalPracticeProblem(activeProblem)
+      ? '本地练习只保存草稿和专注时间；连接题库后可运行与提交。'
+      : `${activeProblem.platform === 'ACWING' ? 'AcWing' : 'HDU'} 暂不支持站内运行和提交，请回对应平台完成判题。`
     : ''
 
   return (
-    <header className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 min-h-[48px] border-b border-border
-                       dark:border-border-dark bg-surface dark:bg-surface-dark flex-shrink-0
-                       xl:h-[48px] xl:flex-nowrap xl:gap-3 xl:px-4 xl:py-0">
-      <div className="flex min-w-0 flex-1 basis-full items-center gap-3 xl:basis-auto xl:min-w-[120px]">
-        <h1 className="truncate font-editorial text-[15px] font-medium tracking-wide text-text-primary dark:text-text-dark-primary">
-          {activeProblem ? activeProblem.title : '工作区'}
-        </h1>
+    <header className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-canvas px-3 py-3 dark:bg-[#0B0C0F] xl:h-[84px] xl:flex-nowrap xl:px-6 xl:py-0">
+      <div className="flex min-w-0 flex-1 basis-full items-center gap-3 xl:basis-auto xl:min-w-[180px]">
+        <div className="min-w-0">
+          <p className="hidden text-xs tracking-cn text-text-muted dark:text-text-dark-muted xl:block">算法练习室 · 今日一页</p>
+          <h1 className="truncate font-editorial text-lg font-semibold tracking-title text-text-primary dark:text-text-dark-primary">
+            {activeProblem ? (activeProblem.titleCn ?? activeProblem.title) : '选择一页练习'}
+          </h1>
+        </div>
         {activeProblem && <Badge difficulty={activeProblem.difficulty} />}
       </div>
 
@@ -228,15 +232,15 @@ export default function Header() {
         value={lang}
         onChange={event => setLang(event.target.value as CodeLanguage)}
         disabled={mode === 'FOCUS'}
-        className="shrink-0 text-xs bg-surface-soft dark:bg-surface-dark-soft border border-border
-                   dark:border-border-dark rounded-md px-2 py-1 text-text-secondary
+        className="h-9 shrink-0 rounded-full border border-border bg-surface px-3 text-sm tracking-cn text-text-secondary
+                   dark:border-border-dark dark:bg-surface-dark-soft
                    dark:text-text-dark-secondary outline-none disabled:cursor-not-allowed disabled:opacity-50"
       >
         {LANGUAGE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
 
-      <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-2.5 py-1 rounded-md bg-surface-muted
-                      dark:bg-surface-dark-muted text-xs">
+      <div className="flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-surface-muted px-3
+                      text-sm tracking-cn dark:bg-surface-dark-muted">
         {mode === 'FOCUS' && <Lock size={12} className="text-focus" />}
         <span className={mode === 'FOCUS' ? 'text-focus font-medium' : mode === 'REVIEW' ? 'text-success font-medium' : 'text-text-secondary dark:text-text-dark-secondary'}>
           {MODE_LABEL[mode]}
@@ -255,7 +259,7 @@ export default function Header() {
 
       {mode === 'REVIEW' && (
         <button onClick={enterFocus}
-          className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium border border-border
+          className="h-9 shrink-0 whitespace-nowrap rounded-full border border-border px-4 text-sm font-medium tracking-cn
                      dark:border-border-dark text-text-secondary hover:bg-surface-muted
                      dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">
           继续做题
@@ -264,7 +268,7 @@ export default function Header() {
 
       {mode === 'FOCUS' && (
         <button onClick={() => { setLastSubmission(null); exitFocus() }} disabled={isBusy}
-          className="shrink-0 whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium border border-border
+          className="h-9 shrink-0 whitespace-nowrap rounded-full border border-border px-4 text-sm font-medium tracking-cn
                      dark:border-border-dark text-text-secondary hover:bg-surface-muted
                      dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted disabled:opacity-40">
           结束专注
@@ -276,10 +280,9 @@ export default function Header() {
           aria-label="运行"
           aria-busy={runLoading}
           aria-describedby={judgeCapabilityNote ? 'judge-capability-note' : undefined}
-          className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium
-                     border border-border dark:border-border-dark text-text-secondary
-                     dark:text-text-dark-secondary hover:bg-surface-muted
-                     dark:hover:bg-surface-dark-muted disabled:opacity-40 transition-colors">
+          className="flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border px-4 text-sm font-medium tracking-cn
+                     dark:border-border-dark text-text-secondary dark:text-text-dark-secondary hover:bg-surface-muted
+                     dark:hover:bg-surface-dark-muted disabled:opacity-40 transition-[background-color,border-color,color] duration-150">
           {runLoading ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
           {runLoading ? '运行中' : '运行'}
         </button>
@@ -287,11 +290,10 @@ export default function Header() {
           aria-label="提交"
           aria-busy={submitLoading}
           aria-describedby={judgeCapabilityNote ? 'judge-capability-note' : undefined}
-          className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-md text-xs font-medium
-                     bg-accent hover:bg-accent-hover text-white
+          className="flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-[#111317] px-[18px] text-sm font-medium tracking-cn text-white transition-opacity hover:opacity-90
                      disabled:bg-surface-muted disabled:text-text-muted
                      dark:disabled:bg-surface-dark-muted dark:disabled:text-text-dark-muted
-                     disabled:cursor-not-allowed disabled:opacity-100 transition-colors">
+                     disabled:cursor-not-allowed disabled:opacity-100">
           {submitLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
           {submitLoading ? '提交中' : '提交'}
         </button>

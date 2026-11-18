@@ -42,6 +42,7 @@ target/flycheck0/stderr
 data/
 .env
 .env.local
+node_modules/
 frontend/node_modules/
 remotion-compositions/node_modules/
 backend/gateway/target/
@@ -55,3 +56,8 @@ frontend/dist/
 remotion-compositions/out/
 frontend/coverage/
 command.log
+!desktop/package.json
+!desktop/package-lock.json
+desktop/node_modules/
+desktop/dist/
+desktop/embedded-dist/
