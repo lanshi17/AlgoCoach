@@ -63,6 +63,9 @@ public class AgentProxyController {
     static final Duration CHAT_RESPONSE_TIMEOUT = Duration.ofSeconds(120);
     /** Spring MVC's default async timeout is shorter; leave room beyond the HTTP timeout. */
     static final Duration CHAT_ASYNC_TIMEOUT = Duration.ofSeconds(125);
+    /** Knowledge indexing may call a remote embedding provider for a large upload. */
+    static final Duration KNOWLEDGE_RESPONSE_TIMEOUT = Duration.ofSeconds(180);
+    static final Duration KNOWLEDGE_ASYNC_TIMEOUT = Duration.ofSeconds(185);
     static final int CONNECT_TIMEOUT_MILLIS = 5_000;
 
     /** Public gateway prefix; the FastAPI service does not use it. */
@@ -91,6 +94,7 @@ public class AgentProxyController {
 
     private final WebClient agentClient;
     private final WebClient agentChatClient;
+    private final WebClient agentKnowledgeClient;
     private final String agentBaseUrl;
 
     public AgentProxyController(
@@ -103,12 +107,21 @@ public class AgentProxyController {
         this.agentChatClient = webClientBuilder.clone()
                 .clientConnector(new ReactorClientHttpConnector(createChatHttpClient()))
                 .build();
+        this.agentKnowledgeClient = webClientBuilder.clone()
+                .clientConnector(new ReactorClientHttpConnector(createKnowledgeHttpClient()))
+                .build();
     }
 
     static HttpClient createChatHttpClient() {
         return HttpClient.create()
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, CONNECT_TIMEOUT_MILLIS)
                 .responseTimeout(CHAT_RESPONSE_TIMEOUT);
+    }
+
+    static HttpClient createKnowledgeHttpClient() {
+        return HttpClient.create()
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, CONNECT_TIMEOUT_MILLIS)
+                .responseTimeout(KNOWLEDGE_RESPONSE_TIMEOUT);
     }
 
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -157,18 +170,18 @@ public class AgentProxyController {
 
     @GetMapping("/knowledge/config")
     public Mono<ResponseEntity<byte[]>> knowledgeConfig(HttpServletRequest request) {
-        return forward(HttpMethod.GET, KNOWLEDGE_CONFIG_PATH, request, null);
+        return forwardKnowledge(HttpMethod.GET, KNOWLEDGE_CONFIG_PATH, request, null);
     }
 
     @org.springframework.web.bind.annotation.PutMapping("/knowledge/config")
     public Mono<ResponseEntity<byte[]>> updateKnowledgeConfig(
             HttpServletRequest request, @RequestBody(required = false) byte[] body) {
-        return forward(HttpMethod.PUT, KNOWLEDGE_CONFIG_PATH, request, body);
+        return forwardKnowledge(HttpMethod.PUT, KNOWLEDGE_CONFIG_PATH, request, body);
     }
 
     @GetMapping("/knowledge/sources")
     public Mono<ResponseEntity<byte[]>> knowledgeSources(HttpServletRequest request) {
-        return forward(HttpMethod.GET, KNOWLEDGE_SOURCES_PATH, request, null);
+        return forwardKnowledge(HttpMethod.GET, KNOWLEDGE_SOURCES_PATH, request, null);
     }
 
     @PostMapping("/knowledge/sources")
@@ -190,24 +203,24 @@ public class AgentProxyController {
                 return Mono.error(ex);
             }
         }
-        return forwardMultipart(HttpMethod.POST, KNOWLEDGE_SOURCES_PATH, request,
+        return forwardKnowledgeMultipart(HttpMethod.POST, KNOWLEDGE_SOURCES_PATH, request,
                 multipart.build());
     }
 
     @org.springframework.web.bind.annotation.DeleteMapping("/knowledge/sources/{sourceId}")
     public Mono<ResponseEntity<byte[]>> deleteKnowledgeSource(
             @PathVariable String sourceId, HttpServletRequest request) {
-        return forward(HttpMethod.DELETE, KNOWLEDGE_SOURCES_PATH + "/" + sourceId, request, null);
+        return forwardKnowledge(HttpMethod.DELETE, KNOWLEDGE_SOURCES_PATH + "/" + sourceId, request, null);
     }
 
     @PostMapping("/knowledge/reindex")
     public Mono<ResponseEntity<byte[]>> reindexKnowledge(HttpServletRequest request) {
-        return forward(HttpMethod.POST, KNOWLEDGE_REINDEX_PATH, request, null);
+        return forwardKnowledge(HttpMethod.POST, KNOWLEDGE_REINDEX_PATH, request, null);
     }
 
     @GetMapping("/knowledge/status")
     public Mono<ResponseEntity<byte[]>> knowledgeStatus(HttpServletRequest request) {
-        return forward(HttpMethod.GET, KNOWLEDGE_STATUS_PATH, request, null);
+        return forwardKnowledge(HttpMethod.GET, KNOWLEDGE_STATUS_PATH, request, null);
     }
 
     @PostMapping("/animate")
@@ -236,7 +249,24 @@ public class AgentProxyController {
             String upstreamPath,
             HttpServletRequest request,
             byte[] body) {
-        WebClient.RequestBodySpec preparedRequest = agentClient.method(method)
+        return forward(agentClient, method, upstreamPath, request, body);
+    }
+
+    private Mono<ResponseEntity<byte[]>> forwardKnowledge(
+            HttpMethod method,
+            String upstreamPath,
+            HttpServletRequest request,
+            byte[] body) {
+        return forward(agentKnowledgeClient, method, upstreamPath, request, body);
+    }
+
+    private Mono<ResponseEntity<byte[]>> forward(
+            WebClient client,
+            HttpMethod method,
+            String upstreamPath,
+            HttpServletRequest request,
+            byte[] body) {
+        WebClient.RequestBodySpec preparedRequest = client.method(method)
                 .uri(upstreamUri(upstreamPath, request.getQueryString()))
                 .headers(headers -> copyRequestHeaders(request, headers));
 
@@ -255,7 +285,19 @@ public class AgentProxyController {
     private Mono<ResponseEntity<byte[]>> forwardMultipart(
             HttpMethod method, String upstreamPath, HttpServletRequest request,
             MultiValueMap<String, org.springframework.http.HttpEntity<?>> body) {
-        WebClient.RequestBodySpec preparedRequest = agentClient.method(method)
+        return forwardMultipart(agentClient, method, upstreamPath, request, body);
+    }
+
+    private Mono<ResponseEntity<byte[]>> forwardKnowledgeMultipart(
+            HttpMethod method, String upstreamPath, HttpServletRequest request,
+            MultiValueMap<String, org.springframework.http.HttpEntity<?>> body) {
+        return forwardMultipart(agentKnowledgeClient, method, upstreamPath, request, body);
+    }
+
+    private Mono<ResponseEntity<byte[]>> forwardMultipart(
+            WebClient client, HttpMethod method, String upstreamPath, HttpServletRequest request,
+            MultiValueMap<String, org.springframework.http.HttpEntity<?>> body) {
+        WebClient.RequestBodySpec preparedRequest = client.method(method)
                 .uri(upstreamUri(upstreamPath, request.getQueryString()))
                 .headers(headers -> headers.setContentType(MediaType.MULTIPART_FORM_DATA));
         return preparedRequest.body(BodyInserters.fromMultipartData(body))

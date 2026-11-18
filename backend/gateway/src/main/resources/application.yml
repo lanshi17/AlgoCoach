@@ -2,6 +2,9 @@ server:
   port: 8080
 
 spring:
+  mvc:
+    async:
+      request-timeout: 185000
   servlet:
     multipart:
       max-file-size: 20MB

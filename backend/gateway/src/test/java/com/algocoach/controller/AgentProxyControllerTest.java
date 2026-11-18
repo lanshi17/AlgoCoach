@@ -277,6 +277,15 @@ class AgentProxyControllerTest {
                 .isGreaterThan(AgentProxyController.CHAT_RESPONSE_TIMEOUT);
     }
 
+    @Test
+    void knowledgeProxyAllowsRemoteEmbeddingIndexingMoreTimeThanGeneralRequests() {
+        assertThat(AgentProxyController.createKnowledgeHttpClient().configuration().responseTimeout())
+                .isEqualTo(AgentProxyController.KNOWLEDGE_RESPONSE_TIMEOUT)
+                .isGreaterThan(AgentProxyController.CHAT_RESPONSE_TIMEOUT);
+        assertThat(AgentProxyController.KNOWLEDGE_ASYNC_TIMEOUT)
+                .isGreaterThan(AgentProxyController.KNOWLEDGE_RESPONSE_TIMEOUT);
+    }
+
     private ResultActions performAsync(MockHttpServletRequestBuilder requestBuilder) throws Exception {
         MvcResult asyncResult = mockMvc.perform(requestBuilder)
                 .andExpect(request().asyncStarted())
