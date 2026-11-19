@@ -28,6 +28,9 @@ async def test_export_archive_contains_rows_reme_files_and_vector_store(
     reme.mkdir()
     chroma.mkdir()
     (reme / "memory.md").write_text("persisted conversation memory", encoding="utf-8")
+    other_workspace = reme / "workspaces" / "another-workspace"
+    other_workspace.mkdir(parents=True)
+    (other_workspace / "private.md").write_text("other workspace", encoding="utf-8")
     (chroma / "index.bin").write_bytes(b"local index")
     async def export_vectors():
         return {"problem_content": [{"id": "two-sum", "document": "statement", "metadata": {}}]}
@@ -45,5 +48,6 @@ async def test_export_archive_contains_rows_reme_files_and_vector_store(
         assert payload["tables"]["episodic"][0]["problem_id"] == "two-sum"
         assert payload["vectors"]["problem_content"][0]["document"] == "statement"
         assert archive.read("reme/memory.md").decode() == "persisted conversation memory"
+        assert not any(name.startswith("reme/workspaces/") for name in archive.namelist())
         assert archive.read("chroma/index.bin") == b"local index"
         assert payload["secrets_included"] is False

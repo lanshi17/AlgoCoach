@@ -255,6 +255,12 @@ class MemoryService:
                     continue
                 resolved_root = root.resolve()
                 for item in root.rglob("*"):
+                    if (
+                        label == "reme"
+                        and workspace == DEFAULT_WORKSPACE_ID
+                        and item.relative_to(root).parts[0] == "workspaces"
+                    ):
+                        continue
                     if item.is_symlink() or not item.is_file():
                         continue
                     resolved = item.resolve()
