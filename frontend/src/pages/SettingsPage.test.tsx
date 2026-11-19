@@ -153,4 +153,20 @@ describe('provider setup return path', () => {
     expect(element.querySelector('[role="status"]')?.textContent).toContain('训练记忆已导出')
     expect(element.querySelector('[role="status"]')?.textContent).toContain('提交历史暂未导出')
   })
+
+  it('exports workspace data even when the agent is unavailable', async () => {
+    vi.spyOn(agentService, 'exportMemory').mockRejectedValue(new Error('offline'))
+    vi.spyOn(leetcodeService, 'submissionHistory').mockRejectedValue(new Error('offline'))
+    const createObjectURL = vi.fn(() => 'blob:mock')
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL: vi.fn() })
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    await act(async () => {
+      root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><SettingsPage /></MemoryRouter>)
+    })
+    await act(async () => {
+      Array.from(element.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent?.includes('导出数据'))!.click()
+    })
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+    expect(element.querySelector('[role="status"]')?.textContent).toContain('工作空间数据已导出')
+  })
 })

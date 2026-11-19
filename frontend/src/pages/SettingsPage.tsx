@@ -6,6 +6,7 @@ import { readProviderApiKey, useAppStore } from '@/stores/useAppStore'
 import { createWorkspace, getWorkspaceId, readWorkspaceManifests, switchWorkspace, type WorkspaceManifest } from '@/services/deepTutorCapabilities'
 import { agentService } from '@/services/agentService'
 import { leetcodeService } from '@/services/leetcodeService'
+import { createWorkspaceExport } from '@/services/workspaceExport'
 import type { CoachStyle, ModelProviderConfig, TrainingGoal } from '@/types'
 import { CUSTOM_PROVIDER_PRESET, PROTOCOL_OPTIONS, PROVIDER_PRESETS, providerFromPreset } from '@/services/providerPresets'
 import Button from '@/components/Common/Button'
@@ -85,20 +86,26 @@ export default function SettingsPage() {
     setExporting(true)
     setExportMessage('')
     try {
+      download(new Blob([JSON.stringify(createWorkspaceExport(), null, 2)], {
+        type: 'application/json',
+      }), 'algocoach-workspace.json')
       const [memoryResult, submissionsResult] = await Promise.allSettled([
         agentService.exportMemory(),
         leetcodeService.submissionHistory(),
       ])
-      if (memoryResult.status === 'rejected') throw memoryResult.reason
+      if (memoryResult.status === 'rejected') {
+        setExportMessage('工作空间数据已导出；训练记忆和提交历史暂未导出，请检查服务后重试。')
+        return
+      }
 
       download(memoryResult.value, 'algocoach-memory.zip')
       if (submissionsResult.status === 'fulfilled') {
         download(new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), preferences: { lang, goal, theme }, submissions: submissionsResult.value }, null, 2)], {
           type: 'application/json',
         }), 'algocoach-submissions.json')
-        setExportMessage('训练记忆和提交历史已导出（提交历史包含代码）。')
+        setExportMessage('工作空间数据、训练记忆和提交历史已导出（提交历史包含代码）。')
       } else {
-        setExportMessage('训练记忆已导出；提交历史暂未导出，请配置有效的 LeetCode Cookie 后重试。')
+        setExportMessage('工作空间数据和训练记忆已导出；提交历史暂未导出，请检查 Gateway 后重试。')
       }
     } catch {
       setExportMessage('导出失败，请确认 Agent 和 Java Gateway 正常运行后重试。')
