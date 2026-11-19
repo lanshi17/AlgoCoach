@@ -369,8 +369,8 @@ class AlgoCoach:
         # ReMe index rebuild before its first search can see seeded documents.
         self._managed_memory = reme_middleware is None
         self._reme_index_ready: set[str] = set()
-        self._agents: dict[str, Agent] = {}
-        self._locks: dict[str, asyncio.Lock] = {}
+        self._agents: dict[tuple[str, str], Agent] = {}
+        self._locks: dict[tuple[str, str], asyncio.Lock] = {}
         self._init_lock = asyncio.Lock()
         self._provider_fingerprint: str | None = None
         # Successful gateway problem metadata, keyed by slug (process-local).
@@ -386,6 +386,7 @@ class AlgoCoach:
     ) -> Agent:
         """Return the per-session Agent in its workspace-scoped runtime."""
         workspace_id = normalize_workspace_id(workspace_id)
+        runtime_key = (workspace_id, session_id)
         async with self._init_lock:
             fingerprint = self._fingerprint_provider(provider)
             if self._provider_fingerprint not in (None, fingerprint) and self._memories:
@@ -398,7 +399,7 @@ class AlgoCoach:
                 self._reme_index_ready.clear()
                 for old_memory in memories:
                     await old_memory.close()
-            existing = self._agents.get(session_id)
+            existing = self._agents.get(runtime_key)
             if existing is not None:
                 await self._ensure_reme_index(workspace_id)
                 return existing
@@ -439,8 +440,8 @@ class AlgoCoach:
                 middlewares=[workspace_memory],
                 state=AgentState(session_id=session_id),
             )
-            self._agents[session_id] = agent
-            self._locks[session_id] = asyncio.Lock()
+            self._agents[runtime_key] = agent
+            self._locks[runtime_key] = asyncio.Lock()
             return agent
 
     @staticmethod
@@ -706,7 +707,7 @@ class AlgoCoach:
         )
 
         agent = await self._get_agent(session_id, provider, workspace_id)
-        lock = self._locks[session_id]
+        lock = self._locks[(workspace_id, session_id)]
 
         async with lock:
             # The domain memory snapshot (weak topics, recent problems,
@@ -816,7 +817,7 @@ class AlgoCoach:
             if resolved_goal is UserGoal.CONTEST else ""
         user_content = f"{training_context}\n{message}" if training_context else message
         agent = await self._get_agent(session_id, provider, workspace_id)
-        lock = self._locks[session_id]
+        lock = self._locks[(workspace_id, session_id)]
 
         async with lock:
             ctx = await _workspace_context_snapshot(workspace_id)

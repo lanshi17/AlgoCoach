@@ -194,3 +194,18 @@ async def test_chat_sends_the_default_soul_to_the_model(tmp_path, monkeypatch):
     assert system.startswith(BASE_SOUL.split("{memory_context}")[0])
     # ReMe's "both" mode appends its memory_search instructions after the Soul.
     assert "memory_search" in system
+
+
+@pytest.mark.asyncio
+async def test_same_session_id_gets_separate_agent_state_per_workspace(tmp_path):
+    model = FakeChatModel()
+    reme = RecordingReMe(str(tmp_path / "reme"))
+    agent = AlgoCoach(chat_model=model, reme_middleware=reme)
+
+    await agent.chat("same-session", "讲讲 DP", "PREP", workspace_id="workspace-a")
+    await agent.chat("same-session", "讲讲 BFS", "PREP", workspace_id="workspace-b")
+
+    assert len(agent._agents) == 2
+    assert {
+        key[0] for key in agent._agents
+    } == {"workspace-a", "workspace-b"}
