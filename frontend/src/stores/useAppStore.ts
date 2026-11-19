@@ -2,15 +2,16 @@ import { create } from 'zustand'
 import type { AgentMode, Problem, ChatMessage, AnimationJob, RunResult, TrainingGoal, TrainingPhase, ModelProviderConfig, CodeLanguage, CoachPrefs } from '@/types'
 import { CODE_LANGUAGES } from '@/services/languages'
 import { appendLocalPracticeRecord, flushLocalPracticeRecords, queueLocalPracticeRecord, readLocalPracticeRecords, type LocalPracticeRecord } from '@/services/localProgress'
+import { workspaceStorageKey } from '@/services/deepTutorCapabilities'
 
 const GOALS: TrainingGoal[] = ['contest', 'interview_prep', 'casual']
-const DRAFTS_KEY = 'algocoach.problemDrafts'
-const ACTIVE_PROBLEM_KEY = 'algocoach.activeProblem'
-const CHAT_DRAFTS_KEY = 'algocoach.chatDrafts'
-const CHAT_PHASES_KEY = 'algocoach.chatPhases'
-const TIME_LIMITS_KEY = 'algocoach.problemTimeLimits'
+const DRAFTS_KEY = workspaceStorageKey('algocoach.problemDrafts')
+const ACTIVE_PROBLEM_KEY = workspaceStorageKey('algocoach.activeProblem')
+const CHAT_DRAFTS_KEY = workspaceStorageKey('algocoach.chatDrafts')
+const CHAT_PHASES_KEY = workspaceStorageKey('algocoach.chatPhases')
+const TIME_LIMITS_KEY = workspaceStorageKey('algocoach.problemTimeLimits')
 const COACH_PREFS_KEY = 'algocoach.coachPrefs'
-const FOCUS_TIMES_KEY = 'algocoach.problemFocusElapsed'
+const FOCUS_TIMES_KEY = workspaceStorageKey('algocoach.problemFocusElapsed')
 const PROVIDER_API_KEY_PREFIX = 'algocoach.provider.apiKey.'
 
 function providerApiKeyStorageKey(providerId: string): string {

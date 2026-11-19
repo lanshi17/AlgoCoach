@@ -9,7 +9,7 @@ import type { ChatMessage as Msg, TrainingPhase } from '@/types'
 import { agentService, canCommitChatReply, getAgentErrorAction, getAgentErrorMessage } from '@/services/agentService'
 import { usePollAnimation } from '@/hooks/usePollAnimation'
 import { nanoid } from 'nanoid'
-import { capabilityForMode, LOCAL_WORKSPACE_ID } from '@/services/deepTutorCapabilities'
+import { capabilityForMode, getWorkspaceId } from '@/services/deepTutorCapabilities'
 
 const TRAINING_PHASES: ReadonlyArray<{ value: TrainingPhase; label: string }> = [
   { value: 'auto', label: '自动判断' },
@@ -133,7 +133,7 @@ export default function ChatPanel() {
       const reply = await agentService.chatStream(userMsg.content, {
         mode: requestMode,
         capability: capabilityForMode(requestMode),
-        workspaceId: LOCAL_WORKSPACE_ID,
+        workspaceId: getWorkspaceId(),
         problemId: activeProblem?.platformId,
         platform: activeProblem?.platform,
         ...(requestMode === 'REVIEW' && currentEditor.code.trim()

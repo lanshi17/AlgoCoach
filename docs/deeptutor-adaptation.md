@@ -18,7 +18,7 @@ AlgoCoach 参考 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 的公开
 
 ## Workspace 与数据边界
 
-当前发行版是单用户、单本地 workspace：浏览器 localStorage 保存草稿和本地练习记录，Agent 的 SQLite、Chroma 和 ReMe 目录保存训练记忆，Gateway SQLite 保存平台 Cookie 和判题事实。题目代码只在本轮 REVIEW 请求中发送，不写入长期记忆。
+当前发行版是单用户、单本地 workspace，默认 ID 为 `local-default`：浏览器 localStorage 的练习本、复盘队列、学习空间布局、草稿和专注记录通过 `workspaceStorageKey` 归属 workspace；默认 workspace 保留旧 key 以兼容已有数据，其他 workspace 使用隔离后缀。Agent 的 SQLite、Chroma 和 ReMe 目录保存训练记忆，Gateway SQLite 保存平台 Cookie 和判题事实。题目代码只在本轮 REVIEW 请求中发送，不写入长期记忆。
 
 后续扩展多 workspace 时，`workspaceId` 必须成为练习记录、复盘队列、Agent session、知识库索引和 turn 的共同隔离键；迁移不能只在 UI 上增加 workspace 下拉框。
 

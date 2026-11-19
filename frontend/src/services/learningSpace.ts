@@ -1,3 +1,5 @@
+import { workspaceStorageKey } from './deepTutorCapabilities'
+
 export type LearningMode = 'self_paced' | 'contest' | 'maintenance'
 export type LearningBlockId = 'digest' | 'continue' | 'quiz' | 'review' | 'knowledge' | 'plan' | 'insight'
 
@@ -27,7 +29,7 @@ const DEFAULT_BLOCKS: LearningBlock[] = [
   { id: 'insight', visible: true },
 ]
 
-const LAYOUT_KEY = 'algocoach.learningSpaceLayout'
+const LAYOUT_KEY = workspaceStorageKey('algocoach.learningSpaceLayout')
 
 export function readLearningSpaceLayout(): LearningSpaceLayout {
   try {

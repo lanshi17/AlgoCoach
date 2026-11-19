@@ -93,7 +93,7 @@ data/              SQLite 数据库 + 渲染出的 MP4 动画
 | `POST /api/agent/knowledge/sources` | 上传知识库源文件 |
 | `POST /api/agent/knowledge/reindex` | 重建用户知识库向量索引 |
 
-前端始终访问 Gateway 的 `/api` 路径。直接访问 Agent 端口主要用于本地调试和健康检查。
+前端始终访问 Gateway 的 `/api` 路径。直接访问 Agent 端口主要用于本地调试和健康检查。当前 workspace 默认是本机 `local-default`，练习本、复盘队列、学习空间布局和草稿会沿用该 workspace 的本地数据；后续 workspace 使用隔离 key。
 
 ## 核心设计原则
 

@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid'
+import { workspaceStorageKey } from './deepTutorCapabilities'
 
-const LOCAL_PROGRESS_KEY = 'algocoach.localPracticeRecords'
+const LOCAL_PROGRESS_KEY = workspaceStorageKey('algocoach.localPracticeRecords')
 
 export type LocalPracticeOutcome = 'SAMPLE_PASSED' | 'SAMPLE_FAILED' | 'UNASSESSED'
 
@@ -42,7 +43,7 @@ function isLocalPracticeRecord(value: unknown): value is LocalPracticeRecord {
     && (item.outcome === undefined || item.outcome === 'SAMPLE_PASSED' || item.outcome === 'SAMPLE_FAILED' || item.outcome === 'UNASSESSED')
 }
 
-const LOCAL_SYNC_QUEUE_KEY = 'algocoach.localPracticeSyncQueue'
+const LOCAL_SYNC_QUEUE_KEY = workspaceStorageKey('algocoach.localPracticeSyncQueue')
 type SyncQueueItem = LocalPracticeRecord | string
 
 function readRawSyncQueue(): SyncQueueItem[] {

@@ -1,7 +1,8 @@
 import type { LocalPracticeRecord } from './localProgress'
 import { isReviewCard, newReviewCard, reviewCard, type ReviewCard, type ReviewRating } from './deepTutorScheduler'
+import { workspaceStorageKey } from './deepTutorCapabilities'
 
-const REVIEW_KEY = 'algocoach.localReviewEntries'
+const REVIEW_KEY = workspaceStorageKey('algocoach.localReviewEntries')
 
 export interface LocalReviewEntry {
   problemId: string

@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { nanoid } from 'nanoid'
 import type { AgentProfile, AnimationJob, CoachStyle, KnowledgeEmbeddingConfig, KnowledgeSource, KnowledgeStatus, ModelProviderConfig, TrainingGoal, TrainingPhase } from '@/types'
-import { capabilityForMode, LOCAL_WORKSPACE_ID, type DeepTutorCapability } from './deepTutorCapabilities'
+import { capabilityForMode, getWorkspaceId, type DeepTutorCapability } from './deepTutorCapabilities'
 
 interface ChatReply {
   content: string
@@ -187,7 +187,7 @@ export const agentService = {
           message,
           ...rest,
           capability: ctx.capability ?? capabilityForMode(ctx.mode),
-          workspaceId: ctx.workspaceId ?? LOCAL_WORKSPACE_ID,
+          workspaceId: ctx.workspaceId ?? getWorkspaceId(),
           turnId,
           afterSequence: ctx.afterSequence ?? 0,
           conversationId,
