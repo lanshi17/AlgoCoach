@@ -110,3 +110,32 @@ async def test_workspace_sources_search_and_delete_are_isolated(tmp_path, monkey
     await kb.remove_source(a["id"], "a")
     assert await kb.search_sources("graph", workspace_id="a") == []
     assert len(kb.list_sources("b")) == 1
+
+
+@pytest.mark.asyncio
+async def test_knowledge_http_routes_keep_workspace_boundaries(client, tmp_path, monkeypatch, fake_embedding):
+    monkeypatch.setattr(kb, "knowledge_dir", lambda: str(tmp_path / "knowledge"))
+    monkeypatch.setattr(kb, "knowledge_store", kb.VectorStore(
+        path=str(tmp_path / "chroma"), embedding_function=fake_embedding
+    ))
+
+    async def configured():
+        return kb.KnowledgeConfig()
+
+    monkeypatch.setattr(kb, "_ensure_configured", configured)
+    uploaded = await client.post(
+        "/knowledge/sources?workspaceId=alpha",
+        files=[("files", ("notes.txt", b"graph traversal", "text/plain"))],
+    )
+    assert uploaded.status_code == 200
+    source_id = uploaded.json()["sources"][0]["id"]
+    alpha = await client.get("/knowledge/status?workspaceId=alpha")
+    beta = await client.get("/knowledge/status?workspaceId=beta")
+    assert alpha.json()["indexedChunks"] == 1
+    assert beta.json()["indexedChunks"] == 0
+    assert beta.json()["sources"] == []
+
+    removed = await client.delete(f"/knowledge/sources/{source_id}?workspaceId=beta")
+    assert removed.json()["removedChunks"] == 0
+    assert (await client.get("/knowledge/sources?workspaceId=alpha")).json()["sources"][0]["id"] == source_id
+    assert (await client.post("/knowledge/reindex?workspaceId=alpha")).json()["files"] == 1
