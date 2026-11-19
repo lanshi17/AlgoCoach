@@ -73,6 +73,7 @@ from app.memory.vector_store import (
     VectorStoreError,
     VectorStoreUnavailable,
     vector_store,
+    workspace_vector_store,
 )
 
 logger = logging.getLogger(__name__)
@@ -579,12 +580,11 @@ async def _similar_problems_by_topic(
     workspace_id: str = DEFAULT_WORKSPACE_ID,
 ) -> dict[str, list[str]]:
     """Best-effort local vector lookups; a broken index degrades to topic-only."""
-    if normalize_workspace_id(workspace_id) != DEFAULT_WORKSPACE_ID:
-        return {}
+    store = workspace_vector_store(normalize_workspace_id(workspace_id), vector_store)
     mapping: dict[str, list[str]] = {}
     for topic_name in topics:
         try:
-            results = await vector_store.find_similar_problems(
+            results = await store.find_similar_problems(
                 topic_name, top_k=SIMILAR_PROBLEMS_PER_TOPIC
             )
         except VectorStoreUnavailable as exc:

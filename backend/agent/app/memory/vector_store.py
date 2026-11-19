@@ -36,6 +36,7 @@ import asyncio
 import hashlib
 import re
 import threading
+from pathlib import Path
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Sequence
@@ -601,3 +602,26 @@ def _format_query_result(result: dict) -> list[dict]:
 # Process-wide store used by the coach. Constructing it is side-effect free;
 # the Chroma client, collections and embedding model are created on first use.
 vector_store = VectorStore()
+
+_workspace_stores: dict[tuple[VectorStore, str, str], VectorStore] = {}
+_workspace_stores_lock = threading.Lock()
+
+
+def workspace_vector_store(workspace_id: str, base_store: VectorStore = vector_store) -> VectorStore:
+    """Use a separate persistent index for each non-default workspace.
+
+    The legacy index remains at CHROMA_PATH. Sibling directories keep its
+    backup/export from accidentally including other workspaces' data.
+    """
+    if workspace_id == "local-default":
+        return base_store
+    base_path = Path(base_store.path).expanduser().resolve()
+    key = (base_store, str(base_path), workspace_id)
+    with _workspace_stores_lock:
+        if key not in _workspace_stores:
+            digest = hashlib.sha256(workspace_id.encode("utf-8")).hexdigest()[:32]
+            path = base_path.parent / f"{base_path.name}-workspaces" / digest
+            _workspace_stores[key] = VectorStore(
+                path=str(path), embedding_function=base_store._embedding_function
+            )
+        return _workspace_stores[key]

@@ -101,6 +101,7 @@ from app.memory.vector_store import (
     VectorStoreError,
     VectorStoreUnavailable,
     vector_store,
+    workspace_vector_store,
 )
 from app.remotion.animation_service import AnimationDisabled, animation_service
 
@@ -1006,7 +1007,7 @@ class AlgoCoach:
         if not slug:
             return {"ok": False, "error": "slug is required"}
 
-        cache_key = f"{platform}:{slug}"
+        cache_key = f"{_active_workspace_id.get()}:{platform}:{slug}"
         cached = self._problem_meta.get(cache_key)
         if cached is None:
             cached = await fetch_problem(slug) if platform == "LEETCODE" else await fetch_problem(slug, platform)
@@ -1024,12 +1025,7 @@ class AlgoCoach:
 
     async def _similar_problems(self, inputs: dict) -> dict:
         """Query local vector memory, bounded by ``MAX_SIMILAR_RESULTS``."""
-        workspace = _active_workspace_id.get()
-        if workspace != DEFAULT_WORKSPACE_ID:
-            return {
-                "ok": False,
-                "error": "当前 workspace 的向量索引尚未独立，已跳过共享索引查询",
-            }
+        store = workspace_vector_store(_active_workspace_id.get(), vector_store)
         problem_id = str(inputs.get("problem_id") or "").strip()
         query = str(inputs.get("query") or "").strip()
         top_k = _tool_top_k(inputs.get("top_k"))
@@ -1038,9 +1034,9 @@ class AlgoCoach:
 
         try:
             if problem_id:
-                results = await vector_store.similar_to_problem(problem_id, top_k)
+                results = await store.similar_to_problem(problem_id, top_k)
             else:
-                results = await vector_store.find_similar_problems(query, top_k)
+                results = await store.find_similar_problems(query, top_k)
         except VectorStoreUnavailable as exc:
             logger.warning("Similar-problem search skipped: %s", exc)
             return {"ok": False, "error": f"local vector memory unavailable: {exc}"}
@@ -1060,11 +1056,8 @@ class AlgoCoach:
 
     async def _index_problem_best_effort(self, problem: dict) -> None:
         """Index a fetched problem; vector-memory failures never fail the chat."""
-        if _active_workspace_id.get() != DEFAULT_WORKSPACE_ID:
-            logger.info("Problem indexing skipped for non-default workspace")
-            return
         try:
-            await vector_store.index_problem(
+            await workspace_vector_store(_active_workspace_id.get(), vector_store).index_problem(
                 problem_id=problem["problem_id"],
                 title=problem.get("title", ""),
                 content=problem.get("content", ""),
@@ -1083,14 +1076,11 @@ class AlgoCoach:
         self, problem_id: str, sticking_points: list
     ) -> None:
         """Index the user's sticking points for later error-pattern search."""
-        if _active_workspace_id.get() != DEFAULT_WORKSPACE_ID:
-            logger.info("Error indexing skipped for non-default workspace")
-            return
         points = [point for point in sticking_points if str(point).strip()]
         if not points:
             return
         try:
-            await vector_store.index_error_descriptions(
+            await workspace_vector_store(_active_workspace_id.get(), vector_store).index_error_descriptions(
                 problem_id=problem_id,
                 sticking_points=points,
                 platform="LEETCODE",

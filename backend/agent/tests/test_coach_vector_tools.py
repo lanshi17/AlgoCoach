@@ -58,6 +58,32 @@ async def test_fetch_problem_meta_caches_and_indexes_once(agent, store, monkeypa
     assert record["metadata"]["topic"] == "Array,Hash Table"
 
 
+async def test_workspace_problem_indexes_are_independent(agent, store, monkeypatch):
+    async def fake_fetch(slug):
+        return {"problem_id": slug, "title": slug, "content": "graph traversal", "topics": ["graph"]}
+
+    monkeypatch.setattr(coach_module, "fetch_problem", fake_fetch)
+    context_handle = coach_module._active_workspace_id.set("alpha")
+    try:
+        await agent._fetch_problem_meta("same-problem")
+        await agent._index_errors_best_effort("same-problem", ["alpha mistake"])
+        alpha = await agent._similar_problems({"query": "graph"})
+        assert alpha["count"] == 1
+    finally:
+        coach_module._active_workspace_id.reset(context_handle)
+
+    context_handle = coach_module._active_workspace_id.set("beta")
+    try:
+        assert (await agent._similar_problems({"query": "graph"}))["count"] == 0
+        await agent._fetch_problem_meta("same-problem")
+        assert (await agent._similar_problems({"query": "graph"}))["count"] == 1
+        beta = vector_module.workspace_vector_store("beta", store)
+        assert await beta.find_similar_errors("alpha mistake") == []
+    finally:
+        coach_module._active_workspace_id.reset(context_handle)
+    assert await store.count(COLLECTION_PROBLEM_CONTENT) == 0
+
+
 async def test_fetch_problem_meta_can_use_the_active_problem_id(agent, store, monkeypatch):
     async def fake_fetch(slug):
         return {
