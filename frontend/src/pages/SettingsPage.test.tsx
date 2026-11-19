@@ -48,6 +48,11 @@ describe('provider setup return path', () => {
       )
     })
 
+    const preset = element.querySelector<HTMLSelectElement>('select[aria-label="模型 Provider 预设"]')!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(preset, 'anthropic')
+      preset.dispatchEvent(new Event('change', { bubbles: true }))
+    })
     const apiKey = element.querySelector<HTMLInputElement>('input[aria-label="Provider API key"]')!
     act(() => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(apiKey, 'test-session-key')
@@ -71,6 +76,11 @@ describe('provider setup return path', () => {
       )
     })
 
+    const preset = element.querySelector<HTMLSelectElement>('select[aria-label="模型 Provider 预设"]')!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(preset, 'anthropic')
+      preset.dispatchEvent(new Event('change', { bubbles: true }))
+    })
     const apiKey = element.querySelector<HTMLInputElement>('input[aria-label="Provider API key"]')!
     act(() => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(apiKey, 'anthropic-key')
@@ -80,7 +90,6 @@ describe('provider setup return path', () => {
       Array.from(element.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent?.includes('保存 Provider'))?.click()
     })
 
-    const preset = element.querySelector<HTMLSelectElement>('select[aria-label="模型 Provider 预设"]')!
     act(() => {
       Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(preset, 'openai')
       preset.dispatchEvent(new Event('change', { bubbles: true }))

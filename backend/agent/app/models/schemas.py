@@ -107,6 +107,7 @@ class MemoryRecordRequest(BaseModel):
     lang: str
     duration_sec: int = Field(ge=0)
     topics: list[str]
+    client_id: str | None = Field(default=None, max_length=128)
 
     @field_validator("problem_id", "platform", "status", "lang", mode="before")
     @classmethod
@@ -114,6 +115,15 @@ class MemoryRecordRequest(BaseModel):
         """Reject missing/blank scalars instead of persisting empty strings."""
         if not isinstance(value, str) or not value.strip():
             raise ValueError("must be a non-empty string")
+        return value.strip()
+
+    @field_validator("client_id", mode="before")
+    @classmethod
+    def _client_id_text(cls, value: object) -> str | None:
+        if value is None or value == "":
+            return None
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("client_id must be a non-empty string")
         return value.strip()
 
     @field_validator("topics")

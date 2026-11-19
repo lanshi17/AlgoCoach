@@ -128,7 +128,8 @@ export default function TestCasePanel() {
             <pre role="alert" className="code-error whitespace-pre-wrap">{runError}</pre>
           ) : runResult ? (
             <div className="space-y-2 whitespace-pre-wrap">
-              {actualOutput && <pre>输出：{actualOutput}</pre>}
+              {actualOutput && <pre>返回值：{actualOutput}</pre>}
+              {runResult.std_output_list?.some(Boolean) && <pre>标准输出：{runResult.std_output_list.join('\n')}</pre>}
               {expectedOutput && <pre className="code-muted">预期：{expectedOutput}</pre>}
               {runResult.compile_error && <pre className="code-error">{runResult.compile_error}</pre>}
               {runResult.runtime_error && <pre className="code-error">{runResult.runtime_error}</pre>}

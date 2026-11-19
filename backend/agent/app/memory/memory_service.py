@@ -21,6 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from app.memory.db import (
     EpisodicArchive,
     EpisodicRecord,
+    MemoryRecordReceipt,
     Notification,
     ProceduralPattern,
     RecommendationLog,
@@ -103,9 +104,7 @@ def _episode_is_due_material(episode: EpisodicRecord) -> bool:
     """
     status = (episode.status or "").upper()
     sticking = _json_list(episode.sticking_points)
-    if status == "ACCEPTED":
-        return bool(sticking)
-    if status == "REVIEWED":
+    if status in {"ACCEPTED", "LOCAL_ACCEPTED", "REVIEWED", "LOCAL_PRACTICE"}:
         return bool(sticking)
     return True
 
@@ -134,6 +133,7 @@ class MemoryService:
         models = {
             "episodic": EpisodicRecord,
             "episodic_archive": EpisodicArchive,
+            "memory_record_receipts": MemoryRecordReceipt,
             "semantic": SemanticNode,
             "procedural": ProceduralPattern,
             "notifications": Notification,
@@ -191,8 +191,13 @@ class MemoryService:
         duration_sec: int,
         topics: list[str],
         sticking_points: list[str],
-    ) -> None:
+        client_id: str | None = None,
+    ) -> bool:
         async with SessionLocal() as s:
+            if client_id and await s.get(MemoryRecordReceipt, client_id) is not None:
+                return False
+            if client_id:
+                s.add(MemoryRecordReceipt(client_id=client_id))
             rec = EpisodicRecord(
                 problem_id=problem_id,
                 platform=platform,
@@ -203,16 +208,26 @@ class MemoryService:
                 sticking_points=json.dumps(sticking_points, ensure_ascii=False),
             )
             s.add(rec)
-            await s.commit()
+            try:
+                await s.commit()
+            except IntegrityError:
+                await s.rollback()
+                return False
 
-        # Propagate to semantic mastery
-        for topic in topics:
-            accepted = status == "ACCEPTED"
-            await self._update_mastery(topic, accepted)
+        # Local desktop focus sessions are evidence of practice, but without a
+        # run result they must not be interpreted as a pass or a failure.
+        if platform.upper() == "LOCAL" and status.upper() == "LOCAL_PRACTICE":
+            for topic in topics:
+                await self._ensure_topic(topic)
+        else:
+            for topic in topics:
+                accepted = status in {"ACCEPTED", "LOCAL_ACCEPTED"}
+                await self._update_mastery(topic, accepted)
 
         # Keep the durable review queue in sync with fresh evidence.
         if _episode_is_due_material(rec):
             await self._refresh_review_schedule(problem_id)
+        return True
 
     async def recent_problems(self, limit: int = 20) -> list[dict]:
         async with SessionLocal() as s:
@@ -234,6 +249,13 @@ class MemoryService:
             ]
 
     # ── Semantic ──────────────────────────────────────────────
+
+    async def _ensure_topic(self, topic: str) -> None:
+        """Expose a locally practised topic without inventing mastery evidence."""
+        async with SessionLocal() as s:
+            if await s.get(SemanticNode, topic) is None:
+                s.add(SemanticNode(topic=topic, mastery=0.5, attempts=0, last_seen=""))
+                await s.commit()
 
     async def _update_mastery(self, topic: str, accepted: bool) -> None:
         """ELO-inspired mastery update: +0.05 on accept, -0.08 on fail, clamped 0–1."""

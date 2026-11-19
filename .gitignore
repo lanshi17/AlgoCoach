@@ -58,6 +58,12 @@ frontend/coverage/
 command.log
 !desktop/package.json
 !desktop/package-lock.json
+!desktop/build/
+!desktop/build/icon.svg
+!desktop/build/icon.png
 desktop/node_modules/
 desktop/dist/
 desktop/embedded-dist/
+
+desktop/sidecar-stage/
+desktop/sidecar-build-env/

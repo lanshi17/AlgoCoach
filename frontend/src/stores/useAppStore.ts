@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { AgentMode, Problem, ChatMessage, AnimationJob, RunResult, TrainingGoal, TrainingPhase, ModelProviderConfig, CodeLanguage, CoachPrefs } from '@/types'
 import { CODE_LANGUAGES } from '@/services/languages'
-import { appendLocalPracticeRecord, readLocalPracticeRecords, type LocalPracticeRecord } from '@/services/localProgress'
+import { appendLocalPracticeRecord, flushLocalPracticeRecords, queueLocalPracticeRecord, readLocalPracticeRecords, type LocalPracticeRecord } from '@/services/localProgress'
 
 const GOALS: TrainingGoal[] = ['contest', 'interview_prep', 'casual']
 const DRAFTS_KEY = 'algocoach.problemDrafts'
@@ -40,7 +40,7 @@ function problemKey(problem: Problem): string {
 
 function readActiveProblem(): Problem | null {
   try {
-    const value: unknown = JSON.parse(window.sessionStorage.getItem(ACTIVE_PROBLEM_KEY) ?? 'null')
+    const value: unknown = JSON.parse(window.localStorage.getItem(ACTIVE_PROBLEM_KEY) ?? window.sessionStorage.getItem(ACTIVE_PROBLEM_KEY) ?? 'null')
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null
     const problem = value as Partial<Problem>
     if (typeof problem.platform !== 'string' || typeof problem.platformId !== 'string'
@@ -53,14 +53,15 @@ function readActiveProblem(): Problem | null {
 
 function persistActiveProblem(problem: Problem | null) {
   try {
-    if (problem) window.sessionStorage.setItem(ACTIVE_PROBLEM_KEY, JSON.stringify(problem))
-    else window.sessionStorage.removeItem(ACTIVE_PROBLEM_KEY)
+    if (problem) window.localStorage.setItem(ACTIVE_PROBLEM_KEY, JSON.stringify(problem))
+    else window.localStorage.removeItem(ACTIVE_PROBLEM_KEY)
+    window.sessionStorage.removeItem(ACTIVE_PROBLEM_KEY)
   } catch { /* keep the selection in memory */ }
 }
 
 function readDrafts(): Record<string, ProblemDraft> {
   try {
-    const value: unknown = JSON.parse(window.sessionStorage.getItem(DRAFTS_KEY) ?? '{}')
+    const value: unknown = JSON.parse(window.localStorage.getItem(DRAFTS_KEY) ?? window.sessionStorage.getItem(DRAFTS_KEY) ?? '{}')
     if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
     return Object.fromEntries(Object.entries(value).filter(([, item]) => {
       if (!item || typeof item !== 'object') return false
@@ -145,7 +146,7 @@ function persistProblemTimeLimits(limits: Record<string, number>) {
 
 function readProblemFocusTimes(): Record<string, number> {
   try {
-    const value: unknown = JSON.parse(window.sessionStorage.getItem(FOCUS_TIMES_KEY) ?? '{}')
+    const value: unknown = JSON.parse(window.localStorage.getItem(FOCUS_TIMES_KEY) ?? window.sessionStorage.getItem(FOCUS_TIMES_KEY) ?? '{}')
     if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
     return Object.fromEntries(Object.entries(value).filter(([, seconds]) =>
       Number.isSafeInteger(seconds) && Number(seconds) >= 0)) as Record<string, number>
@@ -153,7 +154,7 @@ function readProblemFocusTimes(): Record<string, number> {
 }
 
 function persistProblemFocusTimes(times: Record<string, number>) {
-  try { window.sessionStorage.setItem(FOCUS_TIMES_KEY, JSON.stringify(times)) } catch { /* keep in memory */ }
+  try { window.localStorage.setItem(FOCUS_TIMES_KEY, JSON.stringify(times)) } catch { /* keep in memory */ }
 }
 
 function saveDraft(
@@ -166,7 +167,7 @@ function saveDraft(
   if (previous) codes[previous.lang] = { code: previous.code, codeEdited: previous.codeEdited }
   codes[draft.lang] = { code: draft.code, codeEdited: draft.codeEdited }
   const next = { ...drafts, [key]: { ...draft, codes } }
-  try { window.sessionStorage.setItem(DRAFTS_KEY, JSON.stringify(next)) } catch { /* keep in memory */ }
+  try { window.localStorage.setItem(DRAFTS_KEY, JSON.stringify(next)) } catch { /* keep in memory */ }
   return next
 }
 
@@ -192,8 +193,8 @@ function savePreference(key: string, value: string) {
 }
 
 const DEFAULT_PROVIDER: ModelProviderConfig = {
-  id: 'anthropic', name: 'Anthropic', protocol: 'anthropic',
-  baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-4-5', apiKey: '',
+  id: 'ollama', name: 'Ollama（本机）', protocol: 'ollama',
+  baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen3:8b', apiKey: '',
 }
 
 const INITIAL_ACTIVE_PROBLEM = readActiveProblem()
@@ -326,11 +327,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setMode: m => set({ mode: m }),
   focusStartTs: null,
   focusElapsedSec: INITIAL_FOCUS_ELAPSED_SEC,
-  enterFocus: () => set({ mode: 'FOCUS', focusStartTs: Date.now() }),
+  enterFocus: () => set(state => state.mode === 'FOCUS' ? {} : { mode: 'FOCUS', focusStartTs: Date.now(), runResult: null, runError: null }),
   exitFocus: () => {
-    const { activeProblem, focusStartTs } = get()
-    const ts = focusStartTs
-    const elapsed = ts ? Math.floor((Date.now() - ts) / 1000) : 0
+    const { activeProblem, focusStartTs, runResult } = get()
+    if (focusStartTs === null) return
+    const elapsed = Math.max(0, Math.floor((Date.now() - focusStartTs) / 1000))
     set(state => {
       const focusElapsedSec = state.focusElapsedSec + elapsed
       if (!activeProblem) return { mode: 'REVIEW', focusStartTs: null, focusElapsedSec }
@@ -338,10 +339,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         problemId: problemKey(activeProblem),
         title: activeProblem.titleCn ?? activeProblem.title,
         topics: activeProblem.topics,
-        durationSec: focusElapsedSec,
+        durationSec: elapsed,
         codeLength: state.code.length,
         endedAt: new Date().toISOString(),
+        outcome: runResult?.status_msg === '样例通过' ? 'SAMPLE_PASSED' : runResult?.status_msg === '样例未通过' ? 'SAMPLE_FAILED' : 'UNASSESSED',
       })
+      const appendedRecord = localPracticeRecords[localPracticeRecords.length - 1]
+      queueLocalPracticeRecord(appendedRecord)
+      void flushLocalPracticeRecords(localPracticeRecords)
       const problemFocusElapsed = {
         ...state.problemFocusElapsed,
         [problemKey(activeProblem)]: focusElapsedSec,

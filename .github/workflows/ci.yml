@@ -3,6 +3,7 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -53,8 +54,111 @@ jobs:
         working-directory: frontend
       - run: bun run test:coverage
         working-directory: frontend
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: bun run verify:local-python
+        working-directory: frontend
       - run: bun run build
         working-directory: frontend
+
+  desktop-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - run: bun install --frozen-lockfile
+        working-directory: frontend
+      - run: bun run build
+        working-directory: frontend
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: desktop
+      - run: node --check main.mjs && node --check server.mjs && node --check services.mjs && node --check sidecar-builder.cjs && for file in scripts/*.mjs; do node --check "$file"; done
+        working-directory: desktop
+      - run: npm run prepare-dist
+        working-directory: desktop
+      - run: npm run verify:runtime
+        working-directory: desktop
+      - run: node --test tests/*.test.mjs
+        working-directory: desktop
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: astral-sh/setup-uv@v6
+      - run: uv python install 3.12
+      - run: mvn -B -DskipTests package
+        working-directory: backend/gateway
+      - run: npm run prepare:sidecar
+        working-directory: desktop
+      - run: ALGOCOACH_SERVICE_ROOT="$PWD/sidecar-stage" npm run verify:services
+        working-directory: desktop
+      - run: ALGOCOACH_SERVICE_ROOT="$PWD/sidecar-stage" npm run verify:conversation
+        working-directory: desktop
+      - run: npm run package:linux:sidecar
+        working-directory: desktop
+      - run: npm run verify:packaged-python
+        working-directory: desktop
+      - run: APPIMAGE_EXTRACT_AND_RUN=1 ALGOCOACH_DESKTOP_BINARY="$PWD/dist/算法练习室-0.2.0.AppImage" npm run verify:packaged-python
+        working-directory: desktop
+      - run: npm run verify:linux
+        working-directory: desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: algo-coach-linux-x64
+          path: |
+            desktop/dist/*.AppImage
+            desktop/dist/*.deb
+          if-no-files-found: error
+
+  desktop-macos-arm64:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.4'
+      - run: bun install --frozen-lockfile
+        working-directory: frontend
+      - run: bun run build
+        working-directory: frontend
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+        working-directory: desktop
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: astral-sh/setup-uv@v6
+      - run: uv python install 3.12
+      - run: mvn -B -DskipTests package
+        working-directory: backend/gateway
+      - run: npm run prepare:sidecar
+        working-directory: desktop
+      - run: ALGOCOACH_SERVICE_ROOT="$PWD/sidecar-stage" npm run verify:services
+        working-directory: desktop
+      - run: ALGOCOACH_SERVICE_ROOT="$PWD/sidecar-stage" npm run verify:conversation
+        working-directory: desktop
+      - run: npm run package:mac:sidecar
+        working-directory: desktop
+      - run: npm run verify:mac:arm64
+        working-directory: desktop
+      - run: npm run verify:mac:sidecar
+        working-directory: desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: algo-coach-macos-arm64
+          path: |
+            desktop/dist/*.dmg
+            desktop/dist/*.zip
+          if-no-files-found: error
 
   remotion:
     runs-on: ubuntu-latest

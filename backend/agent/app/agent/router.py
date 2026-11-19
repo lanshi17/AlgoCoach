@@ -238,6 +238,7 @@ async def record_memory(req: MemoryRecordRequest):
         duration_sec=req.duration_sec,
         topics=req.topics,
         sticking_points=[],
+        client_id=req.client_id,
     )
     return MemoryRecordResponse()
 

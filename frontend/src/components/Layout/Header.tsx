@@ -82,9 +82,11 @@ export default function Header() {
 
   // Only LeetCode exposes run/submit through the gateway.
   const judgeRunnable = activeProblem?.platform === 'LEETCODE' && !isLocalPracticeProblem(activeProblem)
+  const localRunnable = isLocalPracticeProblem(activeProblem) && lang === 'python3' && ['local-two-sum', 'local-binary-search'].includes(activeProblem?.platformId ?? '')
+  const canRun = judgeRunnable || localRunnable
 
   const onRun = async () => {
-    if (!activeProblem || !judgeRunnable || useAppStore.getState().runLoading || useAppStore.getState().submitLoading) return
+    if (!activeProblem || !canRun || useAppStore.getState().runLoading || useAppStore.getState().submitLoading) return
     setActionError('')
     setRunError(null)
     setRunResult(null)
@@ -96,7 +98,9 @@ export default function Header() {
         && current.code === code && current.lang === lang && current.testInput === testInput
     }
     try {
-      const result = await leetcodeService.runTests(activeProblem.platformId, code, lang, testInput)
+      const result = localRunnable
+        ? await (await import('@/services/localPythonRunner')).runLocalPython(activeProblem.platformId, code, testInput)
+        : await leetcodeService.runTests(activeProblem.platformId, code, lang, testInput)
       if (isCurrentRun()) setRunResult(result)
       else setActionError('代码或测试输入已更改，请重新运行')
     } catch (error) {
@@ -211,7 +215,7 @@ export default function Header() {
     : Math.max(0, problemTimeLimitSec - focusDurationSec)
   const judgeCapabilityNote = activeProblem && mode === 'FOCUS' && !judgeRunnable
     ? isLocalPracticeProblem(activeProblem)
-      ? '本地练习只保存草稿和专注时间；连接题库后可运行与提交。'
+      ? localRunnable ? 'Python 可本地运行样例；暂不支持提交判题。' : '本地题目前仅支持 Python 运行样例，暂不支持提交判题。'
       : `${activeProblem.platform === 'ACWING' ? 'AcWing' : 'HDU'} 暂不支持站内运行和提交，请回对应平台完成判题。`
     : ''
 
@@ -276,7 +280,7 @@ export default function Header() {
       )}
 
       {activeProblem && mode === 'FOCUS' && <>
-        <button onClick={onRun} disabled={!judgeRunnable || isBusy}
+        <button onClick={onRun} disabled={!canRun || isBusy}
           aria-label="运行"
           aria-busy={runLoading}
           aria-describedby={judgeCapabilityNote ? 'judge-capability-note' : undefined}

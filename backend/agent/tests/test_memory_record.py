@@ -121,3 +121,32 @@ async def test_missing_required_field_is_rejected(client, missing):
 
     assert resp.status_code == 422
     assert await _episodes() == []
+
+async def test_local_practice_is_recorded_without_penalising_mastery(client):
+    resp = await client.post('/memory/record', json={
+        **VALID_PAYLOAD, 'problem_id': 'local-two-sum', 'platform': 'LOCAL',
+        'status': 'LOCAL_PRACTICE', 'lang': 'unknown', 'topics': ['Array'],
+    })
+    assert resp.status_code == 200
+    nodes = await _mastery()
+    assert nodes['Array'].mastery == pytest.approx(0.5)
+    assert nodes['Array'].attempts == 0
+
+async def test_client_id_makes_memory_record_idempotent(client):
+    payload = {**VALID_PAYLOAD, 'platform': 'LOCAL', 'status': 'LOCAL_PRACTICE', 'client_id': 'local-sync-1'}
+    first = await client.post('/memory/record', json=payload)
+    second = await client.post('/memory/record', json=payload)
+    assert first.status_code == second.status_code == 200
+    assert len(await _episodes()) == 1
+
+@pytest.mark.parametrize(
+    ('status', 'expected_mastery'),
+    [('LOCAL_ACCEPTED', 0.55), ('LOCAL_FAILED', 0.42)],
+)
+async def test_local_run_outcome_updates_mastery_only_when_a_result_exists(client, status, expected_mastery):
+    resp = await client.post('/memory/record', json={
+        **VALID_PAYLOAD, 'problem_id': 'local-two-sum', 'platform': 'LOCAL',
+        'status': status, 'lang': 'python3', 'topics': ['Array'],
+    })
+    assert resp.status_code == 200
+    assert (await _mastery())['Array'].mastery == pytest.approx(expected_mastery)

@@ -3,15 +3,41 @@
   "version": "0.2.0",
   "private": true,
   "description": "算法练习室的 macOS / Linux 桌面壳",
+  "author": {
+    "name": "AlgoCoach contributors",
+    "email": "lanshi17@users.noreply.github.com"
+  },
+  "homepage": "https://github.com/lanshi17/AlgoCoach",
+  "desktopName": "algo-coach",
   "type": "module",
   "main": "main.mjs",
   "scripts": {
     "dev": "electron .",
     "build:frontend": "npm --prefix ../frontend run build",
     "start": "npm run build:frontend && electron .",
-    "package:mac": "npm run build:frontend && npm run prepare-dist && electron-builder --mac",
-    "package:linux": "npm run build:frontend && npm run prepare-dist && electron-builder --linux",
-    "prepare-dist": "node scripts/prepare-dist.mjs"
+    "package:mac": "npm run package:mac:sidecar",
+    "package:mac:arm64": "npm run package:mac:sidecar",
+    "package:mac:x64": "npm run package:mac:x64:sidecar",
+    "package:linux": "npm run package:linux:sidecar",
+    "package:linux:x64": "npm run package:linux:sidecar",
+    "prepare-dist": "node scripts/prepare-dist.mjs",
+    "prepare:sidecar": "node scripts/prepare-build-env.mjs && node scripts/prepare-sidecar.mjs",
+    "package:linux:sidecar": "npm run build:frontend && npm run prepare-dist && npm run ensure-sidecar && electron-builder --config sidecar-builder.cjs --linux --x64",
+    "package:mac:sidecar": "npm run build:frontend && npm run prepare-dist && npm run ensure-sidecar && electron-builder --config sidecar-builder.cjs --mac --arm64",
+    "verify:linux": "node scripts/verify-artifacts.mjs linux-x64",
+    "verify:mac:arm64": "node scripts/verify-artifacts.mjs macos-arm64",
+    "verify:mac:sidecar": "node scripts/verify-macos-sidecar.mjs",
+    "verify:mac:x64": "node scripts/verify-artifacts.mjs macos-x64",
+    "verify:runtime": "node scripts/verify-runtime.mjs",
+    "verify:services": "node scripts/verify-services.mjs",
+    "verify:conversation": "node scripts/verify-conversation.mjs",
+    "verify:packaged-python": "node scripts/verify-packaged-python.mjs",
+    "package:mac:thin": "npm run build:frontend && npm run prepare-dist && electron-builder --mac --arm64",
+    "package:mac:x64:thin": "npm run build:frontend && npm run prepare-dist && electron-builder --mac --x64",
+    "package:linux:thin": "npm run build:frontend && npm run prepare-dist && electron-builder --linux --x64",
+    "package:linux:x64:thin": "npm run package:linux:thin",
+    "package:mac:x64:sidecar": "npm run build:frontend && npm run prepare-dist && npm run ensure-sidecar && electron-builder --config sidecar-builder.cjs --mac --x64",
+    "ensure-sidecar": "node scripts/ensure-sidecar.mjs"
   },
   "devDependencies": {
     "electron": "^39.2.7",
@@ -23,6 +49,7 @@
     "files": [
       "main.mjs",
       "server.mjs",
+      "services.mjs",
       "package.json",
       "embedded-dist/**/*"
     ],
@@ -35,6 +62,9 @@
     },
     "linux": {
       "category": "Development",
+      "icon": "build/icon.png",
+      "syncDesktopName": true,
+      "maintainer": "lanshi17@users.noreply.github.com",
       "target": [
         "AppImage",
         "deb"

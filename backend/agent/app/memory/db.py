@@ -38,6 +38,14 @@ class EpisodicRecord(Base):
     created_at: Mapped[str] = mapped_column(String(32), default=lambda: _utcnow().isoformat())
 
 
+class MemoryRecordReceipt(Base):
+    """Durable idempotency receipt for retried memory callbacks."""
+    __tablename__ = "memory_record_receipts"
+
+    client_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    created_at: Mapped[str] = mapped_column(String(32), default=lambda: _utcnow().isoformat())
+
+
 class SemanticNode(Base):
     """Knowledge topic mastery node."""
     __tablename__ = "semantic"

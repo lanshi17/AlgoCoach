@@ -18,6 +18,25 @@ describe('training preferences and focus state', () => {
     useAppStore.setState(useAppStore.getInitialState(), true)
   })
 
+  it('records only each focus segment while keeping the cumulative problem timer', () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+      useAppStore.getState().setActiveProblem(problem)
+      useAppStore.getState().enterFocus()
+      vi.advanceTimersByTime(10_000)
+      useAppStore.getState().exitFocus()
+      useAppStore.getState().enterFocus()
+      vi.advanceTimersByTime(5_000)
+      useAppStore.getState().exitFocus()
+      useAppStore.getState().exitFocus()
+      expect(useAppStore.getState().localPracticeRecords.map(record => record.durationSec)).toEqual([10, 5])
+      expect(useAppStore.getState().getFocusDurationSec()).toBe(15)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('persists the selected language, goal, and theme without persisting solution code', () => {
     useAppStore.getState().setLang('python3')
     useAppStore.getState().setGoal('contest')
@@ -153,7 +172,19 @@ describe('training preferences and focus state', () => {
       code: 'solution before refresh', codeEdited: true,
       testInput: 'input before refresh', lang: 'python3',
     })
-    expect(localStorage.getItem('algocoach.problemDrafts')).toBeNull()
+    expect(localStorage.getItem('algocoach.problemDrafts')).toContain('solution before refresh')
+  })
+
+  it('restores the selected problem and draft after the browser session ends', async () => {
+    useAppStore.getState().setActiveProblem(problem)
+    useAppStore.getState().setCode('handwritten answer')
+    useAppStore.getState().setTestInput('custom example')
+    sessionStorage.clear()
+    vi.resetModules()
+    const { useAppStore: reopened } = await import('./useAppStore')
+    expect(reopened.getState().activeProblem?.platformId).toBe('two-sum')
+    expect(reopened.getState().code).toBe('handwritten answer')
+    expect(reopened.getState().testInput).toBe('custom example')
   })
 
   it('restores the selected problem detail after a page reload', async () => {
@@ -367,7 +398,7 @@ describe('training preferences and focus state', () => {
     const start = useAppStore.getState().focusStartTs!
     useAppStore.getState().checkpointFocusDuration(start + 12_000)
     expect(useAppStore.getState().problemFocusElapsed['LEETCODE:two-sum']).toBeUndefined()
-    expect(sessionStorage.getItem('algocoach.problemFocusElapsed')).toContain('"LEETCODE:two-sum":12')
+    expect(localStorage.getItem('algocoach.problemFocusElapsed')).toContain('"LEETCODE:two-sum":12')
     vi.resetModules()
     const { useAppStore: restored } = await import('./useAppStore')
     expect(restored.getState()).toMatchObject({
@@ -391,7 +422,7 @@ describe('training preferences and focus state', () => {
     const start = useAppStore.getState().focusStartTs!
     useAppStore.getState().checkpointFocusDuration(start + 1_000)
 
-    expect(sessionStorage.getItem('algocoach.problemFocusElapsed')).toContain('"LEETCODE:two-sum":1')
+    expect(localStorage.getItem('algocoach.problemFocusElapsed')).toContain('"LEETCODE:two-sum":1')
     expect(useAppStore.getState().problemFocusElapsed['LEETCODE:two-sum']).toBeUndefined()
     expect(notifications).toBe(0)
     unsubscribe()
@@ -405,4 +436,41 @@ describe('training preferences and focus state', () => {
     expect(useAppStore.getState().getFocusDurationSec(startedAt + 4_999)).toBe(4)
     expect(useAppStore.getState().getFocusDurationSec(startedAt + 5_000)).toBe(5)
   })
+})
+
+it('stores the latest local sample outcome with the focus record', () => {
+  vi.useFakeTimers()
+  try {
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+    useAppStore.getState().setActiveProblem({ ...problem, id: 'local-two-sum', platformId: 'local-two-sum' })
+    useAppStore.getState().enterFocus()
+    useAppStore.getState().setRunResult({ status_msg: '样例通过' })
+    vi.advanceTimersByTime(1_000)
+    useAppStore.getState().exitFocus()
+    expect(useAppStore.getState().localPracticeRecords[useAppStore.getState().localPracticeRecords.length - 1]?.outcome).toBe('SAMPLE_PASSED')
+  } finally { vi.useRealTimers() }
+})
+
+it('defaults the desktop coach to local Ollama with a Qwen model', () => {
+  const provider = useAppStore.getState().provider
+  expect(provider.protocol).toBe('ollama')
+  expect(provider.model).toBe('qwen3:8b')
+  expect(provider.baseUrl).toContain('11434')
+})
+
+it('does not carry a previous local sample result into a new focus segment', () => {
+  vi.useFakeTimers()
+  try {
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+    useAppStore.getState().setActiveProblem({ ...problem, id: 'local-two-sum', platformId: 'local-two-sum' })
+    useAppStore.getState().enterFocus()
+    useAppStore.getState().setRunResult({ status_msg: '样例通过' })
+    vi.advanceTimersByTime(1_000)
+    useAppStore.getState().exitFocus()
+    useAppStore.getState().enterFocus()
+    vi.advanceTimersByTime(1_000)
+    useAppStore.getState().exitFocus()
+    const records = useAppStore.getState().localPracticeRecords
+    expect(records[records.length - 1]?.outcome).toBe('UNASSESSED')
+  } finally { vi.useRealTimers() }
 })

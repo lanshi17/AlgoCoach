@@ -1,0 +1,6 @@
+Pyodide 0.27.7
+Copyright and contributors: https://github.com/pyodide/pyodide/blob/0.27.7/AUTHORS
+License: Mozilla Public License 2.0 (see pyodide-MPL-2.0.txt)
+Source: https://github.com/pyodide/pyodide/tree/0.27.7
+The Python standard library included with Pyodide is subject to its own license:
+see python-3.12-LICENSE.txt and https://github.com/python/cpython/blob/v3.12.7/LICENSE

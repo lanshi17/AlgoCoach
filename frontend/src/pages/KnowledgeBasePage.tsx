@@ -77,7 +77,7 @@ export default function KnowledgeBasePage() {
   return <main className="flex-1 min-h-0 overflow-y-auto bg-surface px-6 py-7 dark:bg-surface-dark">
     <div className="mx-auto max-w-4xl">
       <PageHeader title="知识库" icon={<BookOpen size={18} />} actions={<Button size="sm" onClick={() => void load()} disabled={busy}><RefreshCw size={14} />刷新</Button>} />
-      <p className="mb-6 max-w-2xl text-sm leading-6 text-text-secondary dark:text-text-dark-secondary">把自己的笔记、题解和课程资料放进 AlgoCoach。文件只保存在本机，索引使用你选择的 embedding 模型。</p>
+      <p className="mb-6 max-w-2xl text-sm leading-6 text-text-secondary dark:text-text-dark-secondary">把自己的笔记、题解和课程资料放进 AlgoCoach。源文件保存在 Agent 所在设备。选择远程 embedding 或对话模型时，文本片段可能发送给对应服务。</p>
 
       {error && <div role="alert" className="mb-4 rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger">{error}</div>}
       {message && <div role="status" className="mb-4 rounded-md border border-success/30 bg-success/5 px-3 py-2 text-sm text-success">{message}</div>}

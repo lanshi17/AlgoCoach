@@ -8,7 +8,7 @@ import PageHeader from '@/components/Common/PageHeader'
 type StatusMap = { LEETCODE: boolean; ACWING: boolean; HDU: boolean }
 
 const textarea =
-  'w-full rounded-md border border-border bg-surface-soft px-3 py-2 font-mono text-xs leading-relaxed ' +
+  'w-full rounded-[10px] border border-line-300 bg-surface px-3 py-2 font-mono text-xs leading-relaxed ' +
   'text-text-primary outline-none transition-colors focus:border-accent ' +
   'dark:border-border-dark dark:bg-surface-dark-soft dark:text-text-dark-primary dark:placeholder:text-text-dark-muted'
 
@@ -109,9 +109,9 @@ export default function PlatformLoginPage() {
   }
 
   return (
-    <main className="h-full overflow-y-auto bg-surface px-6 py-7 dark:bg-surface-dark">
+    <main className="flex-1 min-h-0 overflow-y-auto bg-canvas px-6 py-7 dark:bg-[#0B0C0F]">
       {confirm && (
-        <div className="fixed right-6 top-6 z-[1100] rounded-md bg-text-primary px-3 py-1.5 text-xs text-surface"
+        <div className="fixed right-6 top-6 z-[1100] rounded-tip bg-text-primary px-3 py-1.5 text-xs text-surface"
           role="status">
           {confirm}
         </div>
@@ -126,13 +126,13 @@ export default function PlatformLoginPage() {
         />
 
         {error && (
-          <div role="alert" className="mb-3 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
+          <div role="alert" className="mb-3 rounded-tip border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
             {error}
           </div>
         )}
 
         <div className="flex flex-col gap-3">
-          <section className="rounded-lg border border-border p-5 dark:border-border-dark">
+          <section className="rounded-card border border-border bg-surface p-6 dark:border-border-dark dark:bg-surface-dark">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-sm font-medium text-text-primary dark:text-text-dark-primary">LeetCode</h2>
               <StatusChip ok={status.LEETCODE} okLabel="已登录" idleLabel="未登录" />
@@ -151,7 +151,7 @@ export default function PlatformLoginPage() {
             </div>
           </section>
 
-          <section className="rounded-lg border border-border p-5 dark:border-border-dark">
+          <section className="rounded-card border border-border bg-surface p-6 dark:border-border-dark dark:bg-surface-dark">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-sm font-medium text-text-primary dark:text-text-dark-primary">AcWing</h2>
               <StatusChip ok={status.ACWING} okLabel="已配置" idleLabel="未配置" />
@@ -170,7 +170,7 @@ export default function PlatformLoginPage() {
             </div>
           </section>
 
-          <section className="rounded-lg border border-border p-5 dark:border-border-dark">
+          <section className="rounded-card border border-border bg-surface p-6 dark:border-border-dark dark:bg-surface-dark">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <h2 className="text-sm font-medium text-text-primary dark:text-text-dark-primary">杭电 HDU</h2>

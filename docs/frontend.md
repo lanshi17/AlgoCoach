@@ -19,7 +19,7 @@
 - 不直接调用 LeetCode GraphQL（由 Java 网关代理）
 - 不直接调用 Claude API（由 Python agent 服务代理）
 - 不在 FOCUS 模式下显示任何 AI 相关 UI（包括补全、提示、chat 输入框）
-- 不持久化代码内容到 localStorage；后端 episodic 只保存判题状态、题目标签与用时，不保存源码
+- 代码草稿和当前题目保存在本机 localStorage，以便重新打开应用后继续练习；后端 episodic 只保存判题状态、题目标签与用时，不保存源码
 - 不在前端存储任何 Cookie 明文（Cookie 只存在 Java 网关的 SQLite）
 
 ---
@@ -131,7 +131,7 @@ frontend/
 
 **内部逻辑**：
 - 语言选择器 `select`，值 `rust` / `cpp` / `python3` / `typescript` / `golang` / `java`，写入 store 的 `lang`
-- `onRun` 调用 `leetcodeService.runTests()`，提交当前题目、代码、语言和测试输入；运行结果或失败信息显示在测试区。
+- LeetCode 的 `onRun` 调用 `leetcodeService.runTests()`；两道内置题选择 Python 时可在本机运行，样例有预期结果，自定义输入只显示返回值。运行结果或失败信息显示在测试区。
 - `onSubmit` 调用 `leetcodeService.submit()`，提交累计 FOCUS 用时；返回终态后保存结果并切换 REVIEW。
 - `mode === 'FOCUS'` 时 mode 徽章显示红色 `Lock` 图标
 - 运行/提交仅在 FOCUS 模式可用；请求期间显示 loading 并阻止重复提交。REVIEW 可继续做题，重试阶段的 FOCUS 时间会累计。
@@ -171,7 +171,7 @@ frontend/
 **当前边界**：
 - LeetCode Run 不会提供测试 case 的期望输出时，结果区域按实际回包显示，不推算缺失字段。
 
-本地练习本提供两道不依赖平台 Cookie 的算法题。题目、语言 starter、代码草稿和专注时长保存在浏览器本地；结束一次 FOCUS 会写入本地练习账本，进度页在 Agent 不可达时以此账本作为离线视图。
+本地练习本提供两道不依赖平台 Cookie 的算法题。Python 代码可在带不透明来源和网络限制的 iframe / Web Worker 中通过本地 Pyodide 运行，运行时间限制为 3 秒；内置样例可比较结果，自定义输入只显示返回值，不代表完整判题。当前尚无硬性内存配额，运行器用于用户自己的练习代码。其他语言暂不支持本地运行或提交。题目、语言 starter、代码草稿和专注时长保存在浏览器本地；结束一次 FOCUS 会写入本地练习账本，进度页在 Agent 不可达时以此账本作为离线视图。
 
 ### 3.5 ChatPanel.tsx
 
@@ -219,7 +219,7 @@ frontend/
 **关键逻辑**：
 - 尚未选题时从 Gateway 拉取 LeetCode 题目列表；选择题目后加载详情、题干、标签、样例与 starter code。FOCUS 期间锁定题目切换。
 - 题库按专项训练组织：`services/trainingTopics.ts` 的 `TRAINING_TOPICS` 把每个 LeetCode 专项定义为一组官方 topic slug（专项内 OR），选专项后把 slug 以逗号拼进 `tag` 参数、难度作为 `difficulty` 参数，由 Gateway 在 LeetCode v2 `filters` 里生效；`共 N 题` 来自上游 `totalLength`。
-- 平台选择：LeetCode / AcWing / 杭电 HDU。LeetCode 保留专项+难度筛选；AcWing 专项走站点的标签搜索（`ACWING_TOPICS`，如 `模拟`、`二分`、`动态规划`），打开题目时附六语言 starter 模板；HDU 无标签/难度，仅浏览题面。运行/提交仍只对 LeetCode 可用。
+- 平台选择：LeetCode / AcWing / 杭电 HDU。LeetCode 保留专项+难度筛选；AcWing 专项走站点的标签搜索（`ACWING_TOPICS`，如 `模拟`、`二分`、`动态规划`），打开题目时附六语言 starter 模板；HDU 无标签/难度，仅浏览题面。在线运行/提交仅对 LeetCode 可用；两道内置题支持本地 Python 运行。
 - 题名/slug 搜索只在当前页内过滤，不改变服务端筛选。
 - 无题目时显示空状态占位（Play 图标 + 引导文字）
 - 有题目时：难度徽章 + 每日一题标签 + topic 标签 + HTML 内容（`dangerouslySetInnerHTML`）
@@ -326,7 +326,7 @@ interface AppState {
 | 组件 | 约束 |
 |------|------|
 | ChatPanel | 输入框替换为锁定条，`send()` 开头判断 `isFocus` 直接 return |
-| Header | LeetCode 运行/提交可用；其他平台暂不支持站内判题，按钮禁用并说明原因 |
+| Header | LeetCode 运行/提交可用；两道内置题支持本地 Python 运行；其他平台暂不支持站内判题 |
 | EditorPanel | `readOnly=false`，`quickSuggestions=true`（Monaco 本地建议；无 AI 补全） |
 | ProblemPanel | 题目描述仍可滚动查看 |
 | AnimationCard | 不主动推送新动画（agent 在 FOCUS 不发消息） |
@@ -437,7 +437,7 @@ interface AppState {
 
 ### 3.10 Provider 设置
 
-`SettingsPage` 提供 OMP 风格的 Provider 预设（Anthropic、OpenAI、OpenAI Responses、OpenCode Go、Command Code GOAT、DeepSeek、Qwen/DashScope、Moonshot/Kimi、MiniMax、Gemini、OpenRouter、Ollama、Volcengine、xAI）和自定义端点。用户可编辑协议、Base URL、模型名和 API key；API key 只放在当前浏览器 `sessionStorage`，每次聊天按请求传给本机 Agent，不进入 SQLite、ReMe、导出文件或 Git。OpenCode Go 预设指向 `https://opencode.ai/inference/go/openai/v1`（Chat Completions），Command Code GOAT 预设指向 `https://api.commandcode.ai/provider/v1`（Responses）；Agent 对 `opencode.ai` 端点自动附加 `x-opencode-session` 请求头，否则 OpenCode Go 在鉴权前就返回 `400 MissingSessionID`。未配置页面 Provider 时，Agent 继续使用服务端 `.env` 的默认 Anthropic 配置。
+`SettingsPage` 提供 OMP 风格的 Provider 预设（Anthropic、OpenAI、OpenAI Responses、OpenCode Go、Command Code GOAT、DeepSeek、Qwen/DashScope、Moonshot/Kimi、MiniMax、Gemini、OpenRouter、Ollama、Volcengine、xAI）和自定义端点。用户可编辑协议、Base URL、模型名和 API key；API key 只放在当前浏览器 `sessionStorage`，每次聊天按请求传给本机 Agent，不进入 SQLite、ReMe、导出文件或 Git。OpenCode Go 预设指向 `https://opencode.ai/inference/go/openai/v1`（Chat Completions），Command Code GOAT 预设指向 `https://api.commandcode.ai/provider/v1`（Responses）；Agent 对 `opencode.ai` 端点自动附加 `x-opencode-session` 请求头，否则 OpenCode Go 在鉴权前就返回 `400 MissingSessionID`。桌面前端首次运行默认选择本机 Ollama（`127.0.0.1:11434/v1`，`qwen3:8b`），并在发送前显示 Provider 与模型；只有不携带请求级 Provider 的直接 Agent 调用才使用服务端 `.env` 默认配置。
 
 **AI 教练**：四个偏好，`localStorage` 键 `algocoach.coachPrefs`，随每次 `/chat/stream` 请求发送：
 
@@ -799,3 +799,17 @@ Playwright 浏览器冒烟脚本位于 `e2e/training_flow.py`，通过 route moc
 8. ✅ **状态机单测**（FOCUS 计时、偏好持久化、题目切换）
 9. ✅ **首屏代码分割**（按路由加载；Monaco 与语法高亮及语言语法按需加载）
 10. ✅ **Playwright 浏览器流程验证**（设置、选题、FOCUS、Run、Submit、REVIEW）
+
+
+### 本地复习调度
+
+本地复盘条目借鉴 OpenTutor 的 FSRS 默认参数安排复习日期。应用不会把显示提醒视为完成复习，用户需要先回忆、展开笔记并自评；这是一套本地默认调度，尚未根据个人数据训练参数。
+
+
+本地专注记录会排入本地同步队列；Agent 可用时通过 `/api/agent/memory/record` 写入本地记忆，离线时保留队列并在下一次打开工作区时重试；每条记录带客户端幂等键，服务端会拒绝重复写入。`LOCAL_PRACTICE` 只创建知识点占位，不把未运行的专注时长误算成通过或失败；本地样例通过和失败会分别同步为 `LOCAL_ACCEPTED` / `LOCAL_FAILED`。
+
+进度页的本地练习本会显示样例通过、样例未通过或未运行，以及该记录是否仍在等待 Agent 同步。
+
+学习空间的“本周计划”使用本地练习结束时间和复盘完成时间统计，不再显示固定的练习/复盘数字；日历实心标记练习，空心标记复盘。
+
+本地同步队列保存完整练习记录而不只是 ID，因此即使本地练习本达到滚动上限，离线期间产生的记录仍可在恢复连接后同步。

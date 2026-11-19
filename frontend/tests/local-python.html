@@ -1,0 +1,26 @@
+<!doctype html><meta charset="utf-8"><script type="module">
+import { runLocalPython, LOCAL_PYTHON_SANDBOX_CSP } from '/src/services/localPythonRunner.ts'
+import sandbox from '/src/services/localPythonSandbox.js?raw'
+window.runPractice = (problem, code, input) => runLocalPython(problem, code, input)
+window.probeSandbox = async url => {
+  const frame = document.createElement('iframe')
+  frame.sandbox = 'allow-scripts'
+  frame.srcdoc = `<meta http-equiv="Content-Security-Policy" content="${LOCAL_PYTHON_SANDBOX_CSP}"><script>${sandbox}<\/script>`
+  document.body.append(frame)
+  return await new Promise(resolve => {
+    const timer = setTimeout(() => done('timeout'), 5000)
+    function done(value) { clearTimeout(timer); window.removeEventListener('message', onMessage); frame.remove(); resolve(value) }
+    function onMessage(event) {
+      if (event.source !== frame.contentWindow) return
+      if (event.data.kind === 'sandbox-ready') frame.contentWindow.postMessage({
+        kind: 'start', assets: {}, code: '', args: {}, functionName: '',
+        workerSource: `onmessage=()=>fetch(${JSON.stringify(url)},{mode:'no-cors'}).then(()=>postMessage({type:'allowed'})).catch(()=>postMessage({type:'blocked'}))`,
+      }, '*')
+      if (event.data.kind === 'worker') done(event.data.payload.type)
+      if (event.data.kind === 'worker-error') done('error')
+    }
+    window.addEventListener('message', onMessage)
+  })
+}
+window.ready = true
+</script>

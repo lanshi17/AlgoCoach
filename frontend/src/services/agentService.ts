@@ -85,7 +85,7 @@ let profileRequest: Promise<AgentProfile> | null = null
 export const agentService = {
   async getProfile(): Promise<AgentProfile> {
     if (!profileRequest) {
-      profileRequest = axios.get<AgentProfile>('/api/agent/memory/profile')
+      profileRequest = axios.get<AgentProfile>('/api/agent/memory/profile', { timeout: 6000 })
         .then(({ data }) => data)
         .finally(() => { profileRequest = null })
     }

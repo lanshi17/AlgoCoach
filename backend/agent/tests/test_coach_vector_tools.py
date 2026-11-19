@@ -213,3 +213,29 @@ async def test_focus_mode_stays_silent_and_never_fetches(agent, monkeypatch):
     assert result == {"content": "", "animation_id": None}
     # FOCUS returns before the tool loop: no gateway call, no vector work.
     assert calls == []
+
+async def test_learning_sources_tool_searches_uploaded_material_and_preserves_source(tmp_path, monkeypatch, fake_embedding):
+    from app.memory import knowledge_base as kb
+
+    monkeypatch.setattr(kb, "knowledge_dir", lambda: str(tmp_path / "knowledge"))
+    store = VectorStore(path=str(tmp_path / "chroma"), embedding_function=fake_embedding)
+    monkeypatch.setattr(kb, "knowledge_store", store)
+    # Keep the deterministic embedding instead of reconfiguring the test store.
+    async def configured():
+        return kb.KnowledgeConfig()
+    monkeypatch.setattr(kb, "_ensure_configured", configured)
+    await kb.add_source("lesson.md", "二分查找需要维护左右边界的不变量。".encode())
+
+    result = await AlgoCoach()._execute_tool("search_learning_sources", {"query": "二分查找"}, None)
+    assert result["ok"] is True
+    assert result["results"][0]["source"] == "lesson.md"
+    assert "不变量" in result["results"][0]["excerpt"]
+    assert "不可信" in result["note"]
+
+async def test_learning_sources_tool_reports_index_failure(monkeypatch):
+    async def fail(_query):
+        raise RuntimeError("secret backend details")
+    monkeypatch.setattr(coach_module.knowledge_base, "search_sources", fail)
+    result = await AlgoCoach()._execute_tool("search_learning_sources", {"query": "数组"}, None)
+    assert result["ok"] is False
+    assert "secret" not in result["error"]

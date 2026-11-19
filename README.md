@@ -17,8 +17,11 @@ AlgoCoach 是一个本地优先的算法训练工作台。它把题目、编辑�
 | 网页知识库与自定义 Embedding | 已实现 | `/knowledge/library` |
 | Monaco 本地代码补全 | 已实现 | 编辑器 |
 | 本地练习本与离线桌面工作区 | 已实现 | 工作区 / 刷题进度 |
+| 本地 Python 样例运行 | 初步实现 | 两道内置题；自定义输入显示返回值，尚无完整判题 |
+| 本地 FSRS 复习调度 | 初步实现 | 借鉴 OpenTutor 默认参数；用户自评后安排下一次复习 |
+| 本地练习同步 Agent 记忆 | 初步实现 | 在线时同步，离线保留重试队列；幂等键避免重复记忆；样例结果分开记录 |
 | OpenTutor 式 Block 学习空间 | 已实现 | `/home` |
-| macOS / Linux 桌面壳 | 开发中 | `desktop/` |
+| macOS / Linux 桌面壳 | 初步实现 | `desktop/`；Linux x86_64 包已验证，macOS arm64 由 runner 构建检查 |
 | 预置 Remotion 动画 | 可选，默认关闭 | `REMOTION_ENABLED=true` |
 | 生成式动画沙箱 | 可选，默认关闭 | 需要额外安全运行环境 |
 
@@ -41,7 +44,9 @@ AlgoCoach 是一个本地优先的算法训练工作台。它把题目、编辑�
 
 `/home` 是可整理的 Block 学习空间，目前包含今日摘要、继续练习、复盘队列、知识地图、本周计划和 Agent 洞察。算法 Agent 继续复用现有题库、Monaco 编辑器、判题、REVIEW 和知识图谱；Block 布局与学习模式保存在本地，后续可由 Agent 根据行为提出增删和排序建议。
 
-`desktop/` 提供 macOS / Linux Electron 壳。开发时它启动 Vite 并把 `/api`、`/animations` 转发到本地 Gateway；生产打包入口已经准备好，Gateway / Agent 的 sidecar 捆绑会在下一阶段接入。
+`desktop/` 提供 macOS / Linux Electron 壳，发布顺序为 macOS Apple Silicon arm64、macOS Intel x64、Linux x86_64。开发时它启动 Vite 并把 `/api`、`/animations` 转发到本地 Gateway；设置 `ALGOCOACH_AUTOSTART_SERVICES=1` 后会尝试管理本地 Gateway / Agent 子进程，生产打包入口已经准备好。
+
+本项目的学习空间、Block 组织和复习闭环参考 [OpenTutor](https://github.com/zijinz456/OpenTutor)（MIT）。当前仓库实际移植的是其 FSRS 默认调度参数，并以算法题目、代码练习和现有 Agent 流程重新组织；对应许可文本见 [`frontend/public/licenses/OpenTutor-MIT.txt`](frontend/public/licenses/OpenTutor-MIT.txt)。
 
 ## 仓库结构
 
@@ -154,8 +159,8 @@ docker-compose 设置 `ANIMATIONS_LOCATION=file:/data/animations/`，与 agent �
 
 | 环境变量 | 默认值 | 用途 |
 |----------|--------|------|
-| `ANTHROPIC_API_KEY` | 无 | 默认 Anthropic Provider 的 API key |
-| `CLAUDE_MODEL` | `claude-opus-5-5` | 默认教练模型 |
+| `ANTHROPIC_API_KEY` | 无 | 直接调用 Agent 且未发送请求级 Provider 时使用的 API key |
+| `CLAUDE_MODEL` | `claude-opus-5-5` | 直接调用 Agent 且未发送请求级 Provider 时使用的默认模型 |
 | `GATEWAY_BASE_URL` | `http://localhost:8080` | Agent 访问 Gateway 的地址 |
 | `DB_PATH` | `./data/agent.db` | Agent SQLite 路径 |
 | `CHROMA_PATH` | `./data/chroma` | 训练向量存储路径 |

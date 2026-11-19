@@ -329,6 +329,21 @@ def list_sources() -> list[dict[str, Any]]:
     return output
 
 
+async def search_sources(query: str, *, top_k: int = 3) -> list[dict[str, Any]]:
+    """Find excerpts in the index for the currently selected embedding model."""
+    query = query.strip()[:2000]
+    if not query:
+        return []
+    config = await _ensure_configured()
+    matches = await knowledge_store.query(_collection_for(config), query, top_k=max(1, min(top_k, 3)))
+    return [
+        {"source": str(item.get("metadata", {}).get("source_name", "")),
+         "excerpt": str(item.get("document", ""))[:1600]}
+        for item in matches
+        if item.get("metadata", {}).get("source_name") and item.get("document")
+    ]
+
+
 async def add_source(name: str, data: bytes) -> dict[str, Any]:
     config = await _ensure_configured()
     collection = _collection_for(config)

@@ -18,7 +18,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
   { id: 'minimax', name: 'MiniMax', protocol: 'minimax', baseUrl: 'https://api.minimax.io/anthropic', model: 'MiniMax-M2.1', hint: 'Anthropic-compatible' },
   { id: 'gemini', name: 'Google Gemini', protocol: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-flash', hint: 'Gemini OpenAI-compatible' },
   { id: 'openrouter', name: 'OpenRouter', protocol: 'openai', baseUrl: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini', hint: '多模型 OpenAI-compatible' },
-  { id: 'ollama', name: 'Ollama', protocol: 'ollama', baseUrl: 'http://host.docker.internal:11434/v1', model: 'qwen3:8b', hint: '本地 OpenAI-compatible' },
+  { id: 'ollama', name: 'Ollama', protocol: 'ollama', baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen3:8b', hint: '本地 OpenAI-compatible' },
   { id: 'volcengine', name: 'Volcengine / 豆包', protocol: 'volcengine', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', model: 'ep-xxxxxxxx', hint: '火山方舟' },
   { id: 'xai', name: 'xAI', protocol: 'xai', baseUrl: 'https://api.x.ai', model: 'grok-3-mini', hint: 'xAI API' },
 ]

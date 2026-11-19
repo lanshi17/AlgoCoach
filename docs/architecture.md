@@ -109,7 +109,7 @@
 | 预置动画触发 | `animation_service.enqueue` — chat 的 `request_animation`、`POST /animate`、周报 cron 全部调用它；`REMOTION_ENABLED` 只在这里判定，调用方只把 `AnimationDisabled` 映射成自己的返回形态（tool 错误 / 503 / 静默跳过） |
 | 生成代码动画 | `POST /animate/generated` — 开关与 Bearer 鉴权都在端点、早于 body 解析；服务层 `enqueue_generated` 只做容量与沙箱 |
 | 平台 Cookie | `POST /api/platforms/{platform}/cookie` — 设置页与统一登录页共用 |
-| Provider 配置 | `useAppStore.setProvider` — 预设与手填都走同一个 setter |
+| Provider 配置 | `useAppStore.setProvider` — 桌面默认 Ollama/Qwen，本地优先；预设与手填都走同一个 setter |
 | 记忆写入 | `memory_service` 的对应方法（`record_attempt` 等） |
 | 题目原文 | `gateway.fetch_problem` — 自带进程内缓存，tool 与路由复用同一结果 |
 

@@ -10,6 +10,7 @@ import ProblemPanel from '@/components/Problem/ProblemPanel'
 import EditorPanel from '@/components/Editor/EditorPanel'
 import ChatPanel from '@/components/Chat/ChatPanel'
 import axios from 'axios'
+import { flushLocalPracticeRecords } from '@/services/localProgress'
 
 let authStatusRequest: Promise<unknown> | null = null
 
@@ -77,6 +78,10 @@ export default function AppShell() {
   }, [mode, activeProblem, activeProblem?.platform, activeProblem?.platformId])
 
   useEffect(() => { void checkAuth() }, [checkAuth])
+
+  useEffect(() => {
+    void flushLocalPracticeRecords(useAppStore.getState().localPracticeRecords)
+  }, [])
 
   useEffect(() => {
     const handleCookieInvalid = () => setCookieInvalid(true)
@@ -166,7 +171,7 @@ function Workspace() {
   const location = useLocation()
   const returnState = location.state as { openPanel?: string } | null
   const [panel, setPanel] = useState<'problem' | 'editor' | 'chat'>(() => {
-    if (returnState?.openPanel === 'chat') return 'chat'
+    if (returnState?.openPanel === 'problem' || returnState?.openPanel === 'editor' || returnState?.openPanel === 'chat') return returnState.openPanel
     try {
       const saved = window.sessionStorage.getItem(PANEL_KEY)
       if (saved === 'problem' || saved === 'editor' || saved === 'chat') return saved

@@ -68,6 +68,22 @@ it('restores the last mobile workspace panel after returning from settings', asy
   sessionStorage.clear()
 })
 
+it('honors an explicit problem panel even when another panel was saved', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  sessionStorage.setItem('algocoach.workspacePanel', 'chat')
+  vi.spyOn(axios, 'get').mockResolvedValue({ data: { authenticated: false } })
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+  await act(async () => {
+    root.render(<MemoryRouter initialEntries={[{ pathname: '/workspace', state: { openPanel: 'problem' } }]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><AppShell /></MemoryRouter>)
+  })
+  expect(element.querySelector('nav[aria-label="工作区面板"] button[aria-pressed="true"]')?.textContent).toBe('题目')
+  act(() => root.unmount())
+  element.remove()
+  sessionStorage.clear()
+})
+
 it('keeps the coach mounted while switching mobile workspace panels', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   sessionStorage.setItem('algocoach.workspacePanel', 'chat')

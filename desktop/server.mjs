@@ -25,6 +25,11 @@ const MIME_TYPES = {
 export function startDesktopServer({ port = 0, distRoot = FRONTEND_DIST, gatewayBaseUrl = process.env.ALGOCOACH_GATEWAY_URL ?? 'http://127.0.0.1:8080' } = {}) {
   const gateway = new URL(gatewayBaseUrl)
   const server = http.createServer((request, response) => {
+    if (!isAllowedRequest(request, server.address())) {
+      response.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
+      response.end('请求来源不被允许')
+      return
+    }
     if (request.url?.startsWith('/api') || request.url?.startsWith('/animations')) {
       proxyRequest(request, response, gateway)
       return
@@ -49,8 +54,29 @@ export function startDesktopServer({ port = 0, distRoot = FRONTEND_DIST, gateway
   })
 }
 
+
+// The server has a stable loopback origin for persistent browser storage. Do
+// not let a remote page or a DNS-rebinding hostname use it as an API proxy.
+function isAllowedRequest(request, address) {
+  if (!address || typeof address === 'string') return false
+  const authority = `127.0.0.1:${address.port}`
+  if (request.headers.host !== authority) return false
+  const origin = request.headers.origin
+  if (origin && origin !== `http://${authority}`) return false
+  if (request.headers['sec-fetch-site'] === 'cross-site') return false
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method ?? '') && !origin) return false
+  return true
+}
+
 function serveFile(request, response, distRoot) {
-  const pathname = decodeURIComponent(new URL(request.url ?? '/', 'http://desktop.local').pathname)
+  let pathname
+  try {
+    pathname = decodeURIComponent(new URL(request.url ?? '/', 'http://desktop.local').pathname)
+  } catch {
+    response.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' })
+    response.end('无效的资源路径')
+    return
+  }
   const relative = pathname === '/' ? 'index.html' : pathname.slice(1)
   const candidate = normalize(join(distRoot, relative))
   const safeRoot = `${normalize(distRoot)}${sep}`
@@ -71,9 +97,13 @@ function serveFile(request, response, distRoot) {
 function proxyRequest(request, response, gateway) {
   const target = new URL(request.url ?? '/', gateway)
   const transport = target.protocol === 'https:' ? https : http
+  // Origin was already validated against the desktop server. The gateway is
+  // a separate loopback origin and must not treat this internal hop as CORS.
+  const headers = { ...request.headers, host: target.host }
+  delete headers.origin
   const upstream = transport.request(target, {
     method: request.method,
-    headers: { ...request.headers, host: target.host },
+    headers,
   }, result => {
     response.writeHead(result.statusCode ?? 502, result.headers)
     result.pipe(response)
