@@ -1,7 +1,7 @@
 /** DeepTutor-inspired capability names used as request context. */
 export type DeepTutorCapability = 'chat' | 'deep_solve' | 'practice' | 'mastery_path' | 'review'
 
-/** The current desktop MVP has one local workspace. */
+/** Local workspace identities used by the desktop MVP; no account is required. */
 export const LOCAL_WORKSPACE_ID = 'local-default'
 const WORKSPACE_ID_KEY = 'algocoach.workspaceId'
 const WORKSPACES_KEY = 'algocoach.workspaces'

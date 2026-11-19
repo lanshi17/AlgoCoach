@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid'
-import { workspaceStorageKey } from './deepTutorCapabilities'
+import { getWorkspaceId, workspaceStorageKey } from './deepTutorCapabilities'
 
 const LOCAL_PROGRESS_KEY = workspaceStorageKey('algocoach.localPracticeRecords')
 
@@ -74,7 +74,7 @@ export async function flushLocalPracticeRecords(records: LocalPracticeRecord[]):
     try {
       const response = await window.fetch('/api/agent/memory/record', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ problem_id: record.problemId.split(':').slice(1).join(':') || record.problemId, platform: 'LOCAL', status: record.outcome === 'SAMPLE_PASSED' ? 'LOCAL_ACCEPTED' : record.outcome === 'SAMPLE_FAILED' ? 'LOCAL_FAILED' : 'LOCAL_PRACTICE', lang: record.outcome === 'SAMPLE_PASSED' || record.outcome === 'SAMPLE_FAILED' ? 'python3' : 'unknown', duration_sec: record.durationSec, topics: record.topics, client_id: record.id }),
+        body: JSON.stringify({ problem_id: record.problemId.split(':').slice(1).join(':') || record.problemId, platform: 'LOCAL', status: record.outcome === 'SAMPLE_PASSED' ? 'LOCAL_ACCEPTED' : record.outcome === 'SAMPLE_FAILED' ? 'LOCAL_FAILED' : 'LOCAL_PRACTICE', lang: record.outcome === 'SAMPLE_PASSED' || record.outcome === 'SAMPLE_FAILED' ? 'python3' : 'unknown', duration_sec: record.durationSec, topics: record.topics, client_id: record.id, workspaceId: getWorkspaceId() }),
       })
       if (!response.ok) throw new Error(`Agent sync failed: ${response.status}`)
     } catch { remaining.push(record) }

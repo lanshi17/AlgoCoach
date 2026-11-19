@@ -32,6 +32,7 @@ import logging
 import os
 import re
 from contextvars import ContextVar
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -91,7 +92,11 @@ from app.config import (
 )
 from app.memory.embedding import create_local_embedding_model
 from app.memory import knowledge_base
-from app.memory.memory_service import memory
+from app.memory.memory_service import (
+    DEFAULT_WORKSPACE_ID,
+    memory,
+    normalize_workspace_id,
+)
 from app.memory.vector_store import (
     VectorStoreError,
     VectorStoreUnavailable,
@@ -310,6 +315,9 @@ _active_problem_id: ContextVar[str | None] = ContextVar(
 _active_platform: ContextVar[str | None] = ContextVar(
     "algocoach_active_platform", default=None
 )
+_active_workspace_id: ContextVar[str] = ContextVar(
+    "algocoach_active_workspace_id", default=DEFAULT_WORKSPACE_ID
+)
 _animation_sink: ContextVar[dict | None] = ContextVar(
     "algocoach_animation_sink", default=None
 )
@@ -319,12 +327,25 @@ _animations_allowed: ContextVar[bool] = ContextVar(
 )
 
 
+async def _workspace_context_snapshot(workspace_id: str) -> dict:
+    """Read domain memory with a compatibility seam for older test doubles."""
+    try:
+        return await memory.build_context_snapshot(workspace_id=workspace_id)
+    except TypeError as exc:
+        # A few integrations supplied a zero-argument memory double before
+        # workspace scoping existed. Keep that seam working without masking a
+        # genuine TypeError raised from inside the memory implementation.
+        if "workspace_id" not in str(exc):
+            raise
+        return await memory.build_context_snapshot()
+
+
 class AlgoCoach:
     """Single-process AgentScope runtime for the coach's ``POST /chat/stream`` route.
 
-    One ReMe middleware (and therefore one embedded ReMe app) is shared by all
-    sessions; each stable ``session_id`` gets its own Agent/AgentState so
-    conversation history and ReMe write-back remain scoped correctly.
+    Each workspace gets its own ReMe middleware and on-disk directory. Within
+    a workspace, stable ``session_id`` values still give each conversation its
+    own Agent/AgentState while the middleware handles long-term write-back.
     """
 
     def __init__(
@@ -339,12 +360,15 @@ class AlgoCoach:
         # and FOCUS requests independent from credentials/network.
         self._chat_model = chat_model
         self._memory = reme_middleware
+        self._memories: dict[str, ReMeMiddleware] = {}
+        if reme_middleware is not None:
+            self._memories[DEFAULT_WORKSPACE_ID] = reme_middleware
         self._embedding_model = embedding_model
         # Injected middleware doubles keep their own lifecycle in tests. The
         # production middleware is created lazily and needs one deterministic
         # ReMe index rebuild before its first search can see seeded documents.
         self._managed_memory = reme_middleware is None
-        self._reme_index_ready = False
+        self._reme_index_ready: set[str] = set()
         self._agents: dict[str, Agent] = {}
         self._locks: dict[str, asyncio.Lock] = {}
         self._init_lock = asyncio.Lock()
@@ -354,30 +378,40 @@ class AlgoCoach:
 
     # ── Agent / middleware lifecycle ──────────────────────────
 
-    async def _get_agent(self, session_id: str, provider: dict[str, Any] | None = None) -> Agent:
-        """Return the per-session Agent, building the shared runtime once."""
+    async def _get_agent(
+        self,
+        session_id: str,
+        provider: dict[str, Any] | None = None,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
+    ) -> Agent:
+        """Return the per-session Agent in its workspace-scoped runtime."""
+        workspace_id = normalize_workspace_id(workspace_id)
         async with self._init_lock:
             fingerprint = self._fingerprint_provider(provider)
-            if self._provider_fingerprint not in (None, fingerprint) and self._memory is not None:
-                middleware = self._memory
+            if self._provider_fingerprint not in (None, fingerprint) and self._memories:
+                memories = list({id(item): item for item in self._memories.values()}.values())
+                self._memories.clear()
                 self._memory = None
                 self._chat_model = None
                 self._agents.clear()
                 self._locks.clear()
-                await middleware.close()
+                self._reme_index_ready.clear()
+                for old_memory in memories:
+                    await old_memory.close()
             existing = self._agents.get(session_id)
             if existing is not None:
-                await self._ensure_reme_index()
+                await self._ensure_reme_index(workspace_id)
                 return existing
 
             if self._chat_model is None:
                 self._chat_model = self._build_chat_model(provider)
             self._provider_fingerprint = fingerprint
-            if self._memory is None:
+            workspace_memory = self._memories.get(workspace_id)
+            if workspace_memory is None:
                 if self._embedding_model is None and reme_vector_enabled():
                     self._embedding_model = create_local_embedding_model()
-                self._memory = ReMeMiddleware(
-                    workspace_dir=reme_workspace_dir(),
+                workspace_memory = ReMeMiddleware(
+                    workspace_dir=self._reme_workspace_for(workspace_id),
                     parameters=ReMeMiddleware.Parameters(
                         chat_model=self._chat_model,
                         embedding_model=self._embedding_model,
@@ -385,13 +419,15 @@ class AlgoCoach:
                         top_k=REME_TOP_K,
                     ),
                 )
+                self._memories[workspace_id] = workspace_memory
+            self._memory = workspace_memory
 
-            await self._ensure_reme_index()
+            await self._ensure_reme_index(workspace_id)
 
             # ReMe's write path is automatic; "both" also exposes the optional
             # memory_search tool, which must be registered explicitly.
             tools: list[Any] = self._build_tools()
-            tools.extend(await self._memory.list_tools())
+            tools.extend(await workspace_memory.list_tools())
 
             agent = Agent(
                 name="AlgoCoach",
@@ -400,14 +436,24 @@ class AlgoCoach:
                 ),
                 model=self._chat_model,
                 toolkit=Toolkit(tools=tools),
-                middlewares=[self._memory],
+                middlewares=[workspace_memory],
                 state=AgentState(session_id=session_id),
             )
             self._agents[session_id] = agent
             self._locks[session_id] = asyncio.Lock()
             return agent
 
-    async def _ensure_reme_index(self) -> None:
+    @staticmethod
+    def _reme_workspace_for(workspace_id: str) -> str:
+        """Map a user workspace to a safe, deterministic ReMe directory."""
+        workspace = normalize_workspace_id(workspace_id)
+        root = Path(reme_workspace_dir())
+        if workspace == DEFAULT_WORKSPACE_ID:
+            return str(root)
+        digest = hashlib.sha256(workspace.encode("utf-8")).hexdigest()[:24]
+        return str(root / "workspaces" / digest)
+
+    async def _ensure_reme_index(self, workspace_id: str = DEFAULT_WORKSPACE_ID) -> None:
         """Index the current ReMe workspace before the first retrieval.
 
         AgentScope's ReMeMiddleware exposes automatic search/write-back but no
@@ -417,14 +463,16 @@ class AlgoCoach:
         watcher. The operation rebuilds derived indexes only and never edits
         ReMe Markdown source files.
         """
-        if not self._managed_memory or self._reme_index_ready or self._memory is None:
+        workspace = normalize_workspace_id(workspace_id)
+        middleware = self._memories.get(workspace)
+        if not self._managed_memory or workspace in self._reme_index_ready or middleware is None:
             return
         try:
-            await self._memory._ensure_started()
-            result = await self._memory._run_job("reindex")
+            await middleware._ensure_started()
+            result = await middleware._run_job("reindex")
             if getattr(result, "success", False):
-                self._reme_index_ready = True
-                logger.info("ReMe memory index is ready for the current workspace")
+                self._reme_index_ready.add(workspace)
+                logger.info("ReMe memory index is ready for workspace %s", workspace)
             else:
                 logger.warning("ReMe index warm-up did not complete: %s", getattr(result, "answer", "unknown error"))
         except Exception:  # noqa: BLE001 - memory indexing must not block coaching
@@ -437,14 +485,15 @@ class AlgoCoach:
         lifespan calls this explicitly on shutdown.
         """
         async with self._init_lock:
-            middleware = self._memory
+            memories = list({id(item): item for item in self._memories.values()}.values())
             self._memory = None
+            self._memories.clear()
             self._agents.clear()
             self._locks.clear()
             self._provider_fingerprint = None
-            self._reme_index_ready = False
-        if middleware is not None:
-            await middleware.close()
+            self._reme_index_ready.clear()
+        for old_memory in memories:
+            await old_memory.close()
 
     # ── Model / tool wiring ──────────────────────────────────
 
@@ -627,6 +676,7 @@ class AlgoCoach:
         ordinary turns keep the default message and Soul; the explicit FOCUS
         silence and no-problem greeting guard above still take precedence.
         """
+        workspace_id = normalize_workspace_id(workspace_id)
         # In FOCUS mode the agent must stay silent: no model, memory or tools.
         # This check stays first even when a training context is supplied.
         if mode == "FOCUS":
@@ -655,14 +705,14 @@ class AlgoCoach:
             f"{training_context}\n{message}" if training_context else message
         )
 
-        agent = await self._get_agent(session_id, provider)
+        agent = await self._get_agent(session_id, provider, workspace_id)
         lock = self._locks[session_id]
 
         async with lock:
             # The domain memory snapshot (weak topics, recent problems,
             # mistakes) still personalises the Soul. ReMe handles conversational
             # long-term memory through the middleware hooks.
-            ctx = await memory.build_context_snapshot()
+            ctx = await _workspace_context_snapshot(workspace_id)
             # AgentScope keeps the constructor prompt on the private attr and
             # has no public setter; update it in place so every turn gets the
             # current domain-memory snapshot and training context.
@@ -694,6 +744,7 @@ class AlgoCoach:
             allowed_token = _animations_allowed.set(animations)
             problem_token = _active_problem_id.set(problem_id)
             platform_token = _active_platform.set(platform)
+            workspace_token = _active_workspace_id.set(workspace_id)
             try:
                 reply = await agent.reply(
                     UserMsg(name="user", content=user_content)
@@ -701,6 +752,7 @@ class AlgoCoach:
             finally:
                 _active_problem_id.reset(problem_token)
                 _active_platform.reset(platform_token)
+                _active_workspace_id.reset(workspace_token)
                 _animations_allowed.reset(allowed_token)
                 _animation_sink.reset(animation_token)
 
@@ -733,6 +785,7 @@ class AlgoCoach:
         means the streaming endpoint is only a transport/UI change; the
         coaching conversation remains one continuous session.
         """
+        workspace_id = normalize_workspace_id(workspace_id)
         if mode == "FOCUS":
             yield {"type": "done", "content": "", "animation_id": None}
             return
@@ -762,11 +815,11 @@ class AlgoCoach:
         training_context = build_training_context(phase, time_remaining_sec) \
             if resolved_goal is UserGoal.CONTEST else ""
         user_content = f"{training_context}\n{message}" if training_context else message
-        agent = await self._get_agent(session_id, provider)
+        agent = await self._get_agent(session_id, provider, workspace_id)
         lock = self._locks[session_id]
 
         async with lock:
-            ctx = await memory.build_context_snapshot()
+            ctx = await _workspace_context_snapshot(workspace_id)
             agent._system_prompt = get_system_prompt(
                 resolved_goal,
                 training_phase=phase,
@@ -794,6 +847,7 @@ class AlgoCoach:
             allowed_token = _animations_allowed.set(animations)
             problem_token = _active_problem_id.set(problem_id)
             platform_token = _active_platform.set(platform)
+            workspace_token = _active_workspace_id.set(workspace_id)
             streamed_text = ""
             final_message: Msg | None = None
             try:
@@ -817,6 +871,7 @@ class AlgoCoach:
             finally:
                 _active_problem_id.reset(problem_token)
                 _active_platform.reset(platform_token)
+                _active_workspace_id.reset(workspace_token)
                 _animations_allowed.reset(allowed_token)
                 _animation_sink.reset(animation_token)
 
@@ -837,7 +892,10 @@ class AlgoCoach:
     async def _execute_tool(self, name: str, inputs: dict, problem_id: str | None) -> object:
         if name == "get_weakness_topics":
             threshold = inputs.get("threshold", 0.6)
-            return await memory.weak_topics(threshold=threshold)
+            return await memory.weak_topics(
+                threshold=threshold,
+                workspace_id=_active_workspace_id.get(),
+            )
 
         if name == "request_animation":
             if not _animations_allowed.get():
@@ -866,11 +924,13 @@ class AlgoCoach:
                 duration_sec=0,
                 topics=[],
                 sticking_points=inputs.get("sticking_points", []),
+                workspace_id=_active_workspace_id.get(),
             )
             if inputs.get("pattern_key"):
                 await memory.upsert_pattern(
                     inputs["pattern_key"],
                     inputs.get("pattern_description", ""),
+                    workspace_id=_active_workspace_id.get(),
                 )
             await self._index_errors_best_effort(
                 pid, inputs.get("sticking_points") or []
@@ -912,6 +972,7 @@ class AlgoCoach:
                 limit=limit,
                 topic=inputs.get("topic"),
                 exclude_problem_id=problem_id,
+                workspace_id=_active_workspace_id.get(),
             )
 
         return {"error": f"unknown tool: {name}"}
@@ -946,6 +1007,12 @@ class AlgoCoach:
 
     async def _similar_problems(self, inputs: dict) -> dict:
         """Query local vector memory, bounded by ``MAX_SIMILAR_RESULTS``."""
+        workspace = _active_workspace_id.get()
+        if workspace != DEFAULT_WORKSPACE_ID:
+            return {
+                "ok": False,
+                "error": "当前 workspace 的向量索引尚未独立，已跳过共享索引查询",
+            }
         problem_id = str(inputs.get("problem_id") or "").strip()
         query = str(inputs.get("query") or "").strip()
         top_k = _tool_top_k(inputs.get("top_k"))
@@ -976,6 +1043,9 @@ class AlgoCoach:
 
     async def _index_problem_best_effort(self, problem: dict) -> None:
         """Index a fetched problem; vector-memory failures never fail the chat."""
+        if _active_workspace_id.get() != DEFAULT_WORKSPACE_ID:
+            logger.info("Problem indexing skipped for non-default workspace")
+            return
         try:
             await vector_store.index_problem(
                 problem_id=problem["problem_id"],
@@ -996,6 +1066,9 @@ class AlgoCoach:
         self, problem_id: str, sticking_points: list
     ) -> None:
         """Index the user's sticking points for later error-pattern search."""
+        if _active_workspace_id.get() != DEFAULT_WORKSPACE_ID:
+            logger.info("Error indexing skipped for non-default workspace")
+            return
         points = [point for point in sticking_points if str(point).strip()]
         if not points:
             return

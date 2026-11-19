@@ -6,7 +6,7 @@ The schema is defined entirely by the current SQLAlchemy models. Startup uses
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Float, Integer, Text, Boolean, UniqueConstraint
+from sqlalchemy import String, Float, Integer, Text, Boolean, UniqueConstraint, inspect, text
 from datetime import datetime, timezone
 
 def _utcnow() -> datetime:
@@ -15,6 +15,7 @@ def _utcnow() -> datetime:
 
 
 DB_PATH = os.getenv("DB_PATH", "../../data/agent.db")
+DEFAULT_WORKSPACE_ID = "local-default"
 engine = create_async_engine(f"sqlite+aiosqlite:///{DB_PATH}", echo=False)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
@@ -28,6 +29,10 @@ class EpisodicRecord(Base):
     __tablename__ = "episodic"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    workspace_id: Mapped[str] = mapped_column(
+        String(128), index=True, default=DEFAULT_WORKSPACE_ID,
+        server_default=DEFAULT_WORKSPACE_ID,
+    )
     problem_id: Mapped[str] = mapped_column(String(64), index=True)
     platform: Mapped[str] = mapped_column(String(16))
     status: Mapped[str] = mapped_column(String(32))          # ACCEPTED / WRONG_ANSWER …
@@ -43,6 +48,10 @@ class MemoryRecordReceipt(Base):
     __tablename__ = "memory_record_receipts"
 
     client_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(
+        String(128), index=True, default=DEFAULT_WORKSPACE_ID,
+        server_default=DEFAULT_WORKSPACE_ID,
+    )
     created_at: Mapped[str] = mapped_column(String(32), default=lambda: _utcnow().isoformat())
 
 
@@ -51,6 +60,10 @@ class SemanticNode(Base):
     __tablename__ = "semantic"
 
     topic: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(
+        String(128), index=True, default=DEFAULT_WORKSPACE_ID,
+        server_default=DEFAULT_WORKSPACE_ID,
+    )
     mastery: Mapped[float] = mapped_column(Float(), default=0.5)   # 0–1
     attempts: Mapped[int] = mapped_column(Integer(), default=0)
     last_seen: Mapped[str] = mapped_column(String(32), default="")
@@ -63,6 +76,10 @@ class ProceduralPattern(Base):
     __tablename__ = "procedural"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    workspace_id: Mapped[str] = mapped_column(
+        String(128), index=True, default=DEFAULT_WORKSPACE_ID,
+        server_default=DEFAULT_WORKSPACE_ID,
+    )
     pattern_key: Mapped[str] = mapped_column(String(128), unique=True)
     description: Mapped[str] = mapped_column(Text())
     frequency: Mapped[int] = mapped_column(Integer(), default=1)
@@ -80,6 +97,10 @@ class Notification(Base):
     __tablename__ = "notifications"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    workspace_id: Mapped[str] = mapped_column(
+        String(128), index=True, default=DEFAULT_WORKSPACE_ID,
+        server_default=DEFAULT_WORKSPACE_ID,
+    )
     type: Mapped[str] = mapped_column(String(32), index=True)
     content: Mapped[str] = mapped_column(Text())
     created_at: Mapped[str] = mapped_column(
@@ -102,6 +123,10 @@ class ReviewSchedule(Base):
     __tablename__ = "review_schedule"
 
     problem_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(
+        String(128), index=True, default=DEFAULT_WORKSPACE_ID,
+        server_default=DEFAULT_WORKSPACE_ID,
+    )
     due_at: Mapped[str] = mapped_column(String(32), index=True)
     interval_days: Mapped[int] = mapped_column(Integer(), default=1)
     mastery: Mapped[float] = mapped_column(Float(), default=0.5)
@@ -125,6 +150,10 @@ class EpisodicArchive(Base):
     __tablename__ = "episodic_archive"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
+    workspace_id: Mapped[str] = mapped_column(
+        String(128), index=True, default=DEFAULT_WORKSPACE_ID,
+        server_default=DEFAULT_WORKSPACE_ID,
+    )
     problem_id: Mapped[str] = mapped_column(String(64), index=True)
     platform: Mapped[str] = mapped_column(String(16))
     status: Mapped[str] = mapped_column(String(32))
@@ -154,6 +183,10 @@ class RecommendationLog(Base):
     __tablename__ = "recommendation_log"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    workspace_id: Mapped[str] = mapped_column(
+        String(128), index=True, default=DEFAULT_WORKSPACE_ID,
+        server_default=DEFAULT_WORKSPACE_ID,
+    )
     strategy: Mapped[str] = mapped_column(String(32), index=True)
     topic: Mapped[str] = mapped_column(String(64), index=True)
     problem_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -202,6 +235,32 @@ class AgentTurnEvent(Base):
 
 
 async def init_db():
-    """Create the current database schema if it does not exist."""
+    """Create the current schema and add workspace columns to old databases.
+
+    ``create_all`` deliberately does not alter existing SQLite tables. The
+    workspace rollout therefore adds the nullable-at-the-SQLite-layer columns
+    with a local-default value in place, keeping existing single-workspace
+    data readable without requiring a destructive migration. Services encode
+    scoped natural keys for non-default workspaces because the original
+    schema's primary/unique constraints are retained by SQLite.
+    """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        table_names = await conn.run_sync(
+            lambda sync_conn: set(inspect(sync_conn).get_table_names())
+        )
+        for table_name, table in Base.metadata.tables.items():
+            if table_name not in table_names or "workspace_id" not in table.c:
+                continue
+            columns = await conn.run_sync(
+                lambda sync_conn, name=table_name: {
+                    column["name"]
+                    for column in inspect(sync_conn).get_columns(name)
+                }
+            )
+            if "workspace_id" not in columns:
+                await conn.execute(text(
+                    f'ALTER TABLE "{table_name}" ADD COLUMN '
+                    'workspace_id VARCHAR(128) NOT NULL '
+                    "DEFAULT 'local-default'"
+                ))

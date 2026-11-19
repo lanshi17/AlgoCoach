@@ -10,6 +10,7 @@ matching the pre-existing ``episodic.created_at`` format; the scheduler's
 timezone only affects *when* jobs fire, never the stored timestamps.
 """
 import json
+import hashlib
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
@@ -19,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.memory.db import (
+    DEFAULT_WORKSPACE_ID,
     EpisodicArchive,
     EpisodicRecord,
     AgentTurn,
@@ -42,6 +44,43 @@ MAX_REVIEW_PUSHES_PER_DAY = 3
 MIN_REVIEW_PUSH_INTERVAL_DAYS = 2
 # Episodes older than this are copied to episodic_archive and removed.
 ARCHIVE_AFTER_DAYS = 90
+_WORKSPACE_KEY_SEPARATOR = "\x1f"
+
+
+def normalize_workspace_id(value: str | None) -> str:
+    """Return the stable local workspace namespace used by memory queries."""
+    workspace = str(value or DEFAULT_WORKSPACE_ID).strip()
+    return workspace[:128] or DEFAULT_WORKSPACE_ID
+
+
+def _storage_key(value: str, workspace_id: str) -> str:
+    """Keep legacy natural-key constraints safe across workspaces.
+
+    The first schema used ``topic``, ``problem_id`` and a few idempotency
+    values as global primary/unique keys. SQLite cannot widen those existing
+    constraints with ``create_all``. Prefixing only non-default workspaces
+    preserves old rows and lets every workspace use the same natural name.
+    """
+    value = str(value or "").strip()
+    workspace = normalize_workspace_id(workspace_id)
+    if workspace == DEFAULT_WORKSPACE_ID:
+        return value
+    return f"{workspace}{_WORKSPACE_KEY_SEPARATOR}{value}"
+
+
+def _logical_key(value: str, workspace_id: str) -> str:
+    prefix = f"{normalize_workspace_id(workspace_id)}{_WORKSPACE_KEY_SEPARATOR}"
+    return str(value or "").removeprefix(prefix)
+
+
+def _reme_workspace_path(workspace_id: str) -> Path:
+    """Resolve the same ReMe directory layout used by ``AlgoCoach``."""
+    root = Path(reme_workspace_dir())
+    workspace = normalize_workspace_id(workspace_id)
+    if workspace == DEFAULT_WORKSPACE_ID:
+        return root
+    digest = hashlib.sha256(workspace.encode("utf-8")).hexdigest()[:24]
+    return root / "workspaces" / digest
 
 
 def utcnow() -> datetime:
@@ -130,8 +169,9 @@ def _weakest_snapshot(
 
 
 class MemoryService:
-    async def export_archive(self) -> bytes:
-        """Create a local-only export of structured memories and local indexes."""
+    async def export_archive(self, workspace_id: str | None = None) -> bytes:
+        """Create a local-only export, optionally scoped to one workspace."""
+        workspace = normalize_workspace_id(workspace_id) if workspace_id else None
         models = {
             "episodic": EpisodicRecord,
             "episodic_archive": EpisodicArchive,
@@ -147,16 +187,49 @@ class MemoryService:
         tables: dict[str, list[dict]] = {}
         async with SessionLocal() as session:
             for name, model in models.items():
-                result = await session.execute(select(model))
-                tables[name] = [
-                    {column.key: getattr(row, column.key) for column in model.__table__.columns}
-                    for row in result.scalars()
-                ]
+                statement = select(model)
+                if workspace is not None and hasattr(model, "workspace_id"):
+                    statement = statement.where(model.workspace_id == workspace)
+                elif workspace is not None and model is AgentTurnEvent:
+                    turn_ids = select(AgentTurn.turn_id).where(
+                        AgentTurn.workspace_id == workspace
+                    )
+                    statement = statement.where(AgentTurnEvent.turn_id.in_(turn_ids))
+                result = await session.execute(statement)
+                exported_rows: list[dict] = []
+                for row in result.scalars():
+                    payload = {
+                        column.key: getattr(row, column.key)
+                        for column in model.__table__.columns
+                    }
+                    if workspace is not None:
+                        key_field = {
+                            "semantic": "topic",
+                            "memory_record_receipts": "client_id",
+                            "procedural": "pattern_key",
+                            "notifications": "dedupe_key",
+                            "review_schedule": "problem_id",
+                        }.get(name)
+                        if key_field and payload.get(key_field):
+                            payload[key_field] = _logical_key(
+                                payload[key_field], workspace
+                            )
+                    exported_rows.append(payload)
+                tables[name] = exported_rows
 
         chroma_root = Path(chroma_path())
-        vector_records = await vector_store.export_all() if chroma_root.is_dir() else {}
+        # Chroma's legacy collections are process-wide until their own
+        # workspace migration lands. Never include them in a non-default
+        # workspace export, which is safer than leaking another workspace's
+        # indexed problem statements.
+        vector_records = (
+            await vector_store.export_all()
+            if workspace in (None, DEFAULT_WORKSPACE_ID) and chroma_root.is_dir()
+            else {}
+        )
         snapshot = {
             "format": "algocoach-memory-v1",
+            "workspace_id": workspace,
             "exported_at": datetime.now(timezone.utc).isoformat(),
             "tables": tables,
             "vectors": vector_records,
@@ -168,10 +241,15 @@ class MemoryService:
                 "memory.json",
                 json.dumps(snapshot, ensure_ascii=False, indent=2, default=str),
             )
-            for label, configured_path in (
-                ("reme", reme_workspace_dir()),
-                ("chroma", str(chroma_root)),
-            ):
+            reme_root = (
+                Path(reme_workspace_dir())
+                if workspace is None
+                else _reme_workspace_path(workspace)
+            )
+            file_roots = [("reme", str(reme_root))]
+            if workspace in (None, DEFAULT_WORKSPACE_ID):
+                file_roots.append(("chroma", str(chroma_root)))
+            for label, configured_path in file_roots:
                 root = Path(configured_path)
                 if not root.exists() or not root.is_dir():
                     continue
@@ -196,13 +274,20 @@ class MemoryService:
         topics: list[str],
         sticking_points: list[str],
         client_id: str | None = None,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
     ) -> bool:
+        workspace = normalize_workspace_id(workspace_id)
         async with SessionLocal() as s:
-            if client_id and await s.get(MemoryRecordReceipt, client_id) is not None:
+            receipt_key = _storage_key(client_id, workspace) if client_id else None
+            if receipt_key and await s.get(MemoryRecordReceipt, receipt_key) is not None:
                 return False
-            if client_id:
-                s.add(MemoryRecordReceipt(client_id=client_id))
+            if receipt_key:
+                s.add(MemoryRecordReceipt(
+                    client_id=receipt_key,
+                    workspace_id=workspace,
+                ))
             rec = EpisodicRecord(
+                workspace_id=workspace,
                 problem_id=problem_id,
                 platform=platform,
                 status=status,
@@ -222,21 +307,25 @@ class MemoryService:
         # run result they must not be interpreted as a pass or a failure.
         if platform.upper() == "LOCAL" and status.upper() == "LOCAL_PRACTICE":
             for topic in topics:
-                await self._ensure_topic(topic)
+                await self._ensure_topic(topic, workspace)
         else:
             for topic in topics:
                 accepted = status in {"ACCEPTED", "LOCAL_ACCEPTED"}
-                await self._update_mastery(topic, accepted)
+                await self._update_mastery(topic, accepted, workspace)
 
         # Keep the durable review queue in sync with fresh evidence.
         if _episode_is_due_material(rec):
-            await self._refresh_review_schedule(problem_id)
+            await self._refresh_review_schedule(problem_id, workspace)
         return True
 
-    async def recent_problems(self, limit: int = 20) -> list[dict]:
+    async def recent_problems(
+        self, limit: int = 20, workspace_id: str = DEFAULT_WORKSPACE_ID
+    ) -> list[dict]:
+        workspace = normalize_workspace_id(workspace_id)
         async with SessionLocal() as s:
             rows = await s.execute(
                 select(EpisodicRecord)
+                .where(EpisodicRecord.workspace_id == workspace)
                 .order_by(EpisodicRecord.id.desc())
                 .limit(limit)
             )
@@ -254,54 +343,81 @@ class MemoryService:
 
     # ── Semantic ──────────────────────────────────────────────
 
-    async def _ensure_topic(self, topic: str) -> None:
+    async def _ensure_topic(
+        self, topic: str, workspace_id: str = DEFAULT_WORKSPACE_ID
+    ) -> None:
         """Expose a locally practised topic without inventing mastery evidence."""
+        workspace = normalize_workspace_id(workspace_id)
+        key = _storage_key(topic, workspace)
         async with SessionLocal() as s:
-            if await s.get(SemanticNode, topic) is None:
-                s.add(SemanticNode(topic=topic, mastery=0.5, attempts=0, last_seen=""))
+            if await s.get(SemanticNode, key) is None:
+                s.add(SemanticNode(
+                    topic=key, workspace_id=workspace,
+                    mastery=0.5, attempts=0, last_seen="",
+                ))
                 await s.commit()
 
-    async def _update_mastery(self, topic: str, accepted: bool) -> None:
+    async def _update_mastery(
+        self, topic: str, accepted: bool,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
+    ) -> None:
         """ELO-inspired mastery update: +0.05 on accept, -0.08 on fail, clamped 0–1."""
         delta = 0.05 if accepted else -0.08
+        workspace = normalize_workspace_id(workspace_id)
+        key = _storage_key(topic, workspace)
         async with SessionLocal() as s:
-            existing = await s.get(SemanticNode, topic)
+            existing = await s.get(SemanticNode, key)
             if existing:
                 existing.mastery = max(0.0, min(1.0, existing.mastery + delta))
                 existing.attempts += 1
                 existing.last_seen = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             else:
                 s.add(SemanticNode(
-                    topic=topic,
+                    topic=key,
+                    workspace_id=workspace,
                     mastery=max(0.0, 0.5 + delta),
                     attempts=1,
                     last_seen=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 ))
             await s.commit()
 
-    async def weak_topics(self, threshold: float = 0.6, top_n: int = 5) -> list[dict]:
+    async def weak_topics(
+        self, threshold: float = 0.6, top_n: int = 5,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
+    ) -> list[dict]:
         """Return topics below mastery threshold, sorted ascending (weakest first)."""
+        workspace = normalize_workspace_id(workspace_id)
         async with SessionLocal() as s:
             rows = await s.execute(
                 select(SemanticNode)
-                .where(SemanticNode.mastery < threshold)
+                .where(
+                    SemanticNode.workspace_id == workspace,
+                    SemanticNode.mastery < threshold,
+                )
                 .order_by(SemanticNode.mastery)
                 .limit(top_n)
             )
             return [
-                {"topic": r.topic, "mastery": round(r.mastery, 2), "attempts": r.attempts}
+                {"topic": _logical_key(r.topic, workspace), "mastery": round(r.mastery, 2), "attempts": r.attempts}
                 for r in rows.scalars()
             ]
 
-    async def all_topics(self) -> list[dict]:
+    async def all_topics(self, workspace_id: str = DEFAULT_WORKSPACE_ID) -> list[dict]:
+        workspace = normalize_workspace_id(workspace_id)
         async with SessionLocal() as s:
-            rows = await s.execute(select(SemanticNode).order_by(SemanticNode.mastery))
+            rows = await s.execute(
+                select(SemanticNode)
+                .where(SemanticNode.workspace_id == workspace)
+                .order_by(SemanticNode.mastery)
+            )
             return [
-                {"topic": r.topic, "mastery": round(r.mastery, 2), "attempts": r.attempts}
+                {"topic": _logical_key(r.topic, workspace), "mastery": round(r.mastery, 2), "attempts": r.attempts}
                 for r in rows.scalars()
             ]
 
-    async def get_mastery(self, topic: str) -> dict:
+    async def get_mastery(
+        self, topic: str, workspace_id: str = DEFAULT_WORKSPACE_ID
+    ) -> dict:
         """Return one topic's mastery snapshot, defaulting to the project baseline.
 
         A topic that has never been seen has no ``semantic`` row. Existing code
@@ -313,12 +429,13 @@ class MemoryService:
         name = (topic or "").strip()
         if not name:
             return {"topic": "", "mastery": 0.5, "attempts": 0}
+        workspace = normalize_workspace_id(workspace_id)
         async with SessionLocal() as s:
-            node = await s.get(SemanticNode, name)
+            node = await s.get(SemanticNode, _storage_key(name, workspace))
             if node is None:
                 return {"topic": name, "mastery": 0.5, "attempts": 0}
             return {
-                "topic": node.topic,
+                "topic": _logical_key(node.topic, workspace),
                 "mastery": float(node.mastery),
                 "attempts": int(node.attempts),
             }
@@ -331,6 +448,7 @@ class MemoryService:
         content: str,
         dedupe_key: str | None = None,
         now: datetime | None = None,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
     ) -> Notification | None:
         """Persist a notification, returning ``None`` for a duplicate key.
 
@@ -339,13 +457,15 @@ class MemoryService:
         so callers must treat ``None`` as "nothing new happened".
         """
         now = now or utcnow()
+        workspace = normalize_workspace_id(workspace_id)
         async with SessionLocal() as s:
             notification = Notification(
+                workspace_id=workspace,
                 type=type,
                 content=content,
                 created_at=_iso(now),
                 read=False,
-                dedupe_key=dedupe_key,
+                dedupe_key=_storage_key(dedupe_key, workspace) if dedupe_key else None,
             )
             s.add(notification)
             try:
@@ -355,7 +475,9 @@ class MemoryService:
                 return None
             return notification
 
-    async def review_push_count(self, local_date: str) -> int:
+    async def review_push_count(
+        self, local_date: str, workspace_id: str = DEFAULT_WORKSPACE_ID
+    ) -> int:
         """Count review pushes already sent for one scheduling-local date.
 
         The dedupe key starts with ``review:<YYYY-MM-DD>:``, so counting those
@@ -363,18 +485,24 @@ class MemoryService:
         retried or triggered more than once in a day.
         """
         prefix = f"review:{local_date}:"
+        workspace = normalize_workspace_id(workspace_id)
+        stored_prefix = _storage_key(prefix, workspace)
         async with SessionLocal() as s:
             rows = await s.execute(
                 select(Notification.id).where(
+                    Notification.workspace_id == workspace,
                     Notification.type == "review",
-                    Notification.dedupe_key.like(f"{prefix}%"),
+                    Notification.dedupe_key.like(f"{stored_prefix}%"),
                 )
             )
             return len(list(rows.scalars()))
 
     # ── Review schedule ───────────────────────────────────────
 
-    async def seed_review_schedule(self, now: datetime | None = None) -> int:
+    async def seed_review_schedule(
+        self, now: datetime | None = None,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
+    ) -> int:
         """Derive initial due state from pre-existing episodic rows.
 
         The schedule is keyed by problem and seeded from the newest eligible
@@ -385,13 +513,22 @@ class MemoryService:
         overwritten, so this is safe to run on every query/startup.
         """
         now = now or utcnow()
+        workspace = normalize_workspace_id(workspace_id)
         inserted = 0
         async with SessionLocal() as s:
             existing = set(
-                (await s.execute(select(ReviewSchedule.problem_id))).scalars()
+                (await s.execute(
+                    select(ReviewSchedule.problem_id).where(
+                        ReviewSchedule.workspace_id == workspace
+                    )
+                )).scalars()
             )
             episodes = list(
-                (await s.execute(select(EpisodicRecord).order_by(EpisodicRecord.id)))
+                (await s.execute(
+                    select(EpisodicRecord)
+                    .where(EpisodicRecord.workspace_id == workspace)
+                    .order_by(EpisodicRecord.id)
+                ))
                 .scalars()
             )
             latest: dict[str, EpisodicRecord] = {}
@@ -405,15 +542,16 @@ class MemoryService:
                     latest[episode.problem_id] = episode
 
             for problem_id, episode in latest.items():
-                if problem_id in existing:
+                if _storage_key(problem_id, workspace) in existing:
                     continue
                 topics = _json_list(episode.topics)
-                nodes = await self._semantic_nodes(s, topics)
+                nodes = await self._semantic_nodes(s, topics, workspace)
                 mastery, attempts = _weakest_snapshot(topics, nodes)
                 interval = next_review_interval_days(mastery, attempts, 1)
                 created = _parse_iso(episode.created_at) or now
                 s.add(ReviewSchedule(
-                    problem_id=problem_id,
+                    problem_id=_storage_key(problem_id, workspace),
+                    workspace_id=workspace,
                     due_at=_iso(created + timedelta(days=interval)),
                     interval_days=interval,
                     mastery=mastery,
@@ -428,13 +566,20 @@ class MemoryService:
             await s.commit()
         return inserted
 
-    async def _refresh_review_schedule(self, problem_id: str) -> ReviewSchedule | None:
+    async def _refresh_review_schedule(
+        self, problem_id: str,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
+    ) -> ReviewSchedule | None:
         """Upsert the due state for one problem from its newest eligible episode."""
+        workspace = normalize_workspace_id(workspace_id)
         async with SessionLocal() as s:
             episodes = list(
                 (await s.execute(
                     select(EpisodicRecord)
-                    .where(EpisodicRecord.problem_id == problem_id)
+                    .where(
+                        EpisodicRecord.workspace_id == workspace,
+                        EpisodicRecord.problem_id == problem_id,
+                    )
                     .order_by(EpisodicRecord.id.desc())
                 )).scalars()
             )
@@ -447,10 +592,12 @@ class MemoryService:
                 return None
 
             topics = _json_list(latest.topics)
-            nodes = await self._semantic_nodes(s, topics)
+            nodes = await self._semantic_nodes(s, topics, workspace)
             mastery, attempts = _weakest_snapshot(topics, nodes)
 
-            schedule = await s.get(ReviewSchedule, problem_id)
+            schedule = await s.get(
+                ReviewSchedule, _storage_key(problem_id, workspace)
+            )
             base_interval = schedule.interval_days if schedule else 1
             interval = next_review_interval_days(mastery, attempts, base_interval)
             created = _parse_iso(latest.created_at) or utcnow()
@@ -458,7 +605,8 @@ class MemoryService:
 
             if schedule is None:
                 schedule = ReviewSchedule(
-                    problem_id=problem_id,
+                    problem_id=_storage_key(problem_id, workspace),
+                    workspace_id=workspace,
                     due_at=_iso(due),
                     interval_days=interval,
                     mastery=mastery,
@@ -486,6 +634,7 @@ class MemoryService:
         now: datetime | None = None,
         limit: int = MAX_REVIEW_PUSHES_PER_DAY,
         local_date: str | None = None,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
     ) -> list[dict]:
         """Return due problems, weakest mastery first, at most ``limit``.
 
@@ -496,16 +645,20 @@ class MemoryService:
         not stuck at its old priority snapshot.
         """
         now = now or utcnow()
+        workspace = normalize_workspace_id(workspace_id)
         limit = max(0, int(limit))
         if limit == 0:
             return []
 
-        await self.seed_review_schedule(now=now)
+        await self.seed_review_schedule(now=now, workspace_id=workspace)
         async with SessionLocal() as s:
             rows = list(
                 (await s.execute(
                     select(ReviewSchedule)
-                    .where(ReviewSchedule.due_at <= _iso(now))
+                    .where(
+                        ReviewSchedule.workspace_id == workspace,
+                        ReviewSchedule.due_at <= _iso(now),
+                    )
                     .order_by(ReviewSchedule.due_at, ReviewSchedule.problem_id)
                 )).scalars()
             )
@@ -518,7 +671,7 @@ class MemoryService:
                 topics = _json_list(row.topics)
                 parsed_topics[row.problem_id] = topics
                 all_topics.update(topics)
-            nodes = await self._semantic_nodes(s, sorted(all_topics))
+            nodes = await self._semantic_nodes(s, sorted(all_topics), workspace)
 
             today = local_date or now.date().isoformat()
             candidates: list[dict] = []
@@ -531,7 +684,7 @@ class MemoryService:
                 row.mastery = mastery
                 row.attempts = attempts
                 candidates.append({
-                    "problem_id": row.problem_id,
+                    "problem_id": _logical_key(row.problem_id, workspace),
                     "due_at": row.due_at,
                     "interval_days": row.interval_days,
                     "mastery": round(mastery, 4),
@@ -555,6 +708,7 @@ class MemoryService:
         problem_id: str,
         now: datetime | None = None,
         local_date: str | None = None,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
     ) -> str | None:
         """Advance the schedule after a successful notification.
 
@@ -564,8 +718,11 @@ class MemoryService:
         skip label aligned with the dedupe key's scheduling timezone.
         """
         now = now or utcnow()
+        workspace = normalize_workspace_id(workspace_id)
         async with SessionLocal() as s:
-            schedule = await s.get(ReviewSchedule, problem_id)
+            schedule = await s.get(
+                ReviewSchedule, _storage_key(problem_id, workspace)
+            )
             if schedule is None:
                 return None
             interval = max(
@@ -583,24 +740,40 @@ class MemoryService:
             return schedule.due_at
 
     @staticmethod
-    async def _semantic_nodes(session, topics: list[str]) -> dict[str, SemanticNode]:
+    async def _semantic_nodes(
+        session, topics: list[str], workspace_id: str = DEFAULT_WORKSPACE_ID
+    ) -> dict[str, SemanticNode]:
         if not topics:
             return {}
+        workspace = normalize_workspace_id(workspace_id)
+        keys = [_storage_key(topic, workspace) for topic in topics]
         rows = await session.execute(
-            select(SemanticNode).where(SemanticNode.topic.in_(topics))
+            select(SemanticNode).where(
+                SemanticNode.workspace_id == workspace,
+                SemanticNode.topic.in_(keys),
+            )
         )
-        return {node.topic: node for node in rows.scalars()}
+        return {
+            _logical_key(node.topic, workspace): node
+            for node in rows.scalars()
+        }
 
     # ── Weekly report ─────────────────────────────────────────
 
     async def weekly_stats(
-        self, now: datetime | None = None, days: int = 7
+        self, now: datetime | None = None, days: int = 7,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
     ) -> dict:
         """Aggregate the rolling ``days``-day window for the weekly report."""
         now = now or utcnow()
+        workspace = normalize_workspace_id(workspace_id)
         start = now - timedelta(days=days)
         async with SessionLocal() as s:
-            rows = list((await s.execute(select(EpisodicRecord))).scalars())
+            rows = list((await s.execute(
+                select(EpisodicRecord).where(
+                    EpisodicRecord.workspace_id == workspace
+                )
+            )).scalars())
 
         episodes = [
             row for row in rows
@@ -631,29 +804,40 @@ class MemoryService:
                 {"name": name, "count": count}
                 for name, count in topic_counts.most_common(8)
             ],
-            "weak_topics": await self.weak_topics(threshold=0.6, top_n=5),
+            "weak_topics": await self.weak_topics(
+                threshold=0.6, top_n=5, workspace_id=workspace
+            ),
             "sticking_points": [
                 point for point, _ in sticking_counts.most_common(5)
             ],
             "problems": [episode.problem_id for episode in episodes[-20:]],
         }
 
-    async def profile_snapshot(self) -> dict:
+    async def profile_snapshot(
+        self, workspace_id: str = DEFAULT_WORKSPACE_ID
+    ) -> dict:
         """Return bounded persisted facts needed by local progress and topic views."""
+        workspace = normalize_workspace_id(workspace_id)
         async with SessionLocal() as session:
             nodes = list((await session.execute(
-                select(SemanticNode).order_by(SemanticNode.mastery, SemanticNode.topic)
+                select(SemanticNode)
+                .where(SemanticNode.workspace_id == workspace)
+                .order_by(SemanticNode.mastery, SemanticNode.topic)
             )).scalars())
             hot_rows: list[EpisodicRecord] = list((await session.execute(
-                select(EpisodicRecord).order_by(EpisodicRecord.id.desc())
+                select(EpisodicRecord)
+                .where(EpisodicRecord.workspace_id == workspace)
+                .order_by(EpisodicRecord.id.desc())
             )).scalars())
             archive_rows: list[EpisodicArchive] = list((await session.execute(
-                select(EpisodicArchive).order_by(EpisodicArchive.id.desc())
+                select(EpisodicArchive)
+                .where(EpisodicArchive.workspace_id == workspace)
+                .order_by(EpisodicArchive.id.desc())
             )).scalars())
         episodes: list[EpisodicRecord | EpisodicArchive] = [*hot_rows, *archive_rows]
         episodes.sort(key=_episode_sort_key, reverse=True)
 
-        topic_names = {node.topic for node in nodes}
+        topic_names = {_logical_key(node.topic, workspace) for node in nodes}
         co_occurrence: Counter[tuple[str, str]] = Counter()
         for episode in episodes:
             topics = sorted(set(_json_list(episode.topics)) & topic_names)
@@ -663,7 +847,7 @@ class MemoryService:
 
         topic_nodes = [
             {
-                "topic": node.topic,
+                "topic": _logical_key(node.topic, workspace),
                 "mastery": round(float(node.mastery), 2),
                 "attempts": int(node.attempts),
                 "lastSeen": node.last_seen,
@@ -732,6 +916,7 @@ class MemoryService:
         self,
         now: datetime | None = None,
         days: int = ARCHIVE_AFTER_DAYS,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
     ) -> dict:
         """Move episodes older than ``days`` to ``episodic_archive`` atomically.
 
@@ -741,6 +926,7 @@ class MemoryService:
         the hot row; no episode can be lost or duplicated.
         """
         now = now or utcnow()
+        workspace = normalize_workspace_id(workspace_id)
         cutoff_dt = now - timedelta(days=days)
         cutoff = _iso(cutoff_dt)
         copied = 0
@@ -748,7 +934,11 @@ class MemoryService:
         removed = 0
 
         async with SessionLocal() as s:
-            all_rows = list((await s.execute(select(EpisodicRecord))).scalars())
+            all_rows = list((await s.execute(
+                select(EpisodicRecord).where(
+                    EpisodicRecord.workspace_id == workspace
+                )
+            )).scalars())
             # Parse instead of comparing ISO strings so sub-second timestamps
             # around the cutoff are handled consistently.
             old_rows = [
@@ -761,13 +951,18 @@ class MemoryService:
                 # SQLite parameter limits would otherwise bite on large
                 # backlogs (the plan allows up to 10,000 hot episodes).
                 archived_ids = set(
-                    (await s.execute(select(EpisodicArchive.id))).scalars()
+                    (await s.execute(
+                        select(EpisodicArchive.id).where(
+                            EpisodicArchive.workspace_id == workspace
+                        )
+                    )).scalars()
                 )
 
             for row in old_rows:
                 if row.id not in archived_ids:
                     s.add(EpisodicArchive(
                         id=row.id,
+                        workspace_id=workspace,
                         problem_id=row.problem_id,
                         platform=row.platform,
                         status=row.status,
@@ -798,10 +993,18 @@ class MemoryService:
 
     # ── Procedural ────────────────────────────────────────────
 
-    async def upsert_pattern(self, key: str, description: str) -> None:
+    async def upsert_pattern(
+        self, key: str, description: str,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
+    ) -> None:
+        workspace = normalize_workspace_id(workspace_id)
+        storage_key = _storage_key(key, workspace)
         async with SessionLocal() as s:
             result = await s.execute(
-                select(ProceduralPattern).where(ProceduralPattern.pattern_key == key)
+                select(ProceduralPattern).where(
+                    ProceduralPattern.workspace_id == workspace,
+                    ProceduralPattern.pattern_key == storage_key,
+                )
             )
             existing = result.scalar_one_or_none()
             if existing:
@@ -809,36 +1012,48 @@ class MemoryService:
                 existing.last_seen = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             else:
                 s.add(ProceduralPattern(
-                    pattern_key=key,
+                    workspace_id=workspace,
+                    pattern_key=storage_key,
                     description=description,
                     frequency=1,
                     last_seen=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 ))
             await s.commit()
 
-    async def top_patterns(self, top_n: int = 5) -> list[dict]:
+    async def top_patterns(
+        self, top_n: int = 5,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
+    ) -> list[dict]:
+        workspace = normalize_workspace_id(workspace_id)
         async with SessionLocal() as s:
             rows = await s.execute(
                 select(ProceduralPattern)
+                .where(ProceduralPattern.workspace_id == workspace)
                 .order_by(ProceduralPattern.frequency.desc())
                 .limit(top_n)
             )
             return [
-                {"key": r.pattern_key, "description": r.description, "frequency": r.frequency}
+                {"key": _logical_key(r.pattern_key, workspace), "description": r.description, "frequency": r.frequency}
                 for r in rows.scalars()
             ]
 
     # ── Composite context for agent prompt ───────────────────
 
-    async def build_context_snapshot(self) -> dict:
+    async def build_context_snapshot(
+        self, workspace_id: str = DEFAULT_WORKSPACE_ID
+    ) -> dict:
         """
         Called before each agent Claude invocation.
         Returns a compact dict the agent inserts into its system prompt.
         """
         return {
-            "weak_topics": await self.weak_topics(),
-            "recent_problems": await self.recent_problems(limit=5),
-            "common_mistakes": await self.top_patterns(top_n=3),
+            "weak_topics": await self.weak_topics(workspace_id=workspace_id),
+            "recent_problems": await self.recent_problems(
+                limit=5, workspace_id=workspace_id
+            ),
+            "common_mistakes": await self.top_patterns(
+                top_n=3, workspace_id=workspace_id
+            ),
         }
 
 
@@ -851,6 +1066,7 @@ async def notify_user(
     content: str,
     dedupe_key: str | None = None,
     now: datetime | None = None,
+    workspace_id: str = DEFAULT_WORKSPACE_ID,
 ) -> Notification | None:
     """Module-level ``notify_user`` matching the plan's cron skeleton.
 
@@ -858,5 +1074,6 @@ async def notify_user(
     dedupe semantics.
     """
     return await memory.notify_user(
-        type, content, dedupe_key=dedupe_key, now=now
+        type, content, dedupe_key=dedupe_key, now=now,
+        workspace_id=workspace_id,
     )

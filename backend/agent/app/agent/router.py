@@ -19,7 +19,7 @@ from app.config import (
     remotion_codegen_enabled,
     remotion_codegen_token,
 )
-from app.memory.memory_service import memory
+from app.memory.memory_service import memory, normalize_workspace_id
 from app.memory import knowledge_base
 from app.models.schemas import (
     AnimateRequest,
@@ -305,20 +305,29 @@ async def record_memory(req: MemoryRecordRequest):
         topics=req.topics,
         sticking_points=[],
         client_id=req.client_id,
+        workspace_id=req.workspace_id,
     )
     return MemoryRecordResponse()
 
 
 @router.get("/memory/profile")
-async def memory_profile():
+async def memory_profile(request: Request):
     """Expose only local learning aggregates needed by the progress views."""
-    return await memory.profile_snapshot()
+    workspace_id = normalize_workspace_id(
+        request.query_params.get("workspaceId")
+        or request.query_params.get("workspace_id")
+    )
+    return await memory.profile_snapshot(workspace_id=workspace_id)
 
 
 @router.get("/memory/export")
-async def export_memory():
+async def export_memory(request: Request):
     """Download local learning history, vector records, and ReMe/Chroma files."""
-    archive = await memory.export_archive()
+    workspace_id = normalize_workspace_id(
+        request.query_params.get("workspaceId")
+        or request.query_params.get("workspace_id")
+    )
+    archive = await memory.export_archive(workspace_id=workspace_id)
     return Response(
         content=archive,
         media_type="application/zip",

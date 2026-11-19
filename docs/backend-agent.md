@@ -9,7 +9,7 @@
 > - **P2 `agent/self_improve.py` 已实现（人工分析型 MVP）**：新增当前 `recommendation_log` 表、`memory.get_mastery`、推荐日志、固定 7 天回测、月度策略汇总、`suggest_next_problem` tool 与两个 cron job。回测按 `[created_at, evaluation_due_at]` 内的事件从 `mastery_before` 重放 ELO 并保存 `mastery_after`，延迟调度不会读入窗口外练习。评估只做记录与人工可读建议，**不自动修改 Soul、prompt、推荐权重或配置**，也没有正式 UI/通知。
 > - **P3 prompt 集中管理与目标变体 API 已实现**：Soul 原文迁至 `agent/prompts.py`，`get_system_prompt(goal)` 支持 `interview_prep` / `contest` / `casual` 三种变体，无效值直接拒绝；助教式教学原则（先问尝试、解释原因、引导验证、不直接给最终答案或整段成品代码）融入基础 Soul；`coach.chat()` 接收来自设置页的浏览器偏好目标；竞赛阶段显式覆盖该目标。目标保存在当前浏览器，不另建用户配置表。
 > - **contest 训练协议已接入 `/chat/stream`**：`ChatRequest` 新增可选 `trainingPhase`（默认 `auto`，允许 `virtual_contest` / `topic_drill` / `attempt` / `hint` / `review` / `upsolve`，无效值拒绝 `auto`）与 `timeRemainingSec`（可选非负整数）；显式阶段或剩余时间会启用 `contest` 目标与真实 OI/xCPC 训练协议，阶段/剩余时间同时写入 AgentScope 用户消息，ReMe 记忆可见。流式 `done` 事件、FOCUS 静默、非 contest 行为与当前客户端契约一致，未新增训练 SQLite（详见 §3.3）。
-> - **/chat/stream Agent runtime 使用 AgentScope 2.0.11 + 官方 ReMeMiddleware**：`AlgoCoach` 使用 `Agent`/`AgentState` 替代手写 Claude tool loop 与 `_sessions`；ReMe 进程内单实例，`mode="both"` 自动召回/写回；短期 AgentState 按 workspace、页面会话与题目隔离，ReMe workspace 跨会话检索，应用关闭时 `await coach.close()`。FOCUS 仍完全静默。工具 schema 保持稳定；请求新增可选 `workspaceId`、`capability`、`conversationId`、`turnId` 与 `afterSequence`，turn 事件写入本地 SQLite 并可 replay。
+> - **/chat/stream Agent runtime 使用 AgentScope 2.0.11 + 官方 ReMeMiddleware**：`AlgoCoach` 使用 `Agent`/`AgentState` 替代手写 Claude tool loop 与 `_sessions`；每个 workspace 使用独立的 ReMe 进程内 middleware 和目录，`mode="both"` 自动召回/写回；短期 AgentState 按 workspace、页面会话与题目隔离，应用关闭时 `await coach.close()`。FOCUS 仍完全静默。工具 schema 保持稳定；请求新增可选 `workspaceId`、`capability`、`conversationId`、`turnId` 与 `afterSequence`，turn 事件写入本地 SQLite 并可 replay。
 > - **Capability registry 已接入**：`chat`、`deep_solve`、`practice`、`mastery_path`、`review` 由同一组受限值校验；非默认能力会追加对应的推理侧重点，未知能力在请求边界拒绝。
 
 ## 1. 模块职责与边界
@@ -108,7 +108,7 @@ backend/agent/
 
   ┌──────────────────────────────────────────────────────────┐
   │  Vector 向量记忆（P1 已实现）= local chromadb collections │
-  │  题目 + 卡点描述嵌入，用于相似题推荐；只写本机 CHROMA_PATH  │
+  │  默认 workspace 使用题目 + 卡点描述相似题；只写本机 CHROMA_PATH │
   └──────────────────────────────────────────────────────────┘
 ```
 
@@ -359,8 +359,8 @@ class AlgoCoach:
 - 训练上下文以 `[竞赛训练上下文] …` 前置到 `UserMsg`，与系统提示中的阶段指导一起进入 AgentScope 状态和 ReMe 记忆
 - 每次 chat 前仍用 `memory.build_context_snapshot()` 渲染 Soul 的 `{memory_context}`（SQLite 领域记忆）
 - `Agent` 负责 reasoning/acting 循环；`AgentState(session_id=...)` 保存短期上下文。前端为页面生命周期生成 `conversationId`，路由再与平台和题目标识一起派生 Agent session；`ALGOCOACH_SESSION_ID`（默认 `default`）只作为命名空间前缀。
-- 页面刷新会创建新的短期对话，与前端不持久化聊天历史一致；同一页面中切换题目会切换题目专属 AgentState。ReMe 写回携带该 session id，但搜索范围仍是共享 workspace，可跨题召回。
-- `ReMeMiddleware`（`mode="both"`）在回复后自动 `auto_memory` 写回，并在推理前自动 `search` 召回；`workspace_dir` 默认 `./data/reme`
+- 页面刷新会创建新的短期对话，与前端不持久化聊天历史一致；同一页面中切换题目会切换题目专属 AgentState。ReMe 写回携带该 session id，并限制在当前 workspace 的目录内，可跨题召回。
+- `ReMeMiddleware`（`mode="both"`）在回复后自动 `auto_memory` 写回，并在推理前自动 `search` 召回；`local-default` 使用 `./data/reme`，其他 workspace 使用其哈希子目录
 - 原 `TOOLS` JSON schema/描述保持不变，包装为 AgentScope `FunctionTool`，内部仍走 `_execute_tool`；`request_animation` 通过 ContextVar 回传 `animation_id`
 - `main.py` 的 lifespan 在关闭时 `await coach.close()`，停止 ReMe 的文件监听/索引任务
 
@@ -788,14 +788,15 @@ Gateway 需要调 agent 写记忆：
   "status": "ACCEPTED",
   "lang": "rust",
   "duration_sec": 480,
-  "topics": ["Array", "Hash Table"]
+  "topics": ["Array", "Hash Table"],
+  "workspace_id": "local-default"
 }
 
 // Response
 { "ok": true }
 ```
 
-正式提交终态写入 Gateway SQLite 后，`SubmissionService` 会把题目 slug、平台、状态、语言、FOCUS 用时和缓存题目标签回调到该端点。成功后 Agent 调 `memory.record_attempt(...)`，新增 episodic 记录并联动更新 semantic mastery。回调失败或 2 秒超时会记录不含敏感字段的警告，不会撤销 Gateway 已保存的提交；需要观察 Agent 服务可用性时使用本地日志和记忆查询。
+正式提交终态写入 Gateway SQLite 后，`SubmissionService` 会把题目 slug、平台、状态、语言、FOCUS 用时、缓存题目标签和 workspace 回调到该端点。成功后 Agent 调 `memory.record_attempt(...)`，新增 workspace-scoped episodic 记录并联动更新 semantic mastery。回调失败或 2 秒超时会记录不含敏感字段的警告，不会撤销 Gateway 已保存的提交；需要观察 Agent 服务可用性时使用本地日志和记忆查询。
 
 前端通过 Gateway `GET /api/agent/memory/profile` 读取进度概览；Gateway 固定代理至 Agent `GET /memory/profile`。响应包含 semantic 节点、同题共现边、35 天提交计数、最近提交和汇总指标，不包含代码或 Cookie。设置页通过 `GET /api/agent/memory/export` 下载 SQLite 记忆表、Chroma 向量文档以及 ReMe/Chroma 本地文件；Gateway 的提交历史另存 JSON，Cookie 不导出。
 

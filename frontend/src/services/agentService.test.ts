@@ -191,4 +191,19 @@ describe('focus chat guard', () => {
     await agentService.getProfile()
     expect(get).toHaveBeenCalledTimes(2)
   })
+
+  it('sends the active workspace when reading profile data', async () => {
+    localStorage.setItem('algocoach.workspaceId', 'team-a')
+    const get = vi.spyOn(axios, 'get').mockResolvedValue({
+      data: { topics: [], edges: [], recentProblems: [], dailyAttempts: [], stats: {} },
+    })
+
+    await agentService.getProfile()
+
+    expect(get).toHaveBeenCalledWith(
+      '/api/agent/memory/profile?workspaceId=team-a',
+      { timeout: 6000 },
+    )
+    localStorage.clear()
+  })
 })

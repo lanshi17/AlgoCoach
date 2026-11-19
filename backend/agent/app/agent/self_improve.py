@@ -60,7 +60,15 @@ from app.memory.db import (
     RecommendationLog,
     SessionLocal,
 )
-from app.memory.memory_service import _iso, _json_list, _parse_iso, memory, utcnow
+from app.memory.memory_service import (
+    DEFAULT_WORKSPACE_ID,
+    _iso,
+    _json_list,
+    _parse_iso,
+    memory,
+    normalize_workspace_id,
+    utcnow,
+)
 from app.memory.vector_store import (
     VectorStoreError,
     VectorStoreUnavailable,
@@ -113,6 +121,7 @@ async def log_recommendation(
     problem_id: str | None = None,
     mastery_before: float | None = None,
     now: datetime | None = None,
+    workspace_id: str = DEFAULT_WORKSPACE_ID,
 ) -> dict:
     """Persist one recommendation and return the stored row as a dict.
 
@@ -127,14 +136,18 @@ async def log_recommendation(
     topic = str(topic or "").strip()
     if not topic:
         raise ValueError("recommendation topic must not be empty")
+    workspace = normalize_workspace_id(workspace_id)
     if mastery_before is None:
-        mastery_before = (await memory.get_mastery(topic))["mastery"]
+        mastery_before = (await memory.get_mastery(
+            topic, workspace_id=workspace
+        ))["mastery"]
     before = float(mastery_before)
     now = _normalise_now(now)
     slug = str(problem_id or "").strip() or None
 
     async with SessionLocal() as s:
         row = RecommendationLog(
+            workspace_id=workspace,
             strategy=strategy,
             topic=topic,
             problem_id=slug,
@@ -169,7 +182,8 @@ def evaluation_due_at(created_at: datetime) -> datetime:
 
 
 async def evaluate_recommendation(
-    rec_log_id: int, now: datetime | None = None
+    rec_log_id: int, now: datetime | None = None,
+    workspace_id: str = DEFAULT_WORKSPACE_ID,
 ) -> int | None:
     """Score one recommendation, exactly once.
 
@@ -178,8 +192,11 @@ async def evaluate_recommendation(
     evaluated (idempotent retry). A missing id raises ``LookupError``.
     """
     now = _normalise_now(now)
+    workspace = normalize_workspace_id(workspace_id)
     async with SessionLocal() as s:
         rec = await s.get(RecommendationLog, int(rec_log_id))
+        if rec is not None and rec.workspace_id != workspace:
+            rec = None
     if rec is None:
         raise LookupError(f"recommendation_log {rec_log_id} not found")
 
@@ -193,7 +210,7 @@ async def evaluate_recommendation(
 
     before = float(rec.mastery_before)
     window_start = _created_time(rec)
-    events = await _window_events(rec.topic, window_start, due)
+    events = await _window_events(rec.topic, window_start, due, workspace)
     after = _replay_mastery(before, events)
     score, outcome = _score_values(before, after, has_events=bool(events))
 
@@ -202,6 +219,7 @@ async def evaluate_recommendation(
             update(RecommendationLog)
             .where(
                 RecommendationLog.id == int(rec_log_id),
+                RecommendationLog.workspace_id == workspace,
                 RecommendationLog.evaluated_at.is_(None),
             )
             .values(
@@ -230,7 +248,10 @@ async def evaluate_recommendation(
     return score
 
 
-async def evaluate_due_recommendations(now: datetime | None = None) -> dict:
+async def evaluate_due_recommendations(
+    now: datetime | None = None,
+    workspace_id: str = DEFAULT_WORKSPACE_ID,
+) -> dict:
     """Evaluate every unevaluated recommendation whose window has elapsed.
 
     Rows that are not due are left untouched. Re-running the job is safe:
@@ -239,12 +260,14 @@ async def evaluate_due_recommendations(now: datetime | None = None) -> dict:
     single broken row is logged and does not abort the batch.
     """
     now = _normalise_now(now)
+    workspace = normalize_workspace_id(workspace_id)
     async with SessionLocal() as s:
         ids = list(
             (
                 await s.execute(
                     select(RecommendationLog.id)
                     .where(RecommendationLog.evaluated_at.is_(None))
+                    .where(RecommendationLog.workspace_id == workspace)
                     .order_by(RecommendationLog.id)
                 )
             ).scalars()
@@ -255,7 +278,9 @@ async def evaluate_due_recommendations(now: datetime | None = None) -> dict:
     failed: list[dict] = []
     for rec_id in ids:
         try:
-            score = await evaluate_recommendation(rec_id, now=now)
+            score = await evaluate_recommendation(
+                rec_id, now=now, workspace_id=workspace
+            )
         except Exception as exc:  # noqa: BLE001 - one bad row must not stop the batch
             logger.warning("Recommendation %s evaluation failed: %s", rec_id, exc)
             failed.append({"id": rec_id, "error": str(exc)})
@@ -316,7 +341,8 @@ def _replay_mastery(before: float, events: list[tuple]) -> float:
 
 
 async def _window_events(
-    topic: str, window_start: datetime, window_end: datetime
+    topic: str, window_start: datetime, window_end: datetime,
+    workspace_id: str = DEFAULT_WORKSPACE_ID,
 ) -> list[tuple]:
     """Episodes for ``topic`` whose timestamp falls inside the fixed window.
 
@@ -329,6 +355,7 @@ async def _window_events(
     """
     if not topic:
         return []
+    workspace = normalize_workspace_id(workspace_id)
     async with SessionLocal() as s:
         hot = list(
             (
@@ -338,7 +365,7 @@ async def _window_events(
                         EpisodicRecord.created_at,
                         EpisodicRecord.status,
                         EpisodicRecord.topics,
-                    )
+                    ).where(EpisodicRecord.workspace_id == workspace)
                 )
             ).all()
         )
@@ -350,7 +377,7 @@ async def _window_events(
                         EpisodicArchive.created_at,
                         EpisodicArchive.status,
                         EpisodicArchive.topics,
-                    )
+                    ).where(EpisodicArchive.workspace_id == workspace)
                 )
             ).all()
         )
@@ -383,6 +410,7 @@ def _due_time(rec: RecommendationLog) -> datetime:
 def _as_dict(row: RecommendationLog) -> dict:
     return {
         "id": row.id,
+        "workspace_id": row.workspace_id,
         "strategy": row.strategy,
         "topic": row.topic,
         "problem_id": row.problem_id,
@@ -404,6 +432,7 @@ async def suggest_next_problem(
     limit: int = MAX_RECOMMENDATIONS,
     topic: str | None = None,
     exclude_problem_id: str | None = None,
+    workspace_id: str = DEFAULT_WORKSPACE_ID,
 ) -> dict:
     """Recommend up to ``limit`` problems for weak topics and log each one.
 
@@ -420,6 +449,7 @@ async def suggest_next_problem(
     ``recommendation_log`` before it is returned.
     """
     now = _normalise_now(now)
+    workspace = normalize_workspace_id(workspace_id)
     limit = _clamp_limit(limit)
     excluded = str(exclude_problem_id or "").strip() or None
 
@@ -428,7 +458,8 @@ async def suggest_next_problem(
         target_topics = [requested]
     else:
         weak = await memory.weak_topics(
-            threshold=WEAK_TOPIC_THRESHOLD, top_n=MAX_RECOMMENDATIONS
+            threshold=WEAK_TOPIC_THRESHOLD, top_n=MAX_RECOMMENDATIONS,
+            workspace_id=workspace,
         )
         target_topics = [
             item["topic"] for item in weak if str(item.get("topic") or "").strip()
@@ -443,8 +474,8 @@ async def suggest_next_problem(
             ),
         }
 
-    due_by_topic = await _due_problems_by_topic(now, limit)
-    similar_by_topic = await _similar_problems_by_topic(target_topics)
+    due_by_topic = await _due_problems_by_topic(now, limit, workspace)
+    similar_by_topic = await _similar_problems_by_topic(target_topics, workspace)
 
     used_problems: set[str] = set()
     recommendations: list[dict] = []
@@ -464,13 +495,16 @@ async def suggest_next_problem(
             strategy, problem_id, reason = choice
             used_problems.add(problem_id)
 
-        mastery_before = (await memory.get_mastery(topic_name))["mastery"]
+        mastery_before = (await memory.get_mastery(
+            topic_name, workspace_id=workspace
+        ))["mastery"]
         row = await log_recommendation(
             strategy=strategy,
             topic=topic_name,
             problem_id=problem_id,
             mastery_before=mastery_before,
             now=now,
+            workspace_id=workspace,
         )
         recommendations.append(
             {
@@ -510,7 +544,8 @@ def _pick_candidate(
 
 
 async def _due_problems_by_topic(
-    now: datetime, limit: int
+    now: datetime, limit: int,
+    workspace_id: str = DEFAULT_WORKSPACE_ID,
 ) -> dict[str, list[str]]:
     """Map a topic to its due problems, weakest first.
 
@@ -521,7 +556,9 @@ async def _due_problems_by_topic(
     next due problem instead of degrading to topic-only.
     """
     probe_limit = max(limit * 3, 6)
-    due = await memory.due_reviews(now=now, limit=probe_limit)
+    due = await memory.due_reviews(
+        now=now, limit=probe_limit, workspace_id=workspace_id
+    )
     mapping: dict[str, list[str]] = {}
     for item in due:
         problem_id = str(item.get("problem_id") or "").strip()
@@ -539,8 +576,11 @@ async def _due_problems_by_topic(
 
 async def _similar_problems_by_topic(
     topics: list[str],
+    workspace_id: str = DEFAULT_WORKSPACE_ID,
 ) -> dict[str, list[str]]:
     """Best-effort local vector lookups; a broken index degrades to topic-only."""
+    if normalize_workspace_id(workspace_id) != DEFAULT_WORKSPACE_ID:
+        return {}
     mapping: dict[str, list[str]] = {}
     for topic_name in topics:
         try:
@@ -593,7 +633,10 @@ def _clamp_limit(value: object) -> int:
 # ── Monthly strategy review ───────────────────────────────────
 
 
-async def monthly_strategy_review(now: datetime | None = None) -> dict:
+async def monthly_strategy_review(
+    now: datetime | None = None,
+    workspace_id: str = DEFAULT_WORKSPACE_ID,
+) -> dict:
     """Aggregate evaluated recommendations from the last 30 days.
 
     Only rows with a score are counted, and each strategy's rate is reported
@@ -603,6 +646,7 @@ async def monthly_strategy_review(now: datetime | None = None) -> dict:
     creates no user notification.
     """
     now = _normalise_now(now)
+    workspace = normalize_workspace_id(workspace_id)
     start = now - timedelta(days=MONTHLY_REVIEW_WINDOW_DAYS)
 
     async with SessionLocal() as s:
@@ -610,7 +654,8 @@ async def monthly_strategy_review(now: datetime | None = None) -> dict:
             (
                 await s.execute(
                     select(RecommendationLog).where(
-                        RecommendationLog.evaluated_at.is_not(None)
+                        RecommendationLog.evaluated_at.is_not(None),
+                        RecommendationLog.workspace_id == workspace,
                     )
                 )
             ).scalars()

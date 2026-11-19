@@ -123,23 +123,32 @@ interface ChatCtx {
 // One in-memory conversation namespace per page lifetime. A refresh clears the
 // visible chat, so it must also start fresh short-term model context.
 const conversationId = nanoid()
-let profileRequest: Promise<AgentProfile> | null = null
+const profileRequests = new Map<string, Promise<AgentProfile>>()
+
+function workspaceScopedPath(path: string): string {
+  const workspaceId = getWorkspaceId()
+  return workspaceId === 'local-default'
+    ? path
+    : `${path}?workspaceId=${encodeURIComponent(workspaceId)}`
+}
 
 /**
  * Python FastAPI agent through the Java gateway at /api/agent/*
  */
 export const agentService = {
   async getProfile(): Promise<AgentProfile> {
-    if (!profileRequest) {
-      profileRequest = axios.get<AgentProfile>('/api/agent/memory/profile', { timeout: 6000 })
-        .then(({ data }) => data)
-        .finally(() => { profileRequest = null })
-    }
-    return profileRequest
+    const workspaceId = getWorkspaceId()
+    const existing = profileRequests.get(workspaceId)
+    if (existing) return existing
+    const request = axios.get<AgentProfile>(workspaceScopedPath('/api/agent/memory/profile'), { timeout: 6000 })
+      .then(({ data }) => data)
+      .finally(() => { profileRequests.delete(workspaceId) })
+    profileRequests.set(workspaceId, request)
+    return request
   },
 
   async exportMemory(): Promise<Blob> {
-    const { data } = await axios.get<Blob>('/api/agent/memory/export', { responseType: 'blob' })
+    const { data } = await axios.get<Blob>(workspaceScopedPath('/api/agent/memory/export'), { responseType: 'blob' })
     return data
   },
 

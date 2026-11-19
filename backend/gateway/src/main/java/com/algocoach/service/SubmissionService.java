@@ -86,7 +86,8 @@ public class SubmissionService {
                 result.status(),
                 request.lang(),
                 request.durationSec(),
-                topics(problem));
+                topics(problem),
+                request.workspaceId());
         return agentMemoryClient.record(memoryRequest)
                 .doOnError(error -> log.warn(
                         "Agent memory callback failed for submission {} ({})",

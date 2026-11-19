@@ -7,7 +7,7 @@ so they must not be renamed without a coordinated client change.
 """
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 from app.agent.prompts import (
     DEFAULT_TRAINING_PHASE,
@@ -32,7 +32,10 @@ class ChatRequest(BaseModel):
     message: str
     mode: str                       # IDLE | PREP | FOCUS | REVIEW
     capability: DeepTutorCapability = "chat"
-    workspaceId: str = Field(default="local-default", min_length=1, max_length=128)
+    workspaceId: str = Field(
+        default="local-default", min_length=1, max_length=128,
+        pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$",
+    )
     turnId: str | None = Field(default=None, min_length=1, max_length=128)
     afterSequence: int = Field(default=0, ge=0)
     problemId: str | None = None
@@ -129,6 +132,11 @@ class MemoryRecordRequest(BaseModel):
     duration_sec: int = Field(ge=0)
     topics: list[str]
     client_id: str | None = Field(default=None, max_length=128)
+    workspace_id: str = Field(
+        default="local-default", min_length=1, max_length=128,
+        pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$",
+        validation_alias=AliasChoices("workspaceId", "workspace_id"),
+    )
 
     @field_validator("problem_id", "platform", "status", "lang", mode="before")
     @classmethod
@@ -145,6 +153,13 @@ class MemoryRecordRequest(BaseModel):
             return None
         if not isinstance(value, str) or not value.strip():
             raise ValueError("client_id must be a non-empty string")
+        return value.strip()
+
+    @field_validator("workspace_id", mode="before")
+    @classmethod
+    def _workspace_text(cls, value: object) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("workspace_id must be a non-empty string")
         return value.strip()
 
     @field_validator("topics")

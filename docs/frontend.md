@@ -19,7 +19,7 @@
 - 不直接调用 LeetCode GraphQL（由 Java 网关代理）
 - 不直接调用 Claude API（由 Python agent 服务代理）
 - 不在 FOCUS 模式下显示任何 AI 相关 UI（包括补全、提示、chat 输入框）
-- 代码草稿和当前题目保存在本机 localStorage，并按 workspace key 隔离，以便重新打开应用后继续练习；后端 episodic 只保存判题状态、题目标签与用时，不保存源码
+- 代码草稿和当前题目保存在本机 localStorage，并按 workspace key 隔离，以便重新打开应用后继续练习；后端 episodic 只保存判题状态、题目标签与用时，不保存源码，并随当前 workspace 归属
 - 不在前端存储任何 Cookie 明文（Cookie 只存在 Java 网关的 SQLite）
 
 ---

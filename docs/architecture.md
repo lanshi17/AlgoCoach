@@ -207,13 +207,13 @@ AgentScope Agent (AnthropicChatModel, claude-opus-5-5)
         │
         ▼
 AgentState 保存当前页面和题目的会话上下文（session_id 由 workspaceId / conversationId / platform / problemId 派生；当前模式每轮更新到系统提示）；turn 事件同时写入本地 SQLite，支持已完成对话 replay。
-ReMeMiddleware 在共享本地 workspace 自动 search 召回 + 按 session_id auto_memory 写回
+ReMeMiddleware 在 workspace 专属本地目录自动 search 召回 + 按 session_id auto_memory 写回
         │
         ▼
 返回 { content, animation_id? } → Gateway → 前端
 ```
 
-前端只连接 Gateway；Agent 的 `/chat/stream`、`/memory/record`、`/memory/profile` 和动画端点由 Gateway 通过固定上游地址代理。ReMeMiddleware 随 AgentScope 进程运行，记忆写入本地 `REME_WORKSPACE_DIR`，不需要单独启动 ReMe 服务。
+前端只连接 Gateway；Agent 的 `/chat/stream`、`/memory/record`、`/memory/profile` 和动画端点由 Gateway 通过固定上游地址代理。ReMeMiddleware 随 AgentScope 进程运行，`local-default` 写入 `REME_WORKSPACE_DIR`，其他 workspace 写入哈希子目录，不需要单独启动 ReMe 服务。
 
 ### 3.4 动画生成流程
 

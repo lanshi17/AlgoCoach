@@ -1,5 +1,6 @@
 import axios from 'axios'
 import type { Problem, RunResult, Submission } from '@/types'
+import { getWorkspaceId } from './deepTutorCapabilities'
 
 axios.interceptors.response.use(response => response, error => {
   const response = error?.response
@@ -110,7 +111,7 @@ export const leetcodeService = {
 
   async submit(titleSlug: string, code: string, lang: string, durationSec: number) {
     const { data } = await axios.post<SubmissionResultDto>('/api/submit', {
-      titleSlug, code, lang, durationSec,
+      titleSlug, code, lang, durationSec, workspaceId: getWorkspaceId(),
     })
     return data
   },
