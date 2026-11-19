@@ -7,6 +7,7 @@ import { useAppStore } from '@/stores/useAppStore'
 import AppShell from './AppShell'
 
 vi.mock('./Sidebar', () => ({ default: () => <div>侧边栏</div> }))
+vi.mock('./MobileTabBar', () => ({ default: () => <nav aria-label="移动导航" /> }))
 vi.mock('./Header', () => ({ default: () => <div>工作区</div> }))
 vi.mock('@/components/Problem/ProblemPanel', () => ({ default: () => <div>题目面板</div> }))
 vi.mock('@/components/Editor/EditorPanel', () => ({ default: () => <div>编辑器</div> }))

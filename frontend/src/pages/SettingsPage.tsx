@@ -11,8 +11,11 @@ import Button from '@/components/Common/Button'
 import PageHeader from '@/components/Common/PageHeader'
 import Switch from '@/components/Common/Switch'
 
-const field = 'mt-1 w-full rounded-md border border-border bg-surface-soft px-3 py-2 text-sm dark:border-border-dark dark:bg-surface-dark-soft'
-const label = 'text-xs text-text-muted dark:text-text-dark-muted'
+const control =
+  'h-9 w-full rounded-[10px] border border-line-300 bg-surface px-3 text-sm text-text-primary outline-none transition-colors ' +
+  'placeholder:text-text-muted focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft dark:text-text-dark-primary'
+const field = `mt-1 ${control}`
+const label = 'text-xs text-text-secondary dark:text-text-dark-secondary'
 
 export default function SettingsPage() {
   const navigate = useNavigate()
@@ -101,11 +104,11 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="flex-1 min-h-0 overflow-y-auto bg-surface px-6 py-7 dark:bg-surface-dark">
+    <main className="flex-1 min-h-0 overflow-y-auto bg-canvas px-6 py-7 dark:bg-[#0B0C0F]">
       <div className="mx-auto max-w-3xl">
         <PageHeader title="设置" icon={<SlidersHorizontal size={18} />} />
 
-        <section className="space-y-5 rounded-lg border border-border p-5 dark:border-border-dark">
+        <section className="space-y-5 rounded-panel border border-border bg-surface p-7 dark:border-border-dark dark:bg-surface-dark">
           <div>
             <label htmlFor="training-goal" className="block text-sm font-medium text-text-primary dark:text-text-dark-primary">训练目标</label>
             <select id="training-goal" value={goal} onChange={event => setGoal(event.target.value as TrainingGoal)}
@@ -133,11 +136,11 @@ export default function SettingsPage() {
               <Switch label="动画讲解" checked={coachPrefs.animations}
                 onChange={value => setCoachPrefs({ animations: value })} />
             </div>
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm text-text-primary dark:text-text-dark-primary">教练风格</span>
               <select aria-label="教练风格" value={coachPrefs.coachStyle}
                 onChange={event => setCoachPrefs({ coachStyle: event.target.value as CoachStyle })}
-                className="w-40 rounded-md border border-border bg-surface-soft px-3 py-2 text-sm dark:border-border-dark dark:bg-surface-dark-soft">
+                className={`${control} w-40`}>
                 <option value="auto">自动</option>
                 <option value="socratic">苏格拉底式追问</option>
                 <option value="direct">直接讲解</option>
@@ -185,7 +188,7 @@ export default function SettingsPage() {
             <div className="mt-3 flex flex-wrap items-center gap-3">
               {providerDirty
                 ? <Button variant="primary" onClick={saveProvider}>保存 Provider</Button>
-                : <span className="text-xs text-text-muted dark:text-text-dark-muted">已保存</span>}
+                : <span className="text-xs text-text-secondary dark:text-text-dark-secondary">已保存</span>}
               {providerMessage && <span role="status" aria-live="polite" className={`text-xs ${providerMessage.startsWith('请') ? 'text-danger' : 'text-success'}`}>{providerMessage}</span>}
             </div>
           </div>

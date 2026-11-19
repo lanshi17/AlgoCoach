@@ -61,6 +61,15 @@
     outline-offset: 2px;
   }
 
+  /* One stroke family: Lucide ships 2px, the console uses 1.5px. */
+  svg.lucide {
+    stroke-width: 1.5;
+  }
+
+  ::selection {
+    background: rgb(var(--accent-rgb) / 0.18);
+  }
+
   input,
   select,
   textarea {
@@ -88,6 +97,15 @@
   }
   .dark .sidebar-btn.active {
     @apply text-accent bg-accent-dark-soft;
+  }
+
+  /* Graph nodes are SVG buttons; the ring belongs on the circle, not the group. */
+  .graph-node:focus-visible {
+    outline: none;
+  }
+  .graph-node:focus-visible circle:first-of-type {
+    stroke: rgb(var(--accent-rgb));
+    stroke-width: 2;
   }
 
   /* Tag / badge */

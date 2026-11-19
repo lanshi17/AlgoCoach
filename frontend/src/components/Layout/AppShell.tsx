@@ -4,6 +4,7 @@ import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AlertCircle, Loader2, RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/stores/useAppStore'
 import Sidebar from './Sidebar'
+import MobileTabBar from './MobileTabBar'
 import Header from './Header'
 import ProblemPanel from '@/components/Problem/ProblemPanel'
 import EditorPanel from '@/components/Editor/EditorPanel'
@@ -106,18 +107,9 @@ export default function AppShell() {
       </div>
       <div className="flex min-h-0 flex-1">
         <Sidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Suspense fallback={<PageLoading />}><Routes>
-            <Route path="/" element={<Navigate to="/home" replace />} />
-            <Route path="/home" element={<LearningSpacePage />} />
-            <Route path="/workspace" element={<Workspace />} />
-            <Route path="/progress" element={<ProgressPage />} />
-            <Route path="/knowledge" element={<KnowledgeGraphPage />} />
-            <Route path="/knowledge/library" element={<KnowledgeBasePage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/settings/platforms" element={<PlatformLoginPage />} />
-            <Route path="*" element={<Navigate to="/home" replace />} />
-          </Routes></Suspense>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <AppRoutes />
+          <MobileTabBar />
         </div>
       </div>
     </div>
@@ -139,20 +131,29 @@ export default function AppShell() {
       <Sidebar />
 
       {/* Main workspace */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Suspense fallback={<PageLoading />}><Routes>
-          <Route path="/" element={<Navigate to="/home" replace />} />
-          <Route path="/home" element={<LearningSpacePage />} />
-          <Route path="/workspace" element={<Workspace />} />
-          <Route path="/progress" element={<ProgressPage />} />
-          <Route path="/knowledge" element={<KnowledgeGraphPage />} />
-          <Route path="/knowledge/library" element={<KnowledgeBasePage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/settings/platforms" element={<PlatformLoginPage />} />
-          <Route path="*" element={<Navigate to="/home" replace />} />
-        </Routes></Suspense>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <AppRoutes />
+        <MobileTabBar />
       </div>
     </div>
+  )
+}
+
+function AppRoutes() {
+  return (
+    <Suspense fallback={<PageLoading />}>
+      <Routes>
+        <Route path="/" element={<Navigate to="/home" replace />} />
+        <Route path="/home" element={<LearningSpacePage />} />
+        <Route path="/workspace" element={<Workspace />} />
+        <Route path="/progress" element={<ProgressPage />} />
+        <Route path="/knowledge" element={<KnowledgeGraphPage />} />
+        <Route path="/knowledge/library" element={<KnowledgeBasePage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings/platforms" element={<PlatformLoginPage />} />
+        <Route path="*" element={<Navigate to="/home" replace />} />
+      </Routes>
+    </Suspense>
   )
 }
 

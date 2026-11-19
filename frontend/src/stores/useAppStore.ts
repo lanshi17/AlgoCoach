@@ -521,7 +521,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   pushAnimation: a => set(s => ({ animations: [...s.animations, a] })),
   setActiveAnimation: a => set({ activeAnimation: a }),
 
-  sidebarExpanded: false,
+  sidebarExpanded: true,
   toggleSidebar: () => set(s => ({ sidebarExpanded: !s.sidebarExpanded })),
   theme: initialTheme(),
   toggleTheme: () => set(state => {

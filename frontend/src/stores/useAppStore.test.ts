@@ -244,7 +244,7 @@ describe('training preferences and focus state', () => {
 
     expect(useAppStore.getState().animations).toEqual([animation])
     expect(useAppStore.getState().activeAnimation).toEqual(animation)
-    expect(useAppStore.getState().sidebarExpanded).toBe(true)
+    expect(useAppStore.getState().sidebarExpanded).toBe(false)
     expect(useAppStore.getState().runLoading).toBe(true)
     expect(useAppStore.getState().runError).toBe('offline')
     expect(useAppStore.getState().runResult?.status_msg).toBe('Accepted')
@@ -254,7 +254,7 @@ describe('training preferences and focus state', () => {
       id: 'sub-1', problemId: 'two-sum', code: 'fn main() {}', lang: 'rust',
       status: 'ACCEPTED', passedTests: 1, totalTests: 1, submittedAt: 'now', durationSec: 1,
     })
-    expect(useAppStore.getState().sidebarExpanded).toBe(false)
+    expect(useAppStore.getState().sidebarExpanded).toBe(true)
     expect(useAppStore.getState().testInput).toBe('custom input')
     expect(useAppStore.getState().lastSubmission?.id).toBe('sub-1')
   })

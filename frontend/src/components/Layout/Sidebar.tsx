@@ -1,7 +1,6 @@
-import React from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { Trophy, BarChart3, Settings, ChevronLeft, ChevronRight, Code2, LayoutDashboard, Sun, Moon } from 'lucide-react'
-import { NavLink } from 'react-router-dom'
+import { BarChart3, ChevronLeft, ChevronRight, Code2, LayoutDashboard, Moon, Settings, Sun, Trophy } from 'lucide-react'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useAppStore } from '@/stores/useAppStore'
 
 const NAV_ITEMS = [
@@ -13,68 +12,99 @@ const NAV_ITEMS = [
 ] as const
 
 /**
- * Qwen-style collapsible left sidebar.
- * Collapsed: 56px icon rail. Expanded: 220px with labels.
+ * One navigation model, two shapes.
+ *
+ * Console routes use the 272px labelled rail. The workspace is a dense
+ * three-pane surface, so it keeps the 72px icon rail regardless of the stored
+ * preference; expanding it there squeezes the editor to an unusable width.
  */
 export default function Sidebar() {
+  const { pathname } = useLocation()
   const { sidebarExpanded, toggleSidebar, theme, toggleTheme } = useAppStore(useShallow(state => ({
     sidebarExpanded: state.sidebarExpanded,
     toggleSidebar: state.toggleSidebar,
     theme: state.theme,
     toggleTheme: state.toggleTheme,
   })))
+  const compactRoute = pathname.startsWith('/workspace')
+  const expanded = !compactRoute && sidebarExpanded
 
   return (
     <aside
-      className={`flex flex-col items-stretch bg-canvas dark:bg-[#0B0C0F] transition-[width] duration-200 flex-shrink-0
-                 w-[var(--sidebar-w)] ${sidebarExpanded ? 'md:w-[var(--sidebar-expanded-w)]' : ''}`}
+      className={`hidden h-full shrink-0 flex-col bg-canvas transition-[width] duration-200 md:flex dark:bg-[#0B0C0F]
+                  ${expanded ? 'w-[272px]' : 'w-[72px]'}`}
     >
-      {/* Logo / brand */}
-      <div className="flex h-[84px] items-center gap-3 px-3 md:px-6">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-white">
+      <div className={`flex h-[84px] shrink-0 items-center gap-3 ${expanded ? 'pl-6' : 'justify-center'}`}>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-white">
           <Code2 size={18} />
-        </div>
-        {sidebarExpanded && (
-          <span className="hidden md:inline whitespace-nowrap text-text-primary dark:text-text-dark-primary">
-            <span className="block font-editorial text-sm font-medium">算法练习室</span>
+        </span>
+        {expanded && (
+          <span className="min-w-0 whitespace-nowrap">
+            <span className="block text-sm font-medium tracking-cn text-text-primary dark:text-text-dark-primary">算法练习室</span>
             <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-[0.14em] text-text-muted dark:text-text-dark-muted">local code desk</span>
           </span>
         )}
       </div>
 
-      {/* Nav list */}
-      <nav className="flex flex-1 flex-col gap-1 px-3 py-4 md:px-5">
+      <nav aria-label="主导航" className={`flex flex-1 flex-col gap-1 py-4 ${expanded ? 'px-5' : 'px-3'}`}>
         {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
-            end
+            end={to === '/home'}
+            title={expanded ? undefined : label}
+            aria-label={expanded ? undefined : label}
             className={({ isActive }) =>
-              `sidebar-btn ${isActive ? 'active' : ''} ${sidebarExpanded ? 'w-full justify-start gap-2 pl-10 pr-3' : 'mx-auto w-10'}`
+              `relative flex h-9 items-center rounded-full text-body tracking-cn transition-[background-color,color,font-weight] duration-150
+               ${expanded ? 'w-full pl-10 pr-3' : 'mx-auto w-10 justify-center'}
+               ${isActive
+                 ? 'bg-border font-medium text-text-primary dark:bg-surface-dark-muted dark:text-text-dark-primary'
+                 : 'text-text-secondary hover:bg-surface-muted hover:font-medium hover:text-text-primary dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted dark:hover:text-text-dark-primary'}`
             }
-            title={label}
-            aria-label={label}
           >
-            <Icon size={20} className="shrink-0" />
-            {sidebarExpanded && <span className="hidden md:inline text-sm whitespace-nowrap">{label}</span>}
+            {({ isActive }) => (
+              <>
+                <span className={`absolute top-0 flex h-9 w-5 items-center justify-center ${expanded ? 'left-2' : 'left-1/2 -translate-x-1/2'} ${isActive ? 'text-accent' : ''}`}>
+                  <Icon size={20} className="shrink-0" />
+                </span>
+                {expanded && <span className="min-w-0 truncate">{label}</span>}
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
 
-      {/* Shell controls: theme (all routes) and collapse (desktop) */}
-      <div className="mb-4 flex flex-col items-center gap-1 px-3 md:px-5">
-        <button onClick={toggleTheme} type="button" aria-label="切换主题" className="sidebar-btn">
-          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-        </button>
+      <div className={`mb-4 flex flex-col gap-1 ${expanded ? 'px-5' : 'px-3'}`}>
         <button
-          onClick={toggleSidebar}
           type="button"
-          aria-label={sidebarExpanded ? '收起侧边栏' : '展开侧边栏'}
-          aria-expanded={sidebarExpanded}
-          className="sidebar-btn hidden md:flex"
+          onClick={toggleTheme}
+          aria-label="切换主题"
+          title={expanded ? undefined : '切换主题'}
+          className={`relative flex h-9 items-center rounded-full text-body tracking-cn text-text-secondary transition-[background-color,color,font-weight] duration-150 hover:bg-surface-muted hover:font-medium hover:text-text-primary dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted dark:hover:text-text-dark-primary
+                      ${expanded ? 'w-full pl-10 pr-3' : 'mx-auto w-10 justify-center'}`}
         >
-          {sidebarExpanded ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+          <span className={`absolute top-0 flex h-9 w-5 items-center justify-center ${expanded ? 'left-2' : 'left-1/2 -translate-x-1/2'}`}>
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </span>
+          {expanded && <span className="truncate">{theme === 'dark' ? '浅色模式' : '深色模式'}</span>}
         </button>
+
+        {!compactRoute && (
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-label={sidebarExpanded ? '收起侧边栏' : '展开侧边栏'}
+            aria-expanded={sidebarExpanded}
+            title={expanded ? undefined : '展开侧边栏'}
+            className={`relative flex h-9 items-center rounded-full text-body tracking-cn text-text-secondary transition-[background-color,color,font-weight] duration-150 hover:bg-surface-muted hover:font-medium hover:text-text-primary dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted dark:hover:text-text-dark-primary
+                        ${expanded ? 'w-full pl-10 pr-3' : 'mx-auto w-10 justify-center'}`}
+          >
+            <span className={`absolute top-0 flex h-9 w-5 items-center justify-center ${expanded ? 'left-2' : 'left-1/2 -translate-x-1/2'}`}>
+              {sidebarExpanded ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+            </span>
+            {expanded && <span className="truncate">收起侧栏</span>}
+          </button>
+        )}
       </div>
     </aside>
   )

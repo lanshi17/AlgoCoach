@@ -52,7 +52,7 @@ export default function KnowledgeGraphPage() {
   const selected = profile?.topics.find(topic => topic.topic === selectedTopic)
 
   return (
-    <main className="flex-1 min-h-0 overflow-y-auto bg-surface px-6 py-7 dark:bg-surface-dark">
+    <main className="flex-1 min-h-0 overflow-y-auto bg-canvas px-6 py-7 dark:bg-[#0B0C0F]">
       <div className="mx-auto max-w-6xl">
         <PageHeader
           title="知识图谱"
@@ -72,12 +72,12 @@ export default function KnowledgeGraphPage() {
         />
 
         {loading ? <Loading /> : error ? <ErrorState message={error} onRetry={() => void load()} /> : !profile?.topics.length ? (
-          <div className="flex min-h-72 flex-col items-center justify-center gap-3 rounded-lg border border-border text-center dark:border-border-dark">
+          <div className="flex min-h-72 flex-col items-center justify-center gap-3 rounded-panel border border-border bg-surface text-center dark:border-border-dark dark:bg-surface-dark">
             <BarChart3 size={28} className="text-text-muted dark:text-text-dark-muted" />
             <p className="text-sm text-text-secondary dark:text-text-dark-secondary">完成并提交题目后，掌握度图谱会从真实训练记录中逐步生成。</p>
           </div>
         ) : listView ? (
-          <div className="overflow-hidden rounded-lg border border-border dark:border-border-dark">
+          <div className="overflow-hidden rounded-card border border-border bg-surface dark:border-border-dark dark:bg-surface-dark">
             <div className="grid grid-cols-[minmax(0,1fr)_50px_32px] gap-2 border-b border-border bg-surface-soft px-2 py-3 text-xs text-text-muted dark:border-border-dark dark:bg-surface-dark-soft dark:text-text-dark-muted sm:grid-cols-[1fr_100px_90px] sm:gap-3 sm:px-4">
               <span className="whitespace-nowrap">知识点</span><span className="whitespace-nowrap">掌握度</span>
               <span className="whitespace-nowrap"><span className="sm:hidden">次数</span><span className="hidden sm:inline">训练次数</span></span>
@@ -95,8 +95,8 @@ export default function KnowledgeGraphPage() {
           </div>
         ) : (
           <div className="space-y-5">
-            <div className="overflow-auto rounded-lg border border-border p-4 dark:border-border-dark">
-              <svg ref={svgRef} viewBox={`0 0 ${graph.width} ${graph.height}`} role="img"
+            <div className="overflow-auto rounded-panel border border-border bg-surface p-5 dark:border-border-dark dark:bg-surface-dark">
+              <svg ref={svgRef} viewBox={`0 0 ${graph.width} ${graph.height}`} role="group"
                 onPointerMove={event => {
                   if (!draggingTopic || !svgRef.current) return
                   const bounds = svgRef.current.getBoundingClientRect()
@@ -123,9 +123,10 @@ export default function KnowledgeGraphPage() {
                   if (!from || !to) return null
                   return <g key={`${edge.from}-${edge.to}`}>
                     <line x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-                      stroke="#9b927e" strokeOpacity="0.45" strokeWidth={Math.min(5, 1 + Math.log2(edge.weight))} />
+                      className="stroke-line-300 dark:stroke-border-dark"
+                      strokeOpacity="0.9" strokeWidth={Math.min(4, 1 + Math.log2(edge.weight))} />
                     {edge.weight > 1 && <text x={(from.x + to.x) / 2} y={(from.y + to.y) / 2 - 5}
-                      textAnchor="middle" fontSize="10" fill="#776f62">{edge.weight}</text>}
+                      textAnchor="middle" fontSize="10" className="fill-text-secondary dark:fill-text-dark-secondary">{edge.weight}</text>}
                   </g>
                 })}
                 {graph.nodes.map(node => <g key={node.topic} role="button" tabIndex={0}
@@ -143,25 +144,31 @@ export default function KnowledgeGraphPage() {
                       setSelectedTopic(node.topic)
                     }
                   }}
-                  className="cursor-grab active:cursor-grabbing">
+                  className="graph-node cursor-grab active:cursor-grabbing">
                   <circle cx={positions.get(node.topic)?.x ?? node.x} cy={positions.get(node.topic)?.y ?? node.y} r={node.radius}
-                    fill={masteryColor(node.mastery)} stroke={selectedTopic === node.topic ? '#725e42' : '#f4efe3'}
-                    strokeWidth={selectedTopic === node.topic ? 3 : 2} />
-                  <text x={positions.get(node.topic)?.x ?? node.x} y={(positions.get(node.topic)?.y ?? node.y) + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill="#332f27" pointerEvents="none">
+                    className="fill-surface-muted dark:fill-surface-dark-muted" />
+                  <circle cx={positions.get(node.topic)?.x ?? node.x} cy={positions.get(node.topic)?.y ?? node.y} r={node.radius}
+                    style={{ fill: `rgb(var(--accent-rgb) / ${0.05 + node.mastery * 0.13})` }} pointerEvents="none" />
+                  <circle cx={positions.get(node.topic)?.x ?? node.x} cy={positions.get(node.topic)?.y ?? node.y} r={node.radius}
+                    className={selectedTopic === node.topic ? 'stroke-accent' : 'stroke-line-300 dark:stroke-border-dark'}
+                    fill="none" strokeWidth={selectedTopic === node.topic ? 3 : 1.5} />
+                  <text x={positions.get(node.topic)?.x ?? node.x} y={(positions.get(node.topic)?.y ?? node.y) + 4}
+                    textAnchor="middle" fontSize="12" fontWeight="600"
+                    className="fill-text-primary dark:fill-text-dark-primary" pointerEvents="none">
                     {shortLabel(node.topic)}
                   </text>
                 </g>)}
               </svg>
-              <p className="mt-2 text-center text-xs text-text-muted dark:text-text-dark-muted">节点按共同训练知识点自动排布；可拖动整理视图。</p>
-              <p className="mt-1 text-center text-[11px] text-text-muted dark:text-text-dark-muted sm:hidden">
+              <p className="mt-2 text-center text-xs text-text-secondary dark:text-text-dark-secondary">节点按共同训练知识点自动排布；可拖动整理视图。</p>
+              <p className="mt-1 text-center text-[11px] text-text-secondary dark:text-text-dark-secondary sm:hidden">
                 窄屏可左右滑动查看完整图谱。
               </p>
-              {!profile.edges.length && <p className="mt-2 text-center text-xs text-text-muted dark:text-text-dark-muted">
+              {!profile.edges.length && <p className="mt-2 text-center text-xs text-text-secondary dark:text-text-dark-secondary">
                 暂无共同训练记录形成连线；图中只显示已记录的知识点。
               </p>}
             </div>
 
-            {selected && <section className="rounded-lg border border-border p-5 dark:border-border-dark">
+            {selected && <section className="rounded-card border border-border bg-surface p-5 dark:border-border-dark dark:bg-surface-dark">
               <div className="flex flex-wrap items-baseline justify-between gap-3">
                 <h2 className="text-base font-semibold text-text-primary dark:text-text-dark-primary">{selected.topic}</h2>
                 <span className="text-xs text-text-muted dark:text-text-dark-muted">
@@ -186,12 +193,6 @@ export default function KnowledgeGraphPage() {
       </div>
     </main>
   )
-}
-
-function masteryColor(value: number): string {
-  if (value < 0.4) return '#d7aaa2'
-  if (value < 0.7) return '#d8c58f'
-  return '#a9bfa4'
 }
 
 function shortLabel(value: string): string {

@@ -25,6 +25,18 @@ export default {
           DEFAULT: '#E6E9EF',
           dark:    '#2A2E38',
         },
+        line: {
+          100: '#E6E9EF',
+          200: '#DEE2E9',
+          300: '#D1D7E2',
+        },
+        ink: {
+          950: '#0B0C0F',
+          900: '#111317',
+          700: '#535B6B',
+          550: '#707889',
+          450: '#8E96A7',
+        },
         text: {
           primary:   '#111317',
           secondary: '#535B6B',

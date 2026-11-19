@@ -252,14 +252,14 @@ export default function ProblemPanel() {
             <div className="flex gap-2">
               <select aria-label="选择题库平台" value={platform}
                 onChange={event => choosePlatform(event.target.value as PickerPlatform)}
-                className="min-w-0 flex-1 rounded-md border border-border bg-surface-soft px-2 py-1.5 text-xs outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft">
+                className="min-w-0 flex-1 rounded-[10px] border border-line-300 bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft">
                 <option value="LEETCODE">LeetCode</option>
                 <option value="ACWING">AcWing</option>
                 <option value="HDU">杭电 HDU</option>
               </select>
               {platform === 'LEETCODE' && (
                 <select aria-label="按难度筛选" value={difficulty} onChange={event => { setPage(1); setDifficulty(event.target.value) }}
-                  className="rounded-md border border-border bg-surface-soft px-2 py-1.5 text-xs outline-none dark:border-border-dark dark:bg-surface-dark-soft">
+                  className="rounded-[10px] border border-line-300 bg-surface px-2 py-1.5 text-xs outline-none dark:border-border-dark dark:bg-surface-dark-soft">
                   <option value="">全部难度</option><option value="EASY">简单</option><option value="MEDIUM">中等</option><option value="HARD">困难</option>
                 </select>
               )}
@@ -267,7 +267,7 @@ export default function ProblemPanel() {
             {platform === 'LEETCODE' && (
               <select aria-label="按专项训练筛选" value={topic}
                 onChange={event => { setPage(1); setTopic(event.target.value) }}
-                className="w-full rounded-md border border-border bg-surface-soft px-2 py-1.5 text-xs outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft">
+                className="w-full rounded-[10px] border border-line-300 bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft">
                 <option value="">全部题库</option>
                 {TRAINING_TOPICS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
@@ -275,27 +275,26 @@ export default function ProblemPanel() {
             {platform === 'ACWING' && (
               <select aria-label="按专项训练筛选" value={topic}
                 onChange={event => { setPage(1); setTopic(event.target.value) }}
-                className="w-full rounded-md border border-border bg-surface-soft px-2 py-1.5 text-xs outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft">
+                className="w-full rounded-[10px] border border-line-300 bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft">
                 <option value="">全部题库</option>
                 {ACWING_TOPICS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
             )}
             <input value={search} onChange={event => setSearch(event.target.value)}
               aria-label="搜索当前页题目" placeholder="搜索当前页题名或题号"
-              className="w-full rounded-md border border-border bg-surface-soft px-2 py-1.5 text-xs outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft" />
+              className="w-full rounded-[10px] border border-line-300 bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft" />
             {platform === 'LEETCODE' && (
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-text-muted dark:text-text-dark-muted">
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-text-secondary dark:text-text-dark-secondary">
                 <input type="checkbox" checked={showAccepted} onChange={event => setShowAccepted(event.target.checked)} />
                 显示已 AC 题{acceptedCount ? `（当前页 ${acceptedCount} 题）` : ''}
               </label>
             )}
           </div>
-          <section className="mt-4 rounded-card border border-border bg-surface p-4" aria-labelledby="local-practice-title">
+          <section className="mt-4 rounded-card border border-border bg-surface p-4 dark:border-border-dark dark:bg-surface-dark" aria-labelledby="local-practice-title">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-accent">本地练习本</p>
-                <h3 id="local-practice-title" className="mt-1 font-editorial text-sm text-text-primary dark:text-text-dark-primary">先写一遍，再看提示</h3>
-                <p className="mt-1 text-[11px] leading-5 text-text-secondary dark:text-text-dark-secondary">无需 Cookie，草稿和专注时间只保存在这台电脑。</p>
+                <h3 id="local-practice-title" className="font-editorial text-sm font-medium text-text-primary dark:text-text-dark-primary">本地练习本</h3>
+                <p className="mt-1 text-[11px] leading-5 text-text-secondary dark:text-text-dark-secondary">先写一遍，再看提示。无需 Cookie，草稿和专注时间只保存在这台电脑。</p>
               </div>
               <span className="shrink-0 rounded-full border border-accent/30 px-2 py-0.5 text-[10px] text-accent">离线可用</span>
             </div>
@@ -313,7 +312,7 @@ export default function ProblemPanel() {
             </div>
           </section>
         </div>
-        {error && visibleProblems.length > 0 && <div role="alert" className="mx-4 mt-3 rounded-md bg-red-50 p-3 text-xs text-danger dark:bg-red-900/10">{error}</div>}
+        {error && visibleProblems.length > 0 && <div role="alert" className="mx-4 mt-3 rounded-tip bg-danger/10 p-3 text-xs text-danger">{error}</div>}
         {loadingList ? (
           <div role="status" aria-live="polite" aria-busy="true" className="flex flex-1 items-center justify-center gap-2 text-sm text-text-muted dark:text-text-dark-muted">
             <Loader2 size={16} className="animate-spin" /> 正在取回题目列表…
