@@ -1,5 +1,5 @@
 import { useShallow } from 'zustand/react/shallow'
-import { BarChart3, ChevronLeft, ChevronRight, Code2, LayoutDashboard, Moon, Settings, Sun, Trophy } from 'lucide-react'
+import { BarChart3, BookOpen, ChevronLeft, ChevronRight, Code2, LayoutDashboard, Moon, Settings, Sun, Trophy } from 'lucide-react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAppStore } from '@/stores/useAppStore'
 
@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { to: '/workspace', icon: Code2, label: '编码练习' },
   { to: '/progress', icon: Trophy, label: '刷题进度' },
   { to: '/knowledge', icon: BarChart3, label: '知识图谱' },
+  { to: '/notebook', icon: BookOpen, label: '学习笔记' },
   { to: '/settings', icon: Settings, label: '设置' },
 ] as const
 

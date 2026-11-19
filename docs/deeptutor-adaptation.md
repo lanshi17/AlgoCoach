@@ -13,7 +13,7 @@ AlgoCoach 参考 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 的公开
 | Practice | 本地算法题练习、样例运行、提交、复盘记录 | 使用 DeepTutor 对应的可解释 SM-2 风格冷启动规则；保留每次自评事件 |
 | Mastery Path | 本地知识图谱、弱点主题和模式推荐 | 当前推荐由既有 Agent 与 mastery 数据驱动，尚未形成独立 path runner |
 | Knowledge Center | `KnowledgeBasePage` 与本地知识库索引 | 文件、索引和 Provider 配置保留在本机运行时目录 |
-| Learning Notebook | 本地复盘队列、练习本和笔记视图 | 当前没有单独 Notebook 服务，数据仍由前端本地状态和 Agent 记忆承载 |
+| Learning Notebook | `/notebook` 学习笔记页 + 复盘队列 | 笔记支持标题、正文、标签、保存和删除，并按 workspace key 存储；复盘笔记仍保留在独立复盘队列 |
 | Task Board / Calendar | `/home` 本周计划、练习/复盘日期与本地任务板 | 任务以 workspace key 持久化，可安排下一页练习或到期复盘并标记完成；更完整的跨设备 calendar 留作后续 |
 
 ## Workspace 与数据边界

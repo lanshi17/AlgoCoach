@@ -29,6 +29,7 @@ const ProgressPage = lazy(() => import('@/pages/ProgressPage'))
 const LearningSpacePage = lazy(() => import('@/pages/LearningSpacePage'))
 const KnowledgeGraphPage = lazy(() => import('@/pages/KnowledgeGraphPage'))
 const KnowledgeBasePage = lazy(() => import('@/pages/KnowledgeBasePage'))
+const NotebookPage = lazy(() => import('@/pages/NotebookPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 const PlatformLoginPage = lazy(() => import('@/pages/PlatformLoginPage'))
 
@@ -154,6 +155,7 @@ function AppRoutes() {
         <Route path="/progress" element={<ProgressPage />} />
         <Route path="/knowledge" element={<KnowledgeGraphPage />} />
         <Route path="/knowledge/library" element={<KnowledgeBasePage />} />
+        <Route path="/notebook" element={<NotebookPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/platforms" element={<PlatformLoginPage />} />
         <Route path="*" element={<Navigate to="/home" replace />} />
