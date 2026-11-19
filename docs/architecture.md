@@ -213,7 +213,7 @@ ReMeMiddleware 在 workspace 专属本地目录自动 search 召回 + 按 sessio
 返回 { content, animation_id? } → Gateway → 前端
 ```
 
-前端只连接 Gateway；Agent 的 `/chat/stream`、`/memory/record`、`/memory/profile` 和动画端点由 Gateway 通过固定上游地址代理。ReMeMiddleware 随 AgentScope 进程运行，`local-default` 写入 `REME_WORKSPACE_DIR`，其他 workspace 写入哈希子目录，不需要单独启动 ReMe 服务。
+前端只连接 Gateway；Agent 的 `/chat/stream`、`/memory/record`、`/memory/profile`、`/memory/mastery-path` 和动画端点由 Gateway 通过固定上游地址代理。ReMeMiddleware 随 AgentScope 进程运行，`local-default` 写入 `REME_WORKSPACE_DIR`，其他 workspace 写入哈希子目录，不需要单独启动 ReMe 服务。
 
 ### 3.4 动画生成流程
 

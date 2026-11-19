@@ -631,7 +631,7 @@ POST /chat/stream {message, mode, conversationId, workspaceId?, capability?, tur
         ├─ ReMe on_reply: 后台 search（自动召回）
         ├─ ReMe on_reasoning: 将检索到的记忆以 HintBlock 注入下一次推理
         ├─ Agent 执行 reasoning/acting 循环：
-        │    FunctionTool(get_weakness_topics / request_animation /
+        │    FunctionTool(get_weakness_topics / get_mastery_path / request_animation /
         │                 record_sticking_points / fetch_problem_meta /
         │                 get_similar_problems / suggest_next_problem)
         │    → _execute_tool(...)（内部逻辑保持一致）
@@ -798,7 +798,7 @@ Gateway 需要调 agent 写记忆：
 
 正式提交终态写入 Gateway SQLite 后，`SubmissionService` 会把题目 slug、平台、状态、语言、FOCUS 用时、缓存题目标签和 workspace 回调到该端点。成功后 Agent 调 `memory.record_attempt(...)`，新增 workspace-scoped episodic 记录并联动更新 semantic mastery。回调失败或 2 秒超时会记录不含敏感字段的警告，不会撤销 Gateway 已保存的提交；需要观察 Agent 服务可用性时使用本地日志和记忆查询。
 
-前端通过 Gateway `GET /api/agent/memory/profile` 读取进度概览；Gateway 固定代理至 Agent `GET /memory/profile`。响应包含 semantic 节点、同题共现边、35 天提交计数、最近提交和汇总指标，不包含代码或 Cookie。设置页通过 `GET /api/agent/memory/export` 下载 SQLite 记忆表、Chroma 向量文档以及 ReMe/Chroma 本地文件；Gateway 的提交历史另存 JSON，Cookie 不导出。
+前端通过 Gateway `GET /api/agent/memory/profile` 读取进度概览，并通过 `GET /api/agent/memory/mastery-path` 读取当前 workspace 的有序学习步骤；Gateway 分别固定代理至 Agent 的 `/memory/profile` 和 `/memory/mastery-path`。路径 runner 只读取当前 workspace 的 semantic mastery、共同训练关系和到期复习队列，到期项优先、同优先级按掌握度升序，并返回原因与建议动作。响应不包含代码或 Cookie。设置页通过 `GET /api/agent/memory/export` 下载 SQLite 记忆表、Chroma 向量文档以及 ReMe/Chroma 本地文件；Gateway 的提交历史另存 JSON，Cookie 不导出。
 
 ---
 

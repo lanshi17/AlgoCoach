@@ -396,7 +396,7 @@ interface AppState {
 
 **职责**：可视化用户的知识掌握图谱。
 
-**数据源**：`GET /api/agent/memory/profile` 由 Gateway 固定代理至 Agent `GET /memory/profile`，返回：
+**数据源**：`GET /api/agent/memory/profile` 由 Gateway 固定代理至 Agent `GET /memory/profile`，返回知识图谱和进度汇总；页面同时请求 `GET /api/agent/memory/mastery-path` 获取当前 workspace 的下一步学习路径。路径按到期复习优先、掌握度升序排列，并展示每一步的原因、建议动作和到期题目：
 ```typescript
 {
   topics: { topic: string; mastery: number; attempts: number; lastSeen: string; weakSubtopics: string[]; relatedTopics: string[] }[]

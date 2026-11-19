@@ -540,12 +540,13 @@ public class GlobalExceptionHandler {
 | `POST /api/agent/chat/replay` | `POST /chat/replay` |
 | `POST /api/agent/memory/record` | `POST /memory/record` |
 | `GET /api/agent/memory/profile` | `GET /memory/profile` |
+| `GET /api/agent/memory/mastery-path` | `GET /memory/mastery-path` |
 | `GET /api/agent/memory/export` | `GET /memory/export` |
 | `POST /api/agent/animate` | `POST /animate` |
 | `POST /api/agent/animate/generated` | `POST /animate/generated` |
 | `GET /api/agent/animate/{jobId}` | `GET /animate/{jobId}` |
 
-FastAPI 已注册 `/memory/profile` 和 `/memory/export`，网关通过固定上游代理进度与数据导出接口。
+FastAPI 已注册 `/memory/profile`、`/memory/mastery-path` 和 `/memory/export`，网关通过固定上游代理进度、学习路径与数据导出接口。
 
 
 **转发语义**：
@@ -851,6 +852,7 @@ CREATE INDEX idx_submission_created ON submission_record(created_at);
 | `POST` | `/api/agent/chat/stream` | `POST /chat/stream` | `{message, mode, conversationId, workspaceId?, capability?, turnId?, afterSequence?, problemId?, trainingPhase?, timeRemainingSec?, code?, codeLanguage?}` | `text/event-stream`（带 `turn_id`/`event_id` 的 thinking/text/done/error） |
 | `POST` | `/api/agent/chat/replay` | `POST /chat/replay` | `{turnId, afterSequence?}` | 已持久化 turn 的状态和有序事件 |
 | `POST` | `/api/agent/memory/record` | `POST /memory/record` | `MemoryRecordRequest` | 上游原始 JSON |
+| `GET`  | `/api/agent/memory/mastery-path` | `GET /memory/mastery-path` | `workspaceId?`, `limit?`（1–12） | 当前 workspace 的有序学习步骤 |
 | `POST` | `/api/agent/animate` | `POST /animate` | `{type, topic?, title?, problemId?}` | 上游原始 JSON |
 | `POST` | `/api/agent/animate/generated` | `POST /animate/generated` | `GeneratedAnimationRequest` + `Authorization: Bearer <token>` | 上游原始 JSON |
 | `GET`  | `/api/agent/animate/{jobId}` | `GET /animate/{jobId}` | — | 上游原始 JSON |
@@ -864,7 +866,7 @@ CREATE INDEX idx_submission_created ON submission_record(created_at);
 `Authorization`；上游的 HTTP status、body、`Content-Type`、`Retry-After` 和
 `WWW-Authenticate` 原样返回。上游 4xx/5xx（含 `401`、`429`、`503`）不会被网关改写；
 只有连接失败/超时走 §10 的统一错误映射（502 `UPSTREAM_ERROR` / 504 `UPSTREAM_TIMEOUT`）。
-`agent.base-url` 由启动配置决定，不能通过请求参数覆盖；`/memory/profile` 与 `/memory/export` 已注册并由网关固定代理。
+`agent.base-url` 由启动配置决定，不能通过请求参数覆盖；`/memory/profile`、`/memory/mastery-path` 与 `/memory/export` 已注册并由网关固定代理。
 
 ### 静态动画资源（P2）
 
