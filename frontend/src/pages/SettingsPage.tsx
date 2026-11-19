@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { Download, SlidersHorizontal } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { readProviderApiKey, useAppStore } from '@/stores/useAppStore'
+import { createWorkspace, getWorkspaceId, readWorkspaceManifests, switchWorkspace, type WorkspaceManifest } from '@/services/deepTutorCapabilities'
 import { agentService } from '@/services/agentService'
 import { leetcodeService } from '@/services/leetcodeService'
 import type { CoachStyle, ModelProviderConfig, TrainingGoal } from '@/types'
@@ -32,6 +33,9 @@ export default function SettingsPage() {
   const [exporting, setExporting] = useState(false)
   const [providerMessage, setProviderMessage] = useState('')
   const [exportMessage, setExportMessage] = useState('')
+  const [workspaces, setWorkspaces] = useState<WorkspaceManifest[]>(() => readWorkspaceManifests())
+  const [workspaceName, setWorkspaceName] = useState('')
+  const [workspaceMessage, setWorkspaceMessage] = useState('')
   const [providerDraft, setProviderDraft] = useState<ModelProviderConfig>(provider)
   const providerDirty = useMemo(
     () => JSON.stringify(providerDraft) !== JSON.stringify(provider),
@@ -103,6 +107,24 @@ export default function SettingsPage() {
     }
   }
 
+  const changeWorkspace = (workspaceId: string) => {
+    switchWorkspace(workspaceId)
+    window.location.reload()
+  }
+
+  const addWorkspace = () => {
+    try {
+      const next = createWorkspace(workspaceName)
+      const created = next[next.length - 1]
+      setWorkspaces(next)
+      setWorkspaceName('')
+      setWorkspaceMessage(`已创建「${created.name}」，正在切换。`)
+      window.setTimeout(() => changeWorkspace(created.id), 120)
+    } catch (error) {
+      setWorkspaceMessage(error instanceof Error ? error.message : '创建 workspace 失败。')
+    }
+  }
+
   return (
     <main className="flex-1 min-h-0 overflow-y-auto bg-canvas px-6 py-7 dark:bg-[#0B0C0F]">
       <div className="mx-auto max-w-3xl">
@@ -117,6 +139,21 @@ export default function SettingsPage() {
               <option value="interview_prep">技术面试准备</option>
               <option value="casual">日常算法学习</option>
             </select>
+          </div>
+
+          <div className="border-t border-border pt-5 dark:border-border-dark">
+            <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">本地 Workspace</p>
+            <p className="mt-1 text-xs leading-5 text-text-secondary dark:text-text-dark-secondary">不同 workspace 的练习本、复盘、草稿和任务板相互隔离。切换后应用会重新载入。</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <select aria-label="本地 Workspace" value={getWorkspaceId()} onChange={event => changeWorkspace(event.target.value)} className={`${control} max-w-sm`}>
+                {workspaces.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.name} · {workspace.id}</option>)}
+              </select>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <input aria-label="新 Workspace 名称" value={workspaceName} onChange={event => setWorkspaceName(event.target.value)} placeholder="例如：2027 春季训练" className={`${control} max-w-sm`} />
+              <Button variant="secondary" onClick={addWorkspace} disabled={!workspaceName.trim()}>创建并切换</Button>
+            </div>
+            {workspaceMessage && <p role="status" className="mt-2 text-xs text-text-secondary dark:text-text-dark-secondary">{workspaceMessage}</p>}
           </div>
 
           <div className="space-y-4 border-t border-border pt-5 dark:border-border-dark">

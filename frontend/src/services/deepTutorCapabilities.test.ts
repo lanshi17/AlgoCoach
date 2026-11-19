@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { getWorkspaceId, LOCAL_WORKSPACE_ID, workspaceStorageKey } from './deepTutorCapabilities'
+import { createWorkspace, getWorkspaceId, LOCAL_WORKSPACE_ID, readWorkspaceManifests, switchWorkspace, workspaceStorageKey } from './deepTutorCapabilities'
 
 afterEach(() => localStorage.clear())
 
@@ -18,5 +18,14 @@ describe('workspace identity', () => {
   it('falls back when a workspace id is malformed', () => {
     localStorage.setItem('algocoach.workspaceId', '../secrets')
     expect(getWorkspaceId()).toBe(LOCAL_WORKSPACE_ID)
+  })
+
+  it('creates and switches a named local workspace', () => {
+    const manifests = createWorkspace('竞赛训练')
+    expect(manifests.some(item => item.name === '竞赛训练')).toBe(true)
+    const created = manifests.find(item => item.name === '竞赛训练')!
+    switchWorkspace(created.id)
+    expect(getWorkspaceId()).toBe(created.id)
+    expect(readWorkspaceManifests()).toContainEqual(created)
   })
 })
