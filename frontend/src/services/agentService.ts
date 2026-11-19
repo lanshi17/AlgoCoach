@@ -6,11 +6,52 @@ import { capabilityForMode, LOCAL_WORKSPACE_ID, type DeepTutorCapability } from 
 interface ChatReply {
   content: string
   animationId?: string
+  turnId?: string
+}
+
+export interface TurnReplayEvent {
+  type: 'thinking' | 'text' | 'done' | 'error'
+  delta?: string
+  content?: string
+  animation_id?: string | null
+  status?: number
+  detail?: unknown
+  turn_id?: string
+  event_id?: number
+}
+
+export interface TurnReplay {
+  turnId: string
+  workspaceId: string
+  conversationId: string
+  capability: DeepTutorCapability
+  state: 'running' | 'completed' | 'failed'
+  events: TurnReplayEvent[]
 }
 
 export interface ChatStreamHandlers {
   onThinking?: (delta: string) => void
   onText?: (delta: string) => void
+}
+
+async function replayPersistedTurn(turnId: string, afterSequence = 0): Promise<TurnReplay> {
+  const response = await window.fetch('/api/agent/chat/replay', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ turnId, afterSequence }),
+  })
+  if (!response.ok) throw new Error(`turn replay failed: ${response.status}`)
+  return await response.json() as TurnReplay
+}
+
+function completedReplay(replay: TurnReplay, fallbackTurnId: string): ChatReply | null {
+  const done = [...replay.events].reverse().find(event => event.type === 'done')
+  if (!done) return null
+  return {
+    content: done.content ?? '',
+    animationId: done.animation_id ?? undefined,
+    turnId: done.turn_id ?? fallbackTurnId,
+  }
 }
 
 /** Keep provider/API errors visible in the conversation without raw network details. */
@@ -65,6 +106,8 @@ interface ChatCtx {
   mode: string
   capability?: DeepTutorCapability
   workspaceId?: string
+  turnId?: string
+  afterSequence?: number
   problemId?: string
   platform?: string
   code?: string
@@ -133,20 +176,33 @@ export const agentService = {
     signal?: AbortSignal,
   ): Promise<ChatReply> {
     const { provider, ...rest } = ctx
+    const turnId = ctx.turnId ?? nanoid()
     const shouldSendProvider = Boolean(provider?.apiKey) || provider?.protocol === 'ollama'
-    const response = await window.fetch('/api/agent/chat/stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-      body: JSON.stringify({
-        message,
-        ...rest,
-        capability: ctx.capability ?? capabilityForMode(ctx.mode),
-        workspaceId: ctx.workspaceId ?? LOCAL_WORKSPACE_ID,
-        conversationId,
-        ...(shouldSendProvider ? { provider } : {}),
-      }),
-      signal,
-    })
+    let response: Response
+    try {
+      response = await window.fetch('/api/agent/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+        body: JSON.stringify({
+          message,
+          ...rest,
+          capability: ctx.capability ?? capabilityForMode(ctx.mode),
+          workspaceId: ctx.workspaceId ?? LOCAL_WORKSPACE_ID,
+          turnId,
+          afterSequence: ctx.afterSequence ?? 0,
+          conversationId,
+          ...(shouldSendProvider ? { provider } : {}),
+        }),
+        signal,
+      })
+    } catch (error) {
+      if (!signal?.aborted) {
+        const replay = await replayPersistedTurn(turnId).catch(() => null)
+        const recovered = replay ? completedReplay(replay, turnId) : null
+        if (recovered) return recovered
+      }
+      throw error
+    }
     if (!response.ok) {
       let data: { detail?: unknown; message?: unknown } = {}
       try { data = await response.json() as typeof data } catch { /* use status fallback */ }
@@ -172,6 +228,7 @@ export const agentService = {
         delta?: string
         content?: string
         animation_id?: string | null
+        turn_id?: string
         status?: number
         detail?: unknown
       }
@@ -187,7 +244,11 @@ export const agentService = {
         throw error
       }
       if (event.type === 'done') {
-        reply = { content: event.content ?? '', animationId: event.animation_id ?? undefined }
+        reply = {
+          content: event.content ?? '',
+          animationId: event.animation_id ?? undefined,
+          turnId: event.turn_id ?? turnId,
+        }
       }
     }
     while (true) {
@@ -203,8 +264,17 @@ export const agentService = {
       if (done) break
     }
     if (buffer.trim()) consume(buffer)
+    if (!reply && !signal?.aborted) {
+      const replay = await replayPersistedTurn(turnId).catch(() => null)
+      const recovered = replay ? completedReplay(replay, turnId) : null
+      if (recovered) return recovered
+    }
     if (!reply) throw new Error('聊天流提前结束')
     return reply
+  },
+
+  async replayTurn(turnId: string, afterSequence = 0): Promise<TurnReplay> {
+    return replayPersistedTurn(turnId, afterSequence)
   },
 
   async requestAnimation(type: string, topic: string, title: string, problemId?: string) {

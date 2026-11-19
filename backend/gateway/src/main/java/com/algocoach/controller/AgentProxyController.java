@@ -72,6 +72,7 @@ public class AgentProxyController {
     public static final String BASE_PATH = "/api/agent";
 
     static final String CHAT_STREAM_PATH = "/chat/stream";
+    static final String CHAT_REPLAY_PATH = "/chat/replay";
     static final String MEMORY_RECORD_PATH = "/memory/record";
     static final String MEMORY_PROFILE_PATH = "/memory/profile";
     static final String MEMORY_EXPORT_PATH = "/memory/export";
@@ -149,6 +150,13 @@ public class AgentProxyController {
         emitter.onTimeout(upstream::dispose);
         emitter.onCompletion(upstream::dispose);
         return emitter;
+    }
+
+    @PostMapping("/chat/replay")
+    public Mono<ResponseEntity<byte[]>> replayChatTurn(
+            HttpServletRequest request,
+            @RequestBody(required = false) byte[] body) {
+        return forward(HttpMethod.POST, CHAT_REPLAY_PATH, request, body);
     }
 
     @PostMapping("/memory/record")

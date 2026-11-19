@@ -15,6 +15,8 @@ async def test_chat_stream_emits_thinking_text_and_done_events(client, monkeypat
         assert kwargs["platform"] == "LEETCODE"
         assert kwargs["code"] == "int answer = 42;"
         assert kwargs["code_language"] == "cpp"
+        assert kwargs["workspace_id"] == "local-default"
+        assert kwargs["capability"] == "chat"
         yield {"type": "thinking", "delta": "先确认约束。"}
         yield {"type": "text", "delta": "复杂度是 O(n)。"}
         yield {"type": "done", "content": "复杂度是 O(n)。", "animation_id": None}
@@ -34,6 +36,43 @@ async def test_chat_stream_emits_thinking_text_and_done_events(client, monkeypat
     assert '"type": "thinking"' in response.text
     assert '"delta": "先确认约束。"' in response.text
     assert '"type": "done"' in response.text
+
+
+async def test_chat_stream_persists_and_replays_a_terminal_turn(client, monkeypatch):
+    calls = 0
+
+    async def fake_stream(**_kwargs):
+        nonlocal calls
+        calls += 1
+        yield {"type": "thinking", "delta": "先看约束。"}
+        yield {"type": "done", "content": "复杂度是 O(n)。", "animation_id": None}
+
+    monkeypatch.setattr(router_module.coach, "chat_stream", fake_stream)
+    body = {
+        "message": "怎么做？", "mode": "PREP", "conversationId": "replay-page",
+        "turnId": "turn-replay-1",
+    }
+    first = await client.post("/chat/stream", json=body)
+    assert first.status_code == 200
+    assert '"event_id": 1' in first.text
+    assert '"event_id": 2' in first.text
+    assert calls == 1
+
+    replay = await client.post("/chat/replay", json={"turnId": "turn-replay-1"})
+    assert replay.status_code == 200
+    assert replay.json()["state"] == "completed"
+    assert [event["event_id"] for event in replay.json()["events"]] == [1, 2]
+
+    resumed = await client.post("/chat/stream", json={**body, "afterSequence": 1})
+    assert resumed.status_code == 200
+    assert '"event_id": 1' not in resumed.text
+    assert '"event_id": 2' in resumed.text
+    assert calls == 1
+
+
+async def test_chat_replay_unknown_turn_is_not_created(client):
+    response = await client.post("/chat/replay", json={"turnId": "missing-turn"})
+    assert response.status_code == 404
 
 
 async def test_chat_stream_requires_conversation_context(client):

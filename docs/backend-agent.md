@@ -9,7 +9,7 @@
 > - **P2 `agent/self_improve.py` 已实现（人工分析型 MVP）**：新增当前 `recommendation_log` 表、`memory.get_mastery`、推荐日志、固定 7 天回测、月度策略汇总、`suggest_next_problem` tool 与两个 cron job。回测按 `[created_at, evaluation_due_at]` 内的事件从 `mastery_before` 重放 ELO 并保存 `mastery_after`，延迟调度不会读入窗口外练习。评估只做记录与人工可读建议，**不自动修改 Soul、prompt、推荐权重或配置**，也没有正式 UI/通知。
 > - **P3 prompt 集中管理与目标变体 API 已实现**：Soul 原文迁至 `agent/prompts.py`，`get_system_prompt(goal)` 支持 `interview_prep` / `contest` / `casual` 三种变体，无效值直接拒绝；助教式教学原则（先问尝试、解释原因、引导验证、不直接给最终答案或整段成品代码）融入基础 Soul；`coach.chat()` 接收来自设置页的浏览器偏好目标；竞赛阶段显式覆盖该目标。目标保存在当前浏览器，不另建用户配置表。
 > - **contest 训练协议已接入 `/chat/stream`**：`ChatRequest` 新增可选 `trainingPhase`（默认 `auto`，允许 `virtual_contest` / `topic_drill` / `attempt` / `hint` / `review` / `upsolve`，无效值拒绝 `auto`）与 `timeRemainingSec`（可选非负整数）；显式阶段或剩余时间会启用 `contest` 目标与真实 OI/xCPC 训练协议，阶段/剩余时间同时写入 AgentScope 用户消息，ReMe 记忆可见。流式 `done` 事件、FOCUS 静默、非 contest 行为与当前客户端契约一致，未新增训练 SQLite（详见 §3.3）。
-> - **/chat/stream Agent runtime 使用 AgentScope 2.0.11 + 官方 ReMeMiddleware**：`AlgoCoach` 使用 `Agent`/`AgentState` 替代手写 Claude tool loop 与 `_sessions`；ReMe 进程内单实例，`mode="both"` 自动召回/写回；短期 AgentState 按页面会话与题目隔离，ReMe workspace 跨会话检索，应用关闭时 `await coach.close()`。FOCUS 仍完全静默。工具 schema 保持稳定；请求新增可选 `conversationId` / `platform` 字段以隔离新客户端上下文，使用当前页面会话契约。
+> - **/chat/stream Agent runtime 使用 AgentScope 2.0.11 + 官方 ReMeMiddleware**：`AlgoCoach` 使用 `Agent`/`AgentState` 替代手写 Claude tool loop 与 `_sessions`；ReMe 进程内单实例，`mode="both"` 自动召回/写回；短期 AgentState 按 workspace、页面会话与题目隔离，ReMe workspace 跨会话检索，应用关闭时 `await coach.close()`。FOCUS 仍完全静默。工具 schema 保持稳定；请求新增可选 `workspaceId`、`capability`、`conversationId`、`turnId` 与 `afterSequence`，turn 事件写入本地 SQLite 并可 replay。
 
 ## 1. 模块职责与边界
 
@@ -365,8 +365,9 @@ class AlgoCoach:
 
 ### `app/agent/router.py`
 
-三个端点：
-- `POST /chat/stream` → `coach.chat_stream()`，返回 `{content, animationId}`
+四个端点：
+- `POST /chat/stream` → `coach.chat_stream()`，返回带 `turn_id` / `event_id` 的 SSE 事件
+- `POST /chat/replay` → 读取本地 SQLite 中已写入的 turn 事件，不调用模型
 - `POST /animate` → `animation_service.enqueue()`，返回 `{job_id, status}`
 - `GET /animate/{job_id}` → 轮询渲染状态
 
@@ -612,7 +613,7 @@ class RecordAttemptRequest(BaseModel):
 ## 6. /chat/stream Agent 流程图（AgentScope + ReMe）
 
 ```
-POST /chat/stream {message, mode, conversationId, problemId?, trainingPhase?, timeRemainingSec?, code?, codeLanguage?}
+POST /chat/stream {message, mode, conversationId, workspaceId?, capability?, turnId?, afterSequence?, problemId?, trainingPhase?, timeRemainingSec?, code?, codeLanguage?}
         │
         ▼
  mode == "FOCUS"? ──yes──▶ return {content: "", animationId: null}
@@ -624,7 +625,7 @@ POST /chat/stream {message, mode, conversationId, problemId?, trainingPhase?, ti
         │
         ▼
  UserMsg("[竞赛训练上下文] 训练阶段=…；剩余时间=… 秒\n" + message)
- AgentState(session_id=ALGOCOACH_SESSION_ID + sha256(JSON([conversationId, platform, problemId]))).agent.reply(UserMsg)
+ AgentState(session_id=ALGOCOACH_SESSION_ID + sha256(JSON([workspaceId, conversationId, platform, problemId]))).agent.reply(UserMsg)
         │
         ├─ ReMe on_reply: 后台 search（自动召回）
         ├─ ReMe on_reasoning: 将检索到的记忆以 HintBlock 注入下一次推理

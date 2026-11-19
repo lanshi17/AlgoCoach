@@ -88,6 +88,7 @@ data/              SQLite 数据库 + 渲染出的 MP4 动画
 | `POST /api/run` / `POST /api/submit` | 运行样例、提交并轮询判题 |
 | `GET /api/submissions` | 本地提交历史 |
 | `POST /api/agent/chat/stream` | 流式 AI 教练对话；REVIEW 可携带当前代码 |
+| `POST /api/agent/chat/replay` | 按 turnId/事件序号恢复已持久化的 Agent 对话事件 |
 | `GET/PUT /api/agent/knowledge/config` | 读取或保存知识库 Embedding 配置 |
 | `POST /api/agent/knowledge/sources` | 上传知识库源文件 |
 | `POST /api/agent/knowledge/reindex` | 重建用户知识库向量索引 |

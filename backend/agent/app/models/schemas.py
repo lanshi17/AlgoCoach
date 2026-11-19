@@ -32,6 +32,8 @@ class ChatRequest(BaseModel):
     mode: str                       # IDLE | PREP | FOCUS | REVIEW
     capability: DeepTutorCapability = "chat"
     workspaceId: str = Field(default="local-default", min_length=1, max_length=128)
+    turnId: str | None = Field(default=None, min_length=1, max_length=128)
+    afterSequence: int = Field(default=0, ge=0)
     problemId: str | None = None
     platform: str | None = None
     code: str | None = Field(default=None, max_length=50_000)
@@ -70,6 +72,13 @@ class ChatRequest(BaseModel):
         if isinstance(value, bool):
             raise ValueError("must be a non-negative integer")
         return value
+
+
+class TurnReplayRequest(BaseModel):
+    """Request body for replaying a persisted terminal turn."""
+
+    turnId: str = Field(min_length=1, max_length=128)
+    afterSequence: int = Field(default=0, ge=0)
 
 
 class ProviderConfig(BaseModel):

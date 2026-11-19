@@ -112,7 +112,7 @@ describe('focus chat guard', () => {
       onText: delta => text.push(delta),
     })
 
-    expect(reply).toEqual({ content: '复杂度是 O(n)。' })
+    expect(reply).toMatchObject({ content: '复杂度是 O(n)。', turnId: expect.any(String) })
     expect(thinking).toEqual(['先看约束。'])
     expect(text).toEqual(['复杂度是 O(n)。'])
     expect(fetch).toHaveBeenCalledWith('/api/agent/chat/stream', expect.objectContaining({ method: 'POST' }))
@@ -135,6 +135,43 @@ describe('focus chat guard', () => {
     const second = JSON.parse(fetch.mock.calls[1][1].body as string) as { conversationId: string }
     expect(first.conversationId).toEqual(expect.any(String))
     expect(second.conversationId).toBe(first.conversationId)
+    Object.defineProperty(window, 'fetch', { configurable: true, value: nativeFetch })
+  })
+
+  it('replays a persisted turn from the gateway without opening a model stream', async () => {
+    const nativeFetch = window.fetch
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      turnId: 'turn-1', workspaceId: 'local-default', conversationId: 'page-1',
+      capability: 'chat', state: 'completed', events: [{ type: 'done', event_id: 2 }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    Object.defineProperty(window, 'fetch', { configurable: true, value: fetch })
+
+    await expect(agentService.replayTurn('turn-1', 1)).resolves.toMatchObject({
+      turnId: 'turn-1', state: 'completed',
+    })
+    expect(fetch).toHaveBeenCalledWith('/api/agent/chat/replay', expect.objectContaining({
+      method: 'POST', body: JSON.stringify({ turnId: 'turn-1', afterSequence: 1 }),
+    }))
+    Object.defineProperty(window, 'fetch', { configurable: true, value: nativeFetch })
+  })
+
+  it('recovers a completed turn when the SSE closes before its done event', async () => {
+    const nativeFetch = window.fetch
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response('data: {"type":"text","delta":"半截"}\n\n', {
+        status: 200, headers: { 'Content-Type': 'text/event-stream' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        turnId: 'recovered-turn', workspaceId: 'local-default', conversationId: 'page-1',
+        capability: 'chat', state: 'completed',
+        events: [{ type: 'done', content: '完整回答', turn_id: 'recovered-turn', event_id: 2 }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    Object.defineProperty(window, 'fetch', { configurable: true, value: fetch })
+
+    const reply = await agentService.chatStream('hello', { mode: 'PREP' })
+    expect(reply).toMatchObject({ content: '完整回答', turnId: 'recovered-turn' })
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(fetch.mock.calls[1][0]).toBe('/api/agent/chat/replay')
     Object.defineProperty(window, 'fetch', { configurable: true, value: nativeFetch })
   })
 

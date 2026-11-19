@@ -6,7 +6,7 @@ The schema is defined entirely by the current SQLAlchemy models. Startup uses
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, Float, Integer, Text, Boolean
+from sqlalchemy import String, Float, Integer, Text, Boolean, UniqueConstraint
 from datetime import datetime, timezone
 
 def _utcnow() -> datetime:
@@ -170,6 +170,35 @@ class RecommendationLog(Base):
     # Reconstructed mastery at ``evaluation_due_at``. Saved so a score can be
     # audited after later practice has moved the live semantic mastery.
     mastery_after: Mapped[float | None] = mapped_column(Float(), nullable=True)
+
+
+class AgentTurn(Base):
+    """Durable state for one agent turn and its replayable event stream."""
+
+    __tablename__ = "agent_turns"
+
+    turn_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(String(128), index=True)
+    conversation_id: Mapped[str] = mapped_column(String(128), index=True)
+    capability: Mapped[str] = mapped_column(String(32), default="chat")
+    state: Mapped[str] = mapped_column(String(16), default="running", index=True)
+    terminal_content: Mapped[str] = mapped_column(Text(), default="")
+    created_at: Mapped[str] = mapped_column(String(32), default=lambda: _utcnow().isoformat())
+    updated_at: Mapped[str] = mapped_column(String(32), default=lambda: _utcnow().isoformat())
+
+
+class AgentTurnEvent(Base):
+    """Append-only JSON payloads emitted by an agent turn."""
+
+    __tablename__ = "agent_turn_events"
+    __table_args__ = (UniqueConstraint("turn_id", "sequence", name="uq_agent_turn_event_sequence"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    turn_id: Mapped[str] = mapped_column(String(128), index=True)
+    sequence: Mapped[int] = mapped_column(Integer())
+    event_type: Mapped[str] = mapped_column(String(32))
+    payload: Mapped[str] = mapped_column(Text())
+    created_at: Mapped[str] = mapped_column(String(32), default=lambda: _utcnow().isoformat())
 
 
 async def init_db():

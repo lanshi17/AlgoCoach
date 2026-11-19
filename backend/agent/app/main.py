@@ -3,6 +3,7 @@ AlgoCoach — Python FastAPI agent service.
 
 Routes:
   POST /chat/stream   — streaming agent conversation endpoint
+  POST /chat/replay   — replay persisted terminal turn events
   POST /animate       — request a prebuilt Remotion animation job
   POST /animate/generated — P2 sandboxed generated TSX (default off)
   GET  /animate/{id}  — poll animation job status

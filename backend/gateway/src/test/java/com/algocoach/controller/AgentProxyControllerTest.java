@@ -81,6 +81,7 @@ class AgentProxyControllerTest {
     @ParameterizedTest
     @ValueSource(strings = {
             "/chat/stream",
+            "/chat/replay",
             "/memory/record",
             "/animate",
             "/animate/generated"

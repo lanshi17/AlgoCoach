@@ -178,7 +178,7 @@ Java Gateway
 ### 3.3 Agent 对话流程
 
 ```
-前端 POST /api/agent/chat/stream { message, mode, conversationId, problemId, goal?, trainingPhase?, timeRemainingSec?, code?, codeLanguage? }
+前端 POST /api/agent/chat/stream { message, mode, conversationId, workspaceId?, capability?, turnId?, afterSequence?, problemId, goal?, trainingPhase?, timeRemainingSec?, code?, codeLanguage? }
         │
         ▼
 Java Gateway 固定代理 → FastAPI router.py
@@ -206,7 +206,7 @@ AgentScope Agent (AnthropicChatModel, claude-opus-5-5)
   └─ 无 tool_call → 提取最终文本
         │
         ▼
-AgentState 保存当前页面和题目的会话上下文（session_id 由 conversationId / platform / problemId 派生；当前模式每轮更新到系统提示）
+AgentState 保存当前页面和题目的会话上下文（session_id 由 workspaceId / conversationId / platform / problemId 派生；当前模式每轮更新到系统提示）；turn 事件同时写入本地 SQLite，支持已完成对话 replay。
 ReMeMiddleware 在共享本地 workspace 自动 search 召回 + 按 session_id auto_memory 写回
         │
         ▼

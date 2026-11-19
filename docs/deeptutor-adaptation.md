@@ -7,7 +7,7 @@ AlgoCoach 参考 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 的公开
 | DeepTutor | AlgoCoach 当前实现 | 适配说明 |
 | --- | --- | --- |
 | Workspace | `/home` 学习空间 + 当前题目的本地算法 workspace | 当前是本地单 workspace；页面上的 Block 是视图组件，不是业务核心 |
-| TurnApplicationService / TurnEngine | `agentService.chatStream` → Gateway → Python Agent | 当前保留 SSE 一次性流；turn 持久化、事件序号和断线 replay 是后续阶段 |
+| TurnApplicationService / TurnEngine | `agentService.chatStream` → Gateway → Python Agent → 本地 `agent_turns` ledger | 每个 turn 有稳定 ID、事件序号和 completed/failed 状态；已完成 turn 可通过 replay API 恢复，不重复调用模型 |
 | Capability | `PREP` → `chat`，`FOCUS` → `practice`，`REVIEW` → `review`；知识图谱建议 → `mastery_path`；复杂分析 → `deep_solve` | capability 作为请求上下文传递，Agent 仍按现有训练阶段执行 |
 | ToolRegistry | AgentScope tools、知识库检索、记忆工具、题库和动画工具 | 工具继续由 Python Agent 注册，前端不直接调用模型或工具 |
 | Practice | 本地算法题练习、样例运行、提交、复盘记录 | 使用 DeepTutor 对应的可解释 SM-2 风格冷启动规则；保留每次自评事件 |
@@ -22,9 +22,9 @@ AlgoCoach 参考 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 的公开
 
 后续扩展多 workspace 时，`workspaceId` 必须成为练习记录、复盘队列、Agent session、知识库索引和 turn 的共同隔离键；迁移不能只在 UI 上增加 workspace 下拉框。
 
-## Durable turn 计划
+## Durable turn 当前边界
 
-当前 SSE 事件只有 thinking、text、done、error，刷新或断线后不能从服务端 replay。下一阶段会为每个 turn 增加 `turnId`、单调递增的 event sequence、terminal state 和 reconnect/replay 合约，再让桌面壳把本地未完成 turn 安全恢复。当前实现不把一次性 SSE 宣称为 DeepTutor 的 durable turn。
+`POST /chat/stream` 接受 `turnId`、`workspaceId`、`capability` 和 `afterSequence`。Agent 在本地 SQLite 的 `agent_turns` / `agent_turn_events` 表中保存 thinking、text、done、error 事件；`POST /chat/replay` 按序返回事件，已完成 turn replay 时不会再次调用模型。当前仍是单进程模型执行：服务进程崩溃时，running turn 只保留已写入事件，不会自动恢复模型任务；桌面壳的断线重连 UI 和跨进程 work queue 留作后续阶段。
 
 ## 许可证与来源
 

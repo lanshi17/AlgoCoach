@@ -21,6 +21,8 @@ from sqlalchemy.exc import IntegrityError
 from app.memory.db import (
     EpisodicArchive,
     EpisodicRecord,
+    AgentTurn,
+    AgentTurnEvent,
     MemoryRecordReceipt,
     Notification,
     ProceduralPattern,
@@ -139,6 +141,8 @@ class MemoryService:
             "notifications": Notification,
             "review_schedule": ReviewSchedule,
             "recommendation_log": RecommendationLog,
+            "agent_turns": AgentTurn,
+            "agent_turn_events": AgentTurnEvent,
         }
         tables: dict[str, list[dict]] = {}
         async with SessionLocal() as session:

@@ -8,7 +8,7 @@
 
 | 模块 | 存储 / 职责 |
 |---|---|
-| 工作记忆 | AgentScope `AgentState`，按页面会话 + 平台 + 题目隔离，训练阶段连续共享 |
+| 工作记忆 | AgentScope `AgentState`，按 workspace + 页面会话 + 平台 + 题目隔离，训练阶段连续共享 |
 | 长期对话记忆 | AgentScope ReMeMiddleware，本地 workspace；各会话写回，跨会话检索 |
 | 情节 / 语义 / 程序记忆 | Agent SQLite |
 | 向量记忆 | 本地 ChromaDB |
@@ -21,12 +21,12 @@
 
 ### 2.1 工作记忆（Working Memory）
 
-**存储位置**：AgentScope `AgentState`（Python 进程内存），按浏览器页面会话、平台和题目隔离；IDLE/PREP/REVIEW 阶段共享上下文。
+**存储位置**：AgentScope `AgentState`（Python 进程内存），按 workspace、浏览器页面会话、平台和题目隔离；IDLE/PREP/REVIEW 阶段共享上下文。turn 的 SSE 事件另写入本地 SQLite，供已完成对话 replay。
 
 ```python
 # app/agent/coach.py
 Agent(state=AgentState(session_id=session_id))
-# router.py 用 ALGOCOACH_SESSION_ID 作为命名空间前缀，并对 conversationId、平台、题目生成独立 session_id
+# router.py 用 ALGOCOACH_SESSION_ID 作为命名空间前缀，并对 workspaceId、conversationId、平台、题目生成独立 session_id
 # 对话上下文由 AgentState.context 持有，AgentScope 按模型上下文窗口压缩
 ```
 
@@ -41,9 +41,10 @@ Agent(state=AgentState(session_id=session_id))
 
 **session_id 管理**：
 - 前端模块每个页面生命周期生成一个 `conversationId`，不持久化；刷新后可见聊天历史与短期 AgentState 同时从新会话开始。
-- 每个页面/题目的 AgentState session id 由 `ALGOCOACH_SESSION_ID` 前缀和 `[conversationId, platform, problemId]` 的 SHA-256 派生；IDLE/PREP/REVIEW 共享同一训练对话，当前模式每轮更新到系统提示。FOCUS 在模型和记忆调用前直接返回，不污染对话状态。
+- 每个 workspace/页面/题目的 AgentState session id 由 `ALGOCOACH_SESSION_ID` 前缀和 `[workspaceId, conversationId, platform, problemId]` 的 SHA-256 派生；IDLE/PREP/REVIEW 共享同一训练对话，当前模式每轮更新到系统提示。FOCUS 在模型和记忆调用前直接返回，不污染对话状态。
 - `ALGOCOACH_SESSION_ID` 仅作为本地部署的命名空间前缀。ReMe 仍共享本地 workspace，自动检索可跨题召回长期记忆。
 - 每次请求都携带页面 `conversationId`；路由将其与平台和题目标识派生 AgentScope session。同一题目的不同训练阶段保持连续上下文。
+- 每个 `/chat/stream` turn 带稳定 `turnId`，thinking/text/done/error 事件写入本地 `agent_turn_events` 并递增 `event_id`；`/chat/replay` 只读取持久化事件，不重新调用模型。running turn 在进程崩溃后不会自动续跑，已写入事件仍可审计。
 
 ---
 

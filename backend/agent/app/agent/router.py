@@ -2,6 +2,7 @@
 import hashlib
 import json
 import logging
+from uuid import uuid4
 from typing import Any
 
 import anthropic
@@ -12,6 +13,7 @@ from openai import APIStatusError as OpenAIAPIStatusError
 from pydantic import ValidationError
 
 from app.agent.coach import ProviderConfigurationError, coach
+from app.agent.turns import TurnConflict, turn_store
 from app.config import (
     chat_session_id,
     remotion_codegen_enabled,
@@ -25,6 +27,7 @@ from app.models.schemas import (
     GeneratedAnimationRequest,
     MemoryRecordRequest,
     MemoryRecordResponse,
+    TurnReplayRequest,
 )
 from app.remotion.animation_service import (
     AnimationDisabled,
@@ -151,9 +154,29 @@ async def chat_stream(req: ChatRequest):
     """
     session_id = _session_id(req)
     provider = req.provider
+    turn_id = req.turnId or uuid4().hex
 
     async def events():
+        started = False
+
+        async def emit(event: dict[str, Any]):
+            return _sse(await turn_store.append(turn_id, event))
+
         try:
+            snapshot = await turn_store.begin(
+                turn_id,
+                workspace_id=req.workspaceId,
+                conversation_id=req.conversationId,
+                capability=req.capability,
+            )
+            started = snapshot.created
+            if not snapshot.created:
+                replayed = await turn_store.replay(turn_id, req.afterSequence)
+                if replayed is not None:
+                    _, persisted_events = replayed
+                    for persisted_event in persisted_events:
+                        yield _sse(persisted_event)
+                return
             kwargs: dict[str, Any] = {
                 "session_id": session_id,
                 "message": req.message,
@@ -174,7 +197,16 @@ async def chat_stream(req: ChatRequest):
             if provider is not None:
                 kwargs["provider"] = provider.model_dump()
             async for event in coach.chat_stream(**kwargs):
-                yield _sse(event)
+                yield await emit(event)
+            await turn_store.finish(turn_id, "completed")
+        except TurnConflict as exc:
+            yield _sse({
+                "type": "error",
+                "status": 409,
+                "detail": str(exc),
+                "turn_id": turn_id,
+                "event_id": 0,
+            })
         except (OpenAIAPIStatusError, anthropic.APIStatusError) as exc:
             protocol = provider.protocol if provider is not None else ""
             logger.warning(
@@ -182,46 +214,78 @@ async def chat_stream(req: ChatRequest):
                 protocol,
                 exc.status_code,
             )
-            yield _sse({
+            error = {
                 "type": "error",
                 "status": 502,
                 "detail": _provider_error_detail(exc.status_code, protocol),
-            })
+            }
+            yield await emit(error) if started else _sse({**error, "turn_id": turn_id, "event_id": 0})
+            if started:
+                await turn_store.finish(turn_id, "failed")
         except ProviderConfigurationError as exc:
             logger.warning("Streaming provider configuration rejected: %s", exc.code)
-            yield _sse({
+            error = {
                 "type": "error",
                 "status": 400,
                 "detail": {"code": exc.code, "message": str(exc)},
-            })
+            }
+            yield await emit(error) if started else _sse({**error, "turn_id": turn_id, "event_id": 0})
+            if started:
+                await turn_store.finish(turn_id, "failed")
         except (PermissionError, RuntimeError) as exc:
             logger.warning("Streaming provider configuration rejected: %s", type(exc).__name__)
-            yield _sse({
+            error = {
                 "type": "error",
                 "status": 400,
                 "detail": str(exc) if isinstance(exc, RuntimeError)
                 else "模型 Provider 配置无效，请检查 API Key 和模型名称。",
-            })
+            }
+            yield await emit(error) if started else _sse({**error, "turn_id": turn_id, "event_id": 0})
+            if started:
+                await turn_store.finish(turn_id, "failed")
         except (OpenAIAPIConnectionError, anthropic.APIConnectionError):
             logger.warning("Streaming model provider connection failed")
-            yield _sse({
+            error = {
                 "type": "error",
                 "status": 502,
                 "detail": "无法连接模型服务，请检查网络和 Provider Base URL。",
-            })
+            }
+            yield await emit(error) if started else _sse({**error, "turn_id": turn_id, "event_id": 0})
+            if started:
+                await turn_store.finish(turn_id, "failed")
         except Exception:
             logger.exception("Unexpected streaming chat failure")
-            yield _sse({
+            error = {
                 "type": "error",
                 "status": 502,
                 "detail": "教练服务暂时不可用，请稍后重试。",
-            })
+            }
+            yield await emit(error) if started else _sse({**error, "turn_id": turn_id, "event_id": 0})
+            if started:
+                await turn_store.finish(turn_id, "failed")
 
     return StreamingResponse(
         events(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/chat/replay")
+async def replay_turn(req: TurnReplayRequest):
+    """Return persisted events for a turn without invoking the model."""
+    replayed = await turn_store.replay(req.turnId, req.afterSequence)
+    if replayed is None:
+        raise HTTPException(404, detail="找不到该 turn")
+    snapshot, events = replayed
+    return {
+        "turnId": snapshot.turn_id,
+        "workspaceId": snapshot.workspace_id,
+        "conversationId": snapshot.conversation_id,
+        "capability": snapshot.capability,
+        "state": snapshot.state,
+        "events": events,
+    }
 
 
 @router.post("/memory/record", response_model=MemoryRecordResponse)

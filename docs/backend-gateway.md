@@ -537,6 +537,7 @@ public class GlobalExceptionHandler {
 | 网关外部路径 | 上游路径 |
 |--------------|----------|
 | `POST /api/agent/chat/stream` | `POST /chat/stream` |
+| `POST /api/agent/chat/replay` | `POST /chat/replay` |
 | `POST /api/agent/memory/record` | `POST /memory/record` |
 | `GET /api/agent/memory/profile` | `GET /memory/profile` |
 | `GET /api/agent/memory/export` | `GET /memory/export` |
@@ -847,7 +848,8 @@ CREATE INDEX idx_submission_created ON submission_record(created_at);
 
 | Method | Path | 上游 | Request | Response |
 |--------|------|------|---------|----------|
-| `POST` | `/api/agent/chat/stream` | `POST /chat/stream` | `{message, mode, conversationId, problemId?, trainingPhase?, timeRemainingSec?, code?, codeLanguage?}` | `text/event-stream`（thinking/text/done/error） |
+| `POST` | `/api/agent/chat/stream` | `POST /chat/stream` | `{message, mode, conversationId, workspaceId?, capability?, turnId?, afterSequence?, problemId?, trainingPhase?, timeRemainingSec?, code?, codeLanguage?}` | `text/event-stream`（带 `turn_id`/`event_id` 的 thinking/text/done/error） |
+| `POST` | `/api/agent/chat/replay` | `POST /chat/replay` | `{turnId, afterSequence?}` | 已持久化 turn 的状态和有序事件 |
 | `POST` | `/api/agent/memory/record` | `POST /memory/record` | `MemoryRecordRequest` | 上游原始 JSON |
 | `POST` | `/api/agent/animate` | `POST /animate` | `{type, topic?, title?, problemId?}` | 上游原始 JSON |
 | `POST` | `/api/agent/animate/generated` | `POST /animate/generated` | `GeneratedAnimationRequest` + `Authorization: Bearer <token>` | 上游原始 JSON |
