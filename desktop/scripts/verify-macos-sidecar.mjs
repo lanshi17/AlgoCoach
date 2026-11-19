@@ -22,12 +22,13 @@ const artifacts = readdirSync(dist).filter(name => /\.(dmg|zip)$/.test(name) && 
 if (artifacts.length < 2) throw new Error('缺少 macOS dmg/zip 产物')
 const zip = artifacts.find(name => name.endsWith('.zip'))
 if (!zip) throw new Error('缺少 macOS zip 产物')
-const listing = spawnSync('unzip', ['-l', join(dist, zip)], { encoding: 'utf8' })
-if (listing.status !== 0) throw new Error(`无法读取 macOS zip：${listing.stderr}`)
 const unpacked = mkdtempSync(join(tmpdir(), 'algocoach-macos-sidecar-'))
 try {
-  const extracted = spawnSync('unzip', ['-q', join(dist, zip), '-d', unpacked], { encoding: 'utf8' })
-  if (extracted.status !== 0) throw new Error(`无法解压 macOS zip：${extracted.stderr}`)
+  // macOS runners may ship a BSD unzip that cannot inspect electron-builder's
+  // zip metadata consistently. ditto is the platform-native extractor and
+  // preserves the .app bundle layout needed by the recursive sidecar check.
+  const extracted = spawnSync('ditto', ['-x', '-k', join(dist, zip), unpacked], { encoding: 'utf8' })
+  if (extracted.status !== 0) throw new Error(`无法解压 macOS zip：${extracted.stderr || extracted.error?.message || '未知错误'}`)
   const appName = readdirSync(unpacked).find(name => name.endsWith('.app'))
   if (!appName) throw new Error('macOS zip 中缺少 .app')
   const appRoot = join(unpacked, appName)
