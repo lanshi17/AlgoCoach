@@ -9,6 +9,7 @@ import { leetcodeService } from '@/services/leetcodeService'
 import { createWorkspaceExport } from '@/services/workspaceExport'
 import type { CoachStyle, ModelProviderConfig, TrainingGoal } from '@/types'
 import { CUSTOM_PROVIDER_PRESET, PROTOCOL_OPTIONS, PROVIDER_PRESETS, providerFromPreset } from '@/services/providerPresets'
+import { DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_OUTPUT_TOKENS } from '@/services/providerPresets'
 import Button from '@/components/Common/Button'
 import PageHeader from '@/components/Common/PageHeader'
 import Switch from '@/components/Common/Switch'
@@ -61,6 +62,13 @@ export default function SettingsPage() {
   }
 
   const saveProvider = () => {
+    const contextWindow = providerDraft.contextWindow ?? DEFAULT_CONTEXT_WINDOW
+    const maxOutputTokens = providerDraft.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS
+    if (!Number.isSafeInteger(contextWindow) || contextWindow < 2 || contextWindow > 10_000_000
+      || !Number.isSafeInteger(maxOutputTokens) || maxOutputTokens < 1 || maxOutputTokens >= contextWindow) {
+      setProviderMessage('请填写有效的 token 限额；最大输出必须小于上下文窗口。')
+      return
+    }
     if (!providerDraft.model.trim()) {
       setProviderMessage('请填写模型名。')
       return
@@ -223,6 +231,17 @@ export default function SettingsPage() {
                   placeholder="model-name"
                   className={field} />
               </label>
+              <label className={label}>上下文窗口（tokens）
+                <input aria-label="上下文窗口" type="number" min={2} max={10000000}
+                  value={providerDraft.contextWindow ?? DEFAULT_CONTEXT_WINDOW}
+                  onChange={event => updateProvider({ contextWindow: Number(event.target.value) })} className={field} />
+              </label>
+              <label className={label}>最大输出（tokens）
+                <input aria-label="最大输出 tokens" type="number" min={1} max={10000000}
+                  value={providerDraft.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS}
+                  onChange={event => updateProvider({ maxOutputTokens: Number(event.target.value) })} className={field} />
+              </label>
+              <p className="text-xs text-text-secondary dark:text-text-dark-secondary sm:col-span-2">请按所选模型的实际限制调整。最大输出会发送给模型服务；上下文窗口用于记录模型容量，不会扩展模型自身能力。</p>
               {providerDraft.protocol !== 'ollama' && <label className={label}>API key
                 <input aria-label="Provider API key" type="password" autoComplete="off" value={providerDraft.apiKey} onChange={event => updateProvider({ apiKey: event.target.value })}
                   placeholder="仅保存在当前浏览器会话"

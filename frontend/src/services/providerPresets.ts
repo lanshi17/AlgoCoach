@@ -4,6 +4,9 @@ export interface ProviderPreset extends Omit<ModelProviderConfig, 'apiKey'> {
   hint: string
 }
 
+export const DEFAULT_CONTEXT_WINDOW = 1_000_000
+export const DEFAULT_MAX_OUTPUT_TOKENS = 384_000
+
 // OMP-style presets: endpoint and model remain editable because availability
 // depends on the user's account, region, and compatible gateway.
 export const PROVIDER_PRESETS: ProviderPreset[] = [
@@ -34,5 +37,5 @@ export const PROTOCOL_OPTIONS: Array<{ value: ProviderProtocol; label: string }>
 ]
 
 export function providerFromPreset(preset: ProviderPreset, apiKey = ''): ModelProviderConfig {
-  return { ...preset, apiKey }
+  return { contextWindow: DEFAULT_CONTEXT_WINDOW, maxOutputTokens: DEFAULT_MAX_OUTPUT_TOKENS, ...preset, apiKey }
 }

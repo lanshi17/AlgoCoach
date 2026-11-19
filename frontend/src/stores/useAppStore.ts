@@ -196,6 +196,7 @@ function savePreference(key: string, value: string) {
 const DEFAULT_PROVIDER: ModelProviderConfig = {
   id: 'ollama', name: 'Ollama（本机）', protocol: 'ollama',
   baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen3:8b', apiKey: '',
+  contextWindow: 1_000_000, maxOutputTokens: 384_000,
 }
 
 const INITIAL_ACTIVE_PROBLEM = readActiveProblem()

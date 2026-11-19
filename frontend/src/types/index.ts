@@ -37,6 +37,8 @@ export interface ModelProviderConfig {
   baseUrl: string
   model: string
   apiKey: string
+  contextWindow?: number
+  maxOutputTokens?: number
 }
 
 export interface Problem {

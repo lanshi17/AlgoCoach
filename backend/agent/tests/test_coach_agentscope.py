@@ -53,7 +53,14 @@ async def test_provider_models_allow_longer_coach_replies(protocol):
     model = AlgoCoach()._build_chat_model({
         "protocol": protocol, "model": "test-model", "apiKey": os.environ["ANTHROPIC_API_KEY"],
     })
-    assert model.parameters.max_tokens == 4096
+    assert model.parameters.max_tokens == 384_000
+
+
+async def test_provider_custom_output_limit_reaches_model():
+    model = AlgoCoach()._build_chat_model({
+        "protocol": "ollama", "model": "example", "maxOutputTokens": 8192,
+    })
+    assert model.parameters.max_tokens == 8192
 
 
 async def test_chat_stream_route_uses_agentscope_agent_and_stable_session(

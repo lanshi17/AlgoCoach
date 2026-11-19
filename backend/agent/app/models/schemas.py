@@ -106,6 +106,16 @@ class ProviderConfig(BaseModel):
     baseUrl: str = ""
     model: str = ""
     apiKey: str = ""
+    contextWindow: int = Field(default=1_000_000, ge=2, le=10_000_000)
+    maxOutputTokens: int = Field(default=384_000, ge=1, le=10_000_000)
+
+    @field_validator("maxOutputTokens")
+    @classmethod
+    def _output_within_context(cls, value: int, info: Any) -> int:
+        context = info.data.get("contextWindow", 1_000_000)
+        if value >= context:
+            raise ValueError("maxOutputTokens must be smaller than contextWindow")
+        return value
 
 
 class AnimateRequest(BaseModel):
