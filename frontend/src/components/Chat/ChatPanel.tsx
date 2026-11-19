@@ -73,6 +73,8 @@ export default function ChatPanel() {
   const timeInput = timeLimitSec === undefined ? '' : String(timeLimitSec / 60)
   const [animationId, setAnimationId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const messagesRef = useRef<HTMLDivElement>(null)
+  const followReplyRef = useRef(true)
   const chatRequestRef = useRef<AbortController | null>(null)
   const contextVersionRef = useRef(0)
   const animation = usePollAnimation(animationId)
@@ -108,8 +110,8 @@ export default function ChatPanel() {
     const behavior = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
       ? 'auto'
       : 'smooth'
-    bottomRef.current?.scrollIntoView({ behavior })
-  }, [messages])
+    if (followReplyRef.current) bottomRef.current?.scrollIntoView({ behavior })
+  }, [messages, streamedReply])
 
   useEffect(() => {
     const lastAnimationId = [...messages].reverse().find(message => message.animationId)?.animationId ?? null
@@ -124,6 +126,7 @@ export default function ChatPanel() {
     setThinkingText('')
     setThinkingExpanded(false)
     setStreamedReply('')
+    followReplyRef.current = true
     const controller = new AbortController()
     chatRequestRef.current = controller
 
@@ -235,7 +238,10 @@ export default function ChatPanel() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+      <div ref={messagesRef} onScroll={() => {
+        const container = messagesRef.current
+        if (container) followReplyRef.current = container.scrollHeight - container.scrollTop - container.clientHeight < 80
+      }} className="min-h-0 flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {!isFocus && messages.length === 0 && !loading && !animation && (
           <div className="mx-1 my-8 border-y border-border py-6 dark:border-border-dark">
             <h2 className="text-lg font-semibold tracking-title text-text-primary dark:text-text-dark-primary">

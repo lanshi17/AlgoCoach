@@ -7,6 +7,7 @@ ReMe app. A separate test starts and closes a real embedded ReMe app to pin
 the pinned ``reme-ai`` version's lifecycle contract.
 """
 import json
+import os
 
 import pytest
 from agentscope.message import TextBlock, ToolCallBlock
@@ -45,6 +46,14 @@ def _make_coach(tmp_path, *, responses=None, search_results=None):
     )
     coach = AlgoCoach(chat_model=model, reme_middleware=reme)
     return coach, model, reme
+
+
+@pytest.mark.parametrize("protocol", ["anthropic", "openai", "openai-response", "deepseek", "dashscope", "moonshot", "minimax", "volcengine", "xai", "ollama", "gemini"])
+async def test_provider_models_allow_longer_coach_replies(protocol):
+    model = AlgoCoach()._build_chat_model({
+        "protocol": protocol, "model": "test-model", "apiKey": os.environ["ANTHROPIC_API_KEY"],
+    })
+    assert model.parameters.max_tokens == 4096
 
 
 async def test_chat_stream_route_uses_agentscope_agent_and_stable_session(

@@ -122,6 +122,29 @@ describe('focus chat guard', () => {
     Object.defineProperty(window, 'ReadableStream', { configurable: true, value: nativeReadableStream })
   })
 
+  it('parses CRLF frames split across chunks without losing the final reply', async () => {
+    const nativeFetch = window.fetch
+    const body = new ReadableStream({
+      start(controller) {
+        for (const chunk of [
+          'data: {"type":"text","delta":"第一段"}\r\n\r',
+          '\ndata: {"type":"text","delta":"第二段"}\r\n\r\n',
+          'data: {"type":"done","content":"第一段第二段"}\r\n\r\n',
+        ]) controller.enqueue(new TextEncoder().encode(chunk))
+        controller.close()
+      },
+    })
+    Object.defineProperty(window, 'fetch', { configurable: true, value: vi.fn().mockResolvedValue(new Response(body)) })
+    const chunks: string[] = []
+    try {
+      const reply = await agentService.chatStream('hello', { mode: 'PREP' }, { onText: delta => chunks.push(delta) })
+      expect(chunks).toEqual(['第一段', '第二段'])
+      expect(reply.content).toBe('第一段第二段')
+    } finally {
+      Object.defineProperty(window, 'fetch', { configurable: true, value: nativeFetch })
+    }
+  })
+
   it('uses a stable conversation identifier for requests in this page', async () => {
     const nativeFetch = window.fetch
     const fetch = vi.fn().mockImplementation(() => new Response(

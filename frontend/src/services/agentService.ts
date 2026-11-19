@@ -271,12 +271,12 @@ export const agentService = {
     while (true) {
       const { value, done } = await reader.read()
       buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done })
-      let boundary = buffer.indexOf('\n\n')
-      while (boundary >= 0) {
-        const frame = buffer.slice(0, boundary)
-        buffer = buffer.slice(boundary + 2)
+      let boundary = /\r?\n\r?\n/.exec(buffer)
+      while (boundary && boundary.index !== undefined) {
+        const frame = buffer.slice(0, boundary.index)
+        buffer = buffer.slice(boundary.index + boundary[0].length)
         consume(frame)
-        boundary = buffer.indexOf('\n\n')
+        boundary = /\r?\n\r?\n/.exec(buffer)
       }
       if (done) break
     }

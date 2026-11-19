@@ -1,9 +1,8 @@
-import React, { Suspense, lazy, useState } from 'react'
+import React, { Suspense, lazy } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Link } from 'react-router-dom'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useAppStore } from '@/stores/useAppStore'
 import type { ChatMessage as Msg } from '@/types'
 import 'katex/dist/katex.min.css'
@@ -15,12 +14,9 @@ const KATEX_OPTIONS = { throwOnError: false, strict: false as const }
 
 export default function ChatMessage({ message }: { message: Msg }) {
   const theme = useAppStore(state => state.theme)
-  const [expanded, setExpanded] = useState(false)
   const isUser = message.role === 'user'
   const isFailure = message.role === 'system' && Boolean(message.retryMessageId)
-  const lines = message.content.split('\n')
-  const isLong = !isUser && lines.length > 200
-  const content = isLong && !expanded ? lines.slice(0, 200).join('\n') : message.content
+  const content = message.content
 
   if (message.role === 'system') {
     return (
@@ -77,11 +73,6 @@ export default function ChatMessage({ message }: { message: Msg }) {
             </ReactMarkdown>
           </div>
         )}
-        {isLong && <button type="button" onClick={() => setExpanded(value => !value)} aria-expanded={expanded}
-          className="mt-2 inline-flex items-center gap-1 text-xs text-accent hover:underline">
-          {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-          {expanded ? '收起长消息' : `展开剩余 ${lines.length - 200} 行`}
-        </button>}
       </div>
     </div>
   )

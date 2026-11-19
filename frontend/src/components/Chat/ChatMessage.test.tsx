@@ -12,6 +12,13 @@ function markup(content: string, role: Msg['role'] = 'agent') {
 }
 
 describe('ChatMessage math rendering', () => {
+  it('renders the complete long response without hiding its final lines', () => {
+    const content = Array.from({ length: 220 }, (_, index) => `第 ${index + 1} 行`).join('\n\n')
+    const html = markup(content)
+    expect(html).toContain('第 220 行')
+    expect(html).not.toContain('展开剩余')
+  })
+
   it('renders inline LaTeX as KaTeX instead of raw dollar signs', () => {
     const html = markup('复杂度是 $O(n\\log n)$。')
     expect(html).toContain('class="katex"')

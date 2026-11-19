@@ -577,7 +577,7 @@ class AlgoCoach:
         # Ollama's OpenAI-compatible endpoint ignores the key, but the OpenAI
         # SDK still requires a non-empty credential object.
         secret = SecretStr(api_key or ("ollama" if protocol == "ollama" else ""))
-        params: dict[str, Any] = {"max_tokens": 1024}
+        params: dict[str, Any] = {"max_tokens": 4096}
         if protocol == "anthropic":
             return AnthropicChatModel(
                 credential=AnthropicCredential(api_key=secret, base_url=base_url),
@@ -597,7 +597,7 @@ class AlgoCoach:
         if protocol == "openai-response":
             return OpenAIResponseModel(
                 credential=OpenAICredential(api_key=secret, base_url=base_url),
-                model=model, parameters=OpenAIResponseModel.Parameters(max_tokens=1024),
+                model=model, parameters=OpenAIResponseModel.Parameters(**params),
                 client_kwargs=self._client_kwargs(base_url),
             )
         if protocol == "deepseek":
