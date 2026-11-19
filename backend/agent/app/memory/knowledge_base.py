@@ -19,6 +19,7 @@ from xml.etree import ElementTree
 import httpx
 
 from app.config import knowledge_dir
+from app.memory.db import DEFAULT_WORKSPACE_ID
 from app.memory.vector_store import (
     COLLECTION_USER_KNOWLEDGE,
     VectorStore,
@@ -128,6 +129,23 @@ def _root() -> Path:
 
 def _config_path() -> Path:
     return _root() / "config.json"
+
+
+def _sources_dir(workspace_id: str = DEFAULT_WORKSPACE_ID) -> Path:
+    if workspace_id == DEFAULT_WORKSPACE_ID:
+        return _root() / "sources"
+    digest = hashlib.sha256(workspace_id.encode("utf-8")).hexdigest()[:32]
+    path = _root() / "workspaces" / digest / "sources"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _workspace_collection(config: KnowledgeConfig, workspace_id: str) -> str:
+    collection = _collection_for(config)
+    if workspace_id == DEFAULT_WORKSPACE_ID:
+        return collection
+    digest = hashlib.sha256(workspace_id.encode("utf-8")).hexdigest()[:16]
+    return f"{collection}_{digest}"
 
 
 def _read_config() -> KnowledgeConfig:
@@ -317,9 +335,9 @@ def _source_id(name: str, data: bytes) -> str:
     return hashlib.sha256(name.encode() + b"\0" + data).hexdigest()[:24]
 
 
-def list_sources() -> list[dict[str, Any]]:
+def list_sources(workspace_id: str = DEFAULT_WORKSPACE_ID) -> list[dict[str, Any]]:
     output = []
-    for path in sorted((_root() / "sources").iterdir()):
+    for path in sorted(_sources_dir(workspace_id).iterdir()):
         if not path.is_file() or path.name.startswith("."):
             continue
         stat_result = path.stat()
@@ -329,13 +347,14 @@ def list_sources() -> list[dict[str, Any]]:
     return output
 
 
-async def search_sources(query: str, *, top_k: int = 3) -> list[dict[str, Any]]:
+async def search_sources(query: str, *, top_k: int = 3,
+                         workspace_id: str = DEFAULT_WORKSPACE_ID) -> list[dict[str, Any]]:
     """Find excerpts in the index for the currently selected embedding model."""
     query = query.strip()[:2000]
     if not query:
         return []
     config = await _ensure_configured()
-    matches = await knowledge_store.query(_collection_for(config), query, top_k=max(1, min(top_k, 3)))
+    matches = await knowledge_store.query(_workspace_collection(config, workspace_id), query, top_k=max(1, min(top_k, 3)))
     return [
         {"source": str(item.get("metadata", {}).get("source_name", "")),
          "excerpt": str(item.get("document", ""))[:1600]}
@@ -344,9 +363,9 @@ async def search_sources(query: str, *, top_k: int = 3) -> list[dict[str, Any]]:
     ]
 
 
-async def add_source(name: str, data: bytes) -> dict[str, Any]:
+async def add_source(name: str, data: bytes, workspace_id: str = DEFAULT_WORKSPACE_ID) -> dict[str, Any]:
     config = await _ensure_configured()
-    collection = _collection_for(config)
+    collection = _workspace_collection(config, workspace_id)
     name = _safe_name(name)
     suffix = Path(name).suffix.lower()
     if suffix not in ALLOWED_SUFFIXES:
@@ -354,8 +373,7 @@ async def add_source(name: str, data: bytes) -> dict[str, Any]:
     if len(data) > MAX_FILE_BYTES:
         raise KnowledgeBaseError("单个文件不能超过 20 MB")
     source_id = _source_id(name, data)
-    path = _root() / "sources" / f"{source_id}--{name}"
-    path.write_bytes(data)
+    path = _sources_dir(workspace_id) / f"{source_id}--{name}"
     records: list[VectorRecord] = []
     for extracted_name, text in _extract_bytes(name, data):
         extracted_id = hashlib.sha1(extracted_name.encode()).hexdigest()[:8]
@@ -368,32 +386,33 @@ async def add_source(name: str, data: bytes) -> dict[str, Any]:
     if not records:
         raise KnowledgeBaseError("文件中没有可索引的文本")
     await knowledge_store.upsert(collection, records)
+    path.write_bytes(data)
     return {"id": source_id, "name": name, "bytes": len(data), "chunks": len(records)}
 
 
-async def remove_source(source_id: str) -> int:
+async def remove_source(source_id: str, workspace_id: str = DEFAULT_WORKSPACE_ID) -> int:
     config = await _ensure_configured()
-    collection = _collection_for(config)
+    collection = _workspace_collection(config, workspace_id)
     if not re.fullmatch(r"[0-9a-f]{24}", source_id):
         raise KnowledgeBaseError("知识库源标识无效")
     removed = await knowledge_store.delete(
         collection, where={"source_id": source_id}
     )
-    for path in (_root() / "sources").glob(f"{source_id}--*"):
+    for path in _sources_dir(workspace_id).glob(f"{source_id}--*"):
         path.unlink(missing_ok=True)
     return removed
 
 
-async def reindex() -> dict[str, int]:
+async def reindex(workspace_id: str = DEFAULT_WORKSPACE_ID) -> dict[str, int]:
     config = await _ensure_configured()
-    collection = _collection_for(config)
+    collection = _workspace_collection(config, workspace_id)
     existing_ids = set(await knowledge_store.ids(
         collection, where={"source_type": "user_knowledge"}
     ))
     all_records: list[VectorRecord] = []
     chunks = 0
     files = 0
-    for path in sorted((_root() / "sources").iterdir()):
+    for path in sorted(_sources_dir(workspace_id).iterdir()):
         if not path.is_file() or "--" not in path.name:
             continue
         source_id, name = path.name.split("--", 1)
@@ -419,7 +438,7 @@ async def reindex() -> dict[str, int]:
     return {"files": files, "chunks": chunks}
 
 
-async def status() -> dict[str, Any]:
+async def status(workspace_id: str = DEFAULT_WORKSPACE_ID) -> dict[str, Any]:
     config = await _ensure_configured()
-    return {"config": config.public(), "sources": list_sources(),
-            "indexedChunks": await knowledge_store.count(_collection_for(config))}
+    return {"config": config.public(), "sources": list_sources(workspace_id),
+            "indexedChunks": await knowledge_store.count(_workspace_collection(config, workspace_id))}

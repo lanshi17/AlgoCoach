@@ -968,7 +968,9 @@ class AlgoCoach:
             if not isinstance(query, str) or not query.strip():
                 return {"ok": False, "error": "query is required"}
             try:
-                results = await knowledge_base.search_sources(query)
+                results = await knowledge_base.search_sources(
+                    query, workspace_id=_active_workspace_id.get()
+                )
             except Exception:
                 logger.warning("Learning source search failed", exc_info=True)
                 return {"ok": False, "error": "学习资料检索暂不可用，请检查知识库索引和 embedding 配置。"}

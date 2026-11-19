@@ -88,3 +88,25 @@ def test_rejects_unsupported_source_and_provider(tmp_path, monkeypatch):
     monkeypatch.setattr(kb, "knowledge_dir", lambda: str(tmp_path / "knowledge"))
     with pytest.raises(kb.KnowledgeBaseError):
         kb.configure({"provider": "unknown", "model": "x"})
+
+
+@pytest.mark.asyncio
+async def test_workspace_sources_search_and_delete_are_isolated(tmp_path, monkeypatch, fake_embedding):
+    monkeypatch.setattr(kb, "knowledge_dir", lambda: str(tmp_path / "knowledge"))
+    store = kb.VectorStore(path=str(tmp_path / "chroma"), embedding_function=fake_embedding)
+    monkeypatch.setattr(kb, "knowledge_store", store)
+    config = kb.KnowledgeConfig()
+
+    async def configured():
+        return config
+
+    monkeypatch.setattr(kb, "_ensure_configured", configured)
+    a = await kb.add_source("lesson.txt", b"graph breadth first search", "a")
+    await kb.add_source("lesson.txt", b"dynamic programming knapsack", "b")
+    assert len(kb.list_sources("a")) == len(kb.list_sources("b")) == 1
+    assert kb.list_sources() == []
+    assert "graph" in (await kb.search_sources("graph", workspace_id="a"))[0]["excerpt"]
+    assert "dynamic" in (await kb.search_sources("graph", workspace_id="b"))[0]["excerpt"]
+    await kb.remove_source(a["id"], "a")
+    assert await kb.search_sources("graph", workspace_id="a") == []
+    assert len(kb.list_sources("b")) == 1

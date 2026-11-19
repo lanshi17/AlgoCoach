@@ -12,7 +12,7 @@ AlgoCoach 参考 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 的公开
 | ToolRegistry | AgentScope tools、知识库检索、记忆工具、题库和动画工具 | 工具继续由 Python Agent 注册，前端不直接调用模型或工具 |
 | Practice | 本地算法题练习、样例运行、提交、复盘记录 | 使用 DeepTutor 对应的可解释 SM-2 风格冷启动规则；保留每次自评事件 |
 | Mastery Path | 本地知识图谱、弱点主题和模式推荐 | 当前推荐由既有 Agent 与 mastery 数据驱动，尚未形成独立 path runner |
-| Knowledge Center | `KnowledgeBasePage` 与本地知识库索引 | 文件、索引和 Provider 配置保留在本机运行时目录 |
+| Knowledge Center | `KnowledgeBasePage` 与本地知识库索引 | 资料文件和索引按 workspace 隔离，embedding Provider 配置在本机共享 |
 | Learning Notebook | `/notebook` 学习笔记页 + 复盘队列 | 笔记支持标题、正文、标签、保存和删除，并按 workspace key 存储；复盘笔记仍保留在独立复盘队列 |
 | Task Board / Calendar | `/home` 本周计划、练习/复盘日期与本地任务板 | 任务以 workspace key 持久化，可安排下一页练习或到期复盘并标记完成；更完整的跨设备 calendar 留作后续 |
 
@@ -20,7 +20,7 @@ AlgoCoach 参考 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 的公开
 
 当前发行版是单用户、本地多 workspace，默认 ID 为 `local-default`；设置页可以创建或切换 workspace，切换后应用重载。浏览器 localStorage 的练习本、复盘队列、学习空间布局、任务板、草稿和专注记录通过 `workspaceStorageKey` 归属 workspace；默认 workspace 保留旧 key 以兼容已有数据，其他 workspace 使用隔离后缀。Agent SQLite 训练记忆和 ReMe 对话目录按 workspace 隔离，profile、复习调度、推荐回测和导出接口都接受 workspace；当前 Chroma 向量集合仍是共享本地索引，非默认 workspace 导出会主动排除向量文件以避免跨 workspace 泄露；Gateway SQLite 保存平台 Cookie 和判题事实。题目代码只在本轮 REVIEW 请求中发送，不写入长期记忆。
 
-后续扩展跨设备同步时，`workspaceId` 还需要成为向量索引、知识库索引和同步协议的共同隔离键；迁移不能只在 UI 上增加 workspace 下拉框。
+题目和错误描述的向量索引仍需按 workspace 隔离；跨设备同步尚未实现。
 
 ## Durable turn 当前边界
 

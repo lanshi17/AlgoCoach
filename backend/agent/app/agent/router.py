@@ -89,12 +89,12 @@ async def update_knowledge_config(request: Request):
 
 
 @router.get("/knowledge/sources")
-async def knowledge_sources():
-    return {"sources": knowledge_base.list_sources()}
+async def knowledge_sources(workspaceId: str = "local-default"):
+    return {"sources": knowledge_base.list_sources(workspaceId)}
 
 
 @router.post("/knowledge/sources")
-async def upload_knowledge_sources(files: list[UploadFile] = File(...)):
+async def upload_knowledge_sources(files: list[UploadFile] = File(...), workspaceId: str = "local-default"):
     if len(files) > knowledge_base.MAX_FILES:
         raise HTTPException(413, detail=f"一次最多上传 {knowledge_base.MAX_FILES} 个文件")
     total = 0
@@ -105,32 +105,32 @@ async def upload_knowledge_sources(files: list[UploadFile] = File(...)):
             total += len(data)
             if total > knowledge_base.MAX_TOTAL_BYTES:
                 raise knowledge_base.KnowledgeBaseError("单次上传总大小不能超过 100 MB")
-            results.append(await knowledge_base.add_source(upload.filename or "source.txt", data))
+            results.append(await knowledge_base.add_source(upload.filename or "source.txt", data, workspaceId))
         return {"sources": results}
     except knowledge_base.KnowledgeBaseError as exc:
         raise HTTPException(422, detail=str(exc)) from exc
 
 
 @router.delete("/knowledge/sources/{source_id}")
-async def delete_knowledge_source(source_id: str):
+async def delete_knowledge_source(source_id: str, workspaceId: str = "local-default"):
     try:
-        return {"removedChunks": await knowledge_base.remove_source(source_id)}
+        return {"removedChunks": await knowledge_base.remove_source(source_id, workspaceId)}
     except knowledge_base.KnowledgeBaseError as exc:
         raise HTTPException(422, detail=str(exc)) from exc
 
 
 @router.post("/knowledge/reindex")
-async def reindex_knowledge():
+async def reindex_knowledge(workspaceId: str = "local-default"):
     try:
-        return await knowledge_base.reindex()
+        return await knowledge_base.reindex(workspaceId)
     except knowledge_base.KnowledgeBaseError as exc:
         raise HTTPException(422, detail=str(exc)) from exc
 
 
 @router.get("/knowledge/status")
-async def knowledge_status():
+async def knowledge_status(workspaceId: str = "local-default"):
     try:
-        return await knowledge_base.status()
+        return await knowledge_base.status(workspaceId)
     except knowledge_base.KnowledgeBaseError as exc:
         raise HTTPException(422, detail=str(exc)) from exc
 

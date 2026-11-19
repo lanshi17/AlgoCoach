@@ -153,7 +153,7 @@ export const agentService = {
   },
 
   async getKnowledgeStatus(): Promise<KnowledgeStatus> {
-    const { data } = await axios.get<KnowledgeStatus>('/api/agent/knowledge/status')
+    const { data } = await axios.get<KnowledgeStatus>(workspaceScopedPath('/api/agent/knowledge/status'))
     return data
   },
 
@@ -165,16 +165,16 @@ export const agentService = {
   async uploadKnowledgeSources(files: File[]): Promise<KnowledgeSource[]> {
     const body = new FormData()
     files.forEach(file => body.append('files', file))
-    const { data } = await axios.post<{ sources: KnowledgeSource[] }>('/api/agent/knowledge/sources', body)
+    const { data } = await axios.post<{ sources: KnowledgeSource[] }>(workspaceScopedPath('/api/agent/knowledge/sources'), body)
     return data.sources
   },
 
   async deleteKnowledgeSource(sourceId: string): Promise<void> {
-    await axios.delete(`/api/agent/knowledge/sources/${encodeURIComponent(sourceId)}`)
+    await axios.delete(workspaceScopedPath(`/api/agent/knowledge/sources/${encodeURIComponent(sourceId)}`))
   },
 
   async reindexKnowledge(): Promise<{ files: number; chunks: number }> {
-    const { data } = await axios.post<{ files: number; chunks: number }>('/api/agent/knowledge/reindex')
+    const { data } = await axios.post<{ files: number; chunks: number }>(workspaceScopedPath('/api/agent/knowledge/reindex'))
     return data
   },
 
