@@ -10,6 +10,7 @@
 > - **P3 prompt 集中管理与目标变体 API 已实现**：Soul 原文迁至 `agent/prompts.py`，`get_system_prompt(goal)` 支持 `interview_prep` / `contest` / `casual` 三种变体，无效值直接拒绝；助教式教学原则（先问尝试、解释原因、引导验证、不直接给最终答案或整段成品代码）融入基础 Soul；`coach.chat()` 接收来自设置页的浏览器偏好目标；竞赛阶段显式覆盖该目标。目标保存在当前浏览器，不另建用户配置表。
 > - **contest 训练协议已接入 `/chat/stream`**：`ChatRequest` 新增可选 `trainingPhase`（默认 `auto`，允许 `virtual_contest` / `topic_drill` / `attempt` / `hint` / `review` / `upsolve`，无效值拒绝 `auto`）与 `timeRemainingSec`（可选非负整数）；显式阶段或剩余时间会启用 `contest` 目标与真实 OI/xCPC 训练协议，阶段/剩余时间同时写入 AgentScope 用户消息，ReMe 记忆可见。流式 `done` 事件、FOCUS 静默、非 contest 行为与当前客户端契约一致，未新增训练 SQLite（详见 §3.3）。
 > - **/chat/stream Agent runtime 使用 AgentScope 2.0.11 + 官方 ReMeMiddleware**：`AlgoCoach` 使用 `Agent`/`AgentState` 替代手写 Claude tool loop 与 `_sessions`；ReMe 进程内单实例，`mode="both"` 自动召回/写回；短期 AgentState 按 workspace、页面会话与题目隔离，ReMe workspace 跨会话检索，应用关闭时 `await coach.close()`。FOCUS 仍完全静默。工具 schema 保持稳定；请求新增可选 `workspaceId`、`capability`、`conversationId`、`turnId` 与 `afterSequence`，turn 事件写入本地 SQLite 并可 replay。
+> - **Capability registry 已接入**：`chat`、`deep_solve`、`practice`、`mastery_path`、`review` 由同一组受限值校验；非默认能力会追加对应的推理侧重点，未知能力在请求边界拒绝。
 
 ## 1. 模块职责与边界
 

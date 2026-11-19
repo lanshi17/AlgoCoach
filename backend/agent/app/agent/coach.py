@@ -672,6 +672,7 @@ class AlgoCoach:
                 time_remaining_sec=time_remaining_sec,
                 animations=remotion_enabled() and animations,
                 coach_style=coach_style,
+                capability=capability,
             ).format(memory_context=json.dumps(ctx, ensure_ascii=False, indent=2)) + (
                 "\n\n当前界面状态（以本轮为准，高于历史对话和记忆）："
                 "如果用户只是问候或闲聊，先自然回应这条消息，不要擅自转成训练、代码复盘或换题引导。"
@@ -772,6 +773,7 @@ class AlgoCoach:
                 time_remaining_sec=time_remaining_sec,
                 animations=remotion_enabled() and animations,
                 coach_style=coach_style,
+                capability=capability,
             ).format(memory_context=json.dumps(ctx, ensure_ascii=False, indent=2)) + (
                 "\n\n当前界面状态（以本轮为准，高于历史对话和记忆）："
                 "如果用户只是问候或闲聊，先自然回应这条消息，不要擅自转成训练、代码复盘或换题引导。"

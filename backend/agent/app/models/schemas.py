@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.agent.prompts import (
     DEFAULT_TRAINING_PHASE,
+    resolve_capability,
     resolve_coach_style,
     resolve_goal,
     resolve_training_phase,
@@ -46,6 +47,11 @@ class ChatRequest(BaseModel):
     animations: bool = True
     coachStyle: str = "auto"
     provider: "ProviderConfig | None" = None
+
+    @field_validator("capability", mode="before")
+    @classmethod
+    def _known_capability(cls, value: object) -> str:
+        return resolve_capability(value).value
 
     @field_validator("trainingPhase", mode="before")
     @classmethod

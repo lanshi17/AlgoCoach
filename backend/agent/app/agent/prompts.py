@@ -45,7 +45,18 @@ class TrainingPhase(str, Enum):
     UPSOLVE = "upsolve"
 
 
+class DeepTutorCapability(str, Enum):
+    """Bounded capability registry carried by each durable turn."""
+
+    CHAT = "chat"
+    DEEP_SOLVE = "deep_solve"
+    PRACTICE = "practice"
+    MASTERY_PATH = "mastery_path"
+    REVIEW = "review"
+
+
 DEFAULT_TRAINING_PHASE = TrainingPhase.AUTO
+DEFAULT_CAPABILITY = DeepTutorCapability.CHAT
 
 # Marker for the per-request training context that is prepended to the
 # AgentScope user message (and therefore written into ReMe memory).
@@ -152,6 +163,25 @@ GOAL_GUIDANCE: dict[UserGoal, str] = {
     ),
 }
 
+CAPABILITY_GUIDANCE: dict[DeepTutorCapability, str] = {
+    DeepTutorCapability.DEEP_SOLVE: (
+        "当前能力是 deep_solve：把复杂问题拆成模型、关键不变量、正确性证明、"
+        "复杂度和可验证的反例；先给推理路径，再决定是否需要工具。"
+    ),
+    DeepTutorCapability.PRACTICE: (
+        "当前能力是 practice：围绕一次练习记录和当前目标推进，优先提出最小可验证步骤；"
+        "FOCUS 仍必须完全静默，不主动给提示。"
+    ),
+    DeepTutorCapability.MASTERY_PATH: (
+        "当前能力是 mastery_path：结合弱点主题、前置关系和最近练习，给出下一步可执行的"
+        "学习路径；区分已有证据与待验证的掌握度。"
+    ),
+    DeepTutorCapability.REVIEW: (
+        "当前能力是 review：只基于判题事实、当前代码和训练记录复盘，分别标记已确认的 bug、"
+        "边界风险、复杂度问题和下一道练习。"
+    ),
+}
+
 
 def resolve_goal(goal: object) -> UserGoal | None:
     """Return the matching :class:`UserGoal`; ``None`` selects the base Soul."""
@@ -163,6 +193,18 @@ def resolve_goal(goal: object) -> UserGoal | None:
         return UserGoal(str(goal).strip())
     except ValueError as exc:
         raise ValueError(f"unsupported coaching goal: {goal!r}") from exc
+
+
+def resolve_capability(capability: object) -> DeepTutorCapability:
+    """Return a registered capability or reject an unknown one."""
+    if isinstance(capability, DeepTutorCapability):
+        return capability
+    if capability is None:
+        return DEFAULT_CAPABILITY
+    try:
+        return DeepTutorCapability(str(capability).strip().lower())
+    except ValueError as exc:
+        raise ValueError(f"unsupported capability: {capability!r}") from exc
 
 
 def resolve_training_phase(
@@ -285,6 +327,7 @@ def get_system_prompt(
     time_remaining_sec: int | None = None,
     animations: bool = True,
     coach_style: str = DEFAULT_COACH_STYLE,
+    capability: str | DeepTutorCapability = DEFAULT_CAPABILITY,
 ) -> str:
     """Build the Soul template for ``goal`` and the contest ``training_phase``.
 
@@ -295,14 +338,16 @@ def get_system_prompt(
     ignore both training fields entirely.
     """
     resolved = resolve_goal(goal)
+    resolved_capability = resolve_capability(capability)
     style_note = COACH_STYLE_GUIDANCE.get(resolve_coach_style(coach_style))
-    if resolved is None:
-        prompt = SOUL if animations else _without_animation_guidance(SOUL)
-        return f"{prompt}\n\n{style_note}" if style_note else prompt
-
-    parts = [SOUL if animations else _without_animation_guidance(SOUL), GOAL_GUIDANCE[resolved]]
+    parts = [SOUL if animations else _without_animation_guidance(SOUL)]
     if style_note:
         parts.append(style_note)
+    if resolved_capability is not DEFAULT_CAPABILITY:
+        parts.append(CAPABILITY_GUIDANCE[resolved_capability])
+    if resolved is None:
+        return "\n\n".join(parts)
+    parts.append(GOAL_GUIDANCE[resolved])
     if resolved is UserGoal.CONTEST:
         phase = resolve_training_phase(training_phase)
         if phase is not TrainingPhase.AUTO:

@@ -14,6 +14,7 @@ from pydantic import ValidationError
 from app.agent.coach import AlgoCoach
 from app.agent.prompts import (
     CONTEST_PROTOCOL,
+    DeepTutorCapability,
     DEFAULT_TRAINING_PHASE,
     GOAL_GUIDANCE,
     PHASE_GUIDANCE,
@@ -22,6 +23,7 @@ from app.agent.prompts import (
     UserGoal,
     build_training_context,
     get_system_prompt,
+    resolve_capability,
     is_contest_context,
     resolve_training_phase,
     time_remaining_note,
@@ -77,6 +79,12 @@ def test_chat_request_accepts_deeptutor_capability_context(capability):
 def test_chat_request_rejects_unknown_deeptutor_capability():
     with pytest.raises(ValidationError):
         _request(capability="unknown")
+
+
+def test_capability_registry_normalises_and_guides_prompts():
+    assert resolve_capability(" DEEP_SOLVE ") is DeepTutorCapability.DEEP_SOLVE
+    assert "deep_solve" in get_system_prompt(capability="deep_solve")
+    assert "deep_solve" not in get_system_prompt()
 
 
 @pytest.mark.parametrize("goal", ["contest", "interview_prep", "casual"])
