@@ -117,7 +117,8 @@ jobs:
           if-no-files-found: error
 
   desktop-macos-arm64:
-    runs-on: macos-14
+    # macos-15 is the current GitHub-hosted Apple Silicon runner label.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
