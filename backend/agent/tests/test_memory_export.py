@@ -7,6 +7,7 @@ import pytest
 
 from app.memory.db import EpisodicRecord, SessionLocal
 from app.memory import memory_service as memory_module
+from app.memory.vector_store import VectorStore, workspace_vector_store
 
 pytestmark = pytest.mark.asyncio
 
@@ -51,3 +52,26 @@ async def test_export_archive_contains_rows_reme_files_and_vector_store(
         assert not any(name.startswith("reme/workspaces/") for name in archive.namelist())
         assert archive.read("chroma/index.bin") == b"local index"
         assert payload["secrets_included"] is False
+
+
+async def test_non_default_export_contains_only_its_vector_documents(
+    client, tmp_path, monkeypatch, fake_embedding
+):
+    base = VectorStore(path=str(tmp_path / "chroma"), embedding_function=fake_embedding)
+    monkeypatch.setattr(memory_module, "vector_store", base)
+    monkeypatch.setattr(memory_module, "chroma_path", lambda: str(tmp_path / "chroma"))
+    monkeypatch.setattr(memory_module, "reme_workspace_dir", lambda: str(tmp_path / "reme"))
+    alpha = workspace_vector_store("alpha", base)
+    beta = workspace_vector_store("beta", base)
+    await alpha.index_problem("same", "Alpha", "alpha graph")
+    await beta.index_problem("same", "Beta", "beta graph")
+    await alpha.index_error_descriptions("same", ["alpha mistake"])
+
+    response = await client.get("/memory/export?workspaceId=alpha")
+    assert response.status_code == 200
+    with ZipFile(BytesIO(response.content)) as archive:
+        snapshot = json.loads(archive.read("memory.json"))
+        assert snapshot["vectors"]["problem_content"][0]["metadata"]["title"] == "Alpha"
+        assert "alpha mistake" in snapshot["vectors"]["error_description"][0]["document"]
+        assert not any(name.startswith("chroma/") for name in archive.namelist())
+        assert "beta graph" not in json.dumps(snapshot)

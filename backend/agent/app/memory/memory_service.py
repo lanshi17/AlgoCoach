@@ -34,7 +34,7 @@ from app.memory.db import (
     SessionLocal,
 )
 from app.config import chroma_path, reme_workspace_dir
-from app.memory.vector_store import vector_store
+from app.memory.vector_store import vector_store, workspace_vector_store
 
 # One notification per problem per day; the batch never exceeds three.
 MAX_REVIEW_PUSHES_PER_DAY = 3
@@ -218,15 +218,17 @@ class MemoryService:
                 tables[name] = exported_rows
 
         chroma_root = Path(chroma_path())
-        # Chroma's legacy collections are process-wide until their own
-        # workspace migration lands. Never include them in a non-default
-        # workspace export, which is safer than leaking another workspace's
-        # indexed problem statements.
-        vector_records = (
-            await vector_store.export_all()
-            if workspace in (None, DEFAULT_WORKSPACE_ID) and chroma_root.is_dir()
-            else {}
+        scoped_store = (
+            workspace_vector_store(workspace, vector_store)
+            if workspace is not None and workspace != DEFAULT_WORKSPACE_ID
+            else vector_store
         )
+        scoped_chroma_root = (
+            Path(scoped_store.path)
+            if workspace not in (None, DEFAULT_WORKSPACE_ID)
+            else chroma_root
+        )
+        vector_records = await scoped_store.export_all() if scoped_chroma_root.is_dir() else {}
         snapshot = {
             "format": "algocoach-memory-v1",
             "workspace_id": workspace,
