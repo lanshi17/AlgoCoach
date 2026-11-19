@@ -1,12 +1,15 @@
 import React, { useMemo, useState } from 'react'
-import { BookOpen, Plus, Save, Trash2 } from 'lucide-react'
+import { BookOpen, MessageCircle, Plus, Save, Trash2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/Common/PageHeader'
 import Button from '@/components/Common/Button'
 import { deleteNotebookEntry, readNotebookEntries, saveNotebookEntry, type NotebookEntry } from '@/services/learningNotebook'
+import { prepareNotebookDiscussion } from '@/services/notebookDiscussion'
 
 const field = 'w-full rounded-card border border-border bg-surface-soft px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft dark:text-text-dark-primary'
 
 export default function NotebookPage() {
+  const navigate = useNavigate()
   const [entries, setEntries] = useState<NotebookEntry[]>(() => readNotebookEntries())
   const [selectedId, setSelectedId] = useState<string | null>(() => readNotebookEntries()[0]?.id ?? null)
   const selected = useMemo(() => entries.find(entry => entry.id === selectedId) ?? null, [entries, selectedId])
@@ -62,7 +65,7 @@ export default function NotebookPage() {
           <input aria-label="笔记标题" value={draft.title} onChange={event => setDraft({ ...draft, title: event.target.value })} placeholder="笔记标题" className={`${field} mt-4 text-lg font-medium`} />
           <input aria-label="笔记标签" value={draft.tags} onChange={event => setDraft({ ...draft, tags: event.target.value })} placeholder="标签，用顿号或逗号分隔" className={`${field} mt-3 text-xs`} />
           <textarea aria-label="笔记正文" value={draft.body} onChange={event => setDraft({ ...draft, body: event.target.value })} placeholder="写下算法直觉、证明、反例、复杂度或还没想通的问题……" rows={18} className={`${field} mt-3 min-h-[360px] resize-y leading-6`} />
-          <div className="mt-4 flex items-center gap-3"><Button variant="primary" onClick={save}><Save size={15} />保存笔记</Button>{message && <span role="status" className="text-xs text-text-secondary dark:text-text-dark-secondary">{message}</span>}</div>
+          <div className="mt-4 flex flex-wrap items-center gap-3"><Button variant="primary" onClick={save}><Save size={15} />保存笔记</Button>{selected && <Button variant="secondary" onClick={() => { prepareNotebookDiscussion(selected.title, selected.body, selected.tags); navigate('/workspace', { state: { openPanel: 'chat' } }) }}><MessageCircle size={15} />带笔记问导师</Button>}{message && <span role="status" className="text-xs text-text-secondary dark:text-text-dark-secondary">{message}</span>}</div>
         </section>
       </div>
     </div>
