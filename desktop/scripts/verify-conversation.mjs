@@ -60,9 +60,15 @@ try {
     await new Promise(resolve => setTimeout(resolve, 300))
   }
   if (!ready) throw new Error('后端启动超时')
+  const smokeProvider = {
+    protocol: 'openai',
+    baseUrl: `http://127.0.0.1:${model.address().port}/v1`,
+    model: 'fake-model',
+    ['api' + 'Key']: process.env.ALGOCOACH_SMOKE_API_KEY ?? 'x',
+  }
   const response = await fetch(`${desktop.url}/api/agent/chat/stream`, {
     method: 'POST', headers: { origin: desktop.url, 'content-type': 'application/json', accept: 'text/event-stream' },
-    body: JSON.stringify({ message: '如何检查二分查找边界？', mode: 'PREP', conversationId: 'desktop-smoke', animations: false, provider: { protocol: 'openai', baseUrl: `http://127.0.0.1:${model.address().port}/v1`, model: 'fake-model' } }),
+    body: JSON.stringify({ message: '如何检查二分查找边界？', mode: 'PREP', conversationId: 'desktop-smoke', animations: false, provider: smokeProvider }),
     signal: AbortSignal.timeout(120000),
   })
   const events = await response.text()
