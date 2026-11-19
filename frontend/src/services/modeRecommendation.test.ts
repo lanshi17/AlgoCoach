@@ -18,3 +18,8 @@ it('suggests contest when accepted rate is low after enough attempts', () => {
   expect(result?.suggestedMode).toBe('contest')
   expect(result?.key).toBe('error_rate')
 })
+
+it('falls back to local attempts when an older profile omits optional arrays', () => {
+  const result = recommendLearningMode({ currentMode: 'self_paced', localAttempts: 3, profile: { stats: undefined, topics: undefined } as unknown as AgentProfile })
+  expect(result).toBeNull()
+})

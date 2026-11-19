@@ -33,7 +33,8 @@ export default function LearningSpacePage() {
     return () => window.clearInterval(timer)
   }, [])
   const topicCounts = useMemo(() => {
-    if (profile?.topics.length) return profile.topics.slice().sort((a, b) => b.mastery - a.mastery).slice(0, 4).map(topic => [topic.topic, topic.attempts] as [string, number])
+    const topics = Array.isArray(profile?.topics) ? profile.topics : []
+    if (topics.length) return topics.slice().sort((a, b) => b.mastery - a.mastery).slice(0, 4).map(topic => [topic.topic, topic.attempts] as [string, number])
     const counts = new Map<string, number>()
     records.forEach(record => record.topics.forEach(topic => counts.set(topic, (counts.get(topic) ?? 0) + 1)))
     return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4)
@@ -135,7 +136,7 @@ function renderBlock(id: LearningBlockId, context: RenderContext) {
   if (id === 'digest') return (
     <BlockCard id="digest" onRemove={remove} className="lg:col-span-2">
       <div className="grid gap-4 sm:grid-cols-3">
-        <DigestItem icon={<Code2 size={17} />} label="最近练习" value={records[records.length - 1]?.title ?? profile?.recentProblems[0]?.problemId ?? '还没有练习'} />
+        <DigestItem icon={<Code2 size={17} />} label="最近练习" value={records[records.length - 1]?.title ?? profile?.recentProblems?.[0]?.problemId ?? '还没有练习'} />
         <DigestItem icon={<Clock3 size={17} />} label="专注时间" value={`${Math.round(records.reduce((sum, record) => sum + record.durationSec, 0) / 60)} 分钟`} />
         <DigestItem icon={<Check size={17} />} label="当前状态" value={mode === 'FOCUS' ? '正在专注' : mode === 'REVIEW' ? '等待复盘' : '准备开始'} />
       </div>
