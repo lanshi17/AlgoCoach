@@ -878,7 +878,7 @@ class MemoryService:
                 if not steps else None
             ),
             "sourceSummary": {
-                "topics": len(node_by_topic),
+                "topics": len(all_topics),
                 "dueReviews": len(due_problems),
             },
         }
