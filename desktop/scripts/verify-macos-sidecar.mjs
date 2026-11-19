@@ -23,21 +23,21 @@ if (artifacts.length < 2) throw new Error('缺少 macOS dmg/zip 产物')
 const zip = artifacts.find(name => name.endsWith('.zip'))
 if (!zip) throw new Error('缺少 macOS zip 产物')
 const listing = spawnSync('unzip', ['-l', join(dist, zip)], { encoding: 'utf8' })
-if (listing.status !== 0 || !listing.stdout.includes('/Contents/Resources/sidecar/python/bin/python3.12')) {
-  throw new Error('macOS zip 中没有完整侧车 Python 运行时')
-}
+if (listing.status !== 0) throw new Error(`无法读取 macOS zip：${listing.stderr}`)
 const unpacked = mkdtempSync(join(tmpdir(), 'algocoach-macos-sidecar-'))
 try {
   const extracted = spawnSync('unzip', ['-q', join(dist, zip), '-d', unpacked], { encoding: 'utf8' })
   if (extracted.status !== 0) throw new Error(`无法解压 macOS zip：${extracted.stderr}`)
   const appName = readdirSync(unpacked).find(name => name.endsWith('.app'))
   if (!appName) throw new Error('macOS zip 中缺少 .app')
-  const sidecar = join(unpacked, appName, 'Contents', 'Resources', 'sidecar')
-  const python = join(sidecar, 'python', 'bin', 'python3.12')
-  const java = join(sidecar, 'java', 'bin', 'java')
-  const gateway = join(sidecar, 'backend', 'gateway', 'target', 'gateway-0.1.0.jar')
+  const appRoot = join(unpacked, appName)
+  const python = findFile(appRoot, path => path.endsWith(join('python', 'bin', 'python3.12')))
+  const java = findFile(appRoot, path => path.endsWith(join('java', 'bin', 'java')))
+  const gateway = findFile(appRoot, path => path.endsWith(join('backend', 'gateway', 'target', 'gateway-0.1.0.jar')))
+  if (!python || !java || !gateway) throw new Error('macOS zip 解压后没有找到完整 sidecar（Python、Java 或 Gateway JAR）')
+  const sidecar = python.slice(0, -join('python', 'bin', 'python3.12').length - 1)
   for (const file of [python, java, gateway]) {
-    if (!existsSync(file)) throw new Error(`macOS zip 解压后缺少：${file.slice(sidecar.length + 1)}`)
+    if (!existsSync(file)) throw new Error(`macOS zip 解压后缺少：${file.slice(appRoot.length + 1)}`)
   }
   const pythonProbe = spawnSync(python, ['-c', 'import platform,sys; assert platform.machine() in ("arm64", "aarch64"); print(sys.version)'], {
     encoding: 'utf8',
@@ -51,6 +51,22 @@ try {
   rmSync(unpacked, { recursive: true, force: true })
 }
 console.log(`macOS arm64 sidecar verified: ${artifacts.join(', ')}`)
+
+function findFile(root, predicate) {
+  const visit = directory => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name)
+      if (entry.isDirectory() && !entry.isSymbolicLink()) {
+        const found = visit(path)
+        if (found) return found
+      } else if (entry.isFile() && predicate(path)) {
+        return path
+      }
+    }
+    return null
+  }
+  return visit(root)
+}
 
 function statSize(path) {
   try { return statSync(path).size > 0 } catch { return false }

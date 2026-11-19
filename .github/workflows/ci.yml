@@ -92,7 +92,13 @@ jobs:
           java-version: '21'
       - uses: astral-sh/setup-uv@v6
       - run: uv python install 3.12
-      - run: mvn -B -DskipTests package
+      - name: Build Gateway with Maven retries
+        run: |
+          for attempt in 1 2 3; do
+            mvn -B -DskipTests package && exit 0
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep $((attempt * 20))
+          done
         working-directory: backend/gateway
       - run: npm run prepare:sidecar
         working-directory: desktop
