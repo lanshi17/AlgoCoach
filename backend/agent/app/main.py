@@ -9,6 +9,7 @@ Routes:
   GET  /animate/{id}  — poll animation job status
   POST /memory/record — gateway callback: persist a finished submission
   GET  /memory/profile — local progress and knowledge graph aggregates
+  GET  /memory/mastery-path — ordered, explainable next learning steps
   GET  /memory/export — ZIP download of local memories and indexes
 
 Startup creates the current SQLite schema and starts the cron scheduler exactly

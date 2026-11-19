@@ -11,7 +11,7 @@ AlgoCoach 参考 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 的公开
 | Capability | `PREP` → `chat`，`FOCUS` → `practice`，`REVIEW` → `review`；知识图谱建议 → `mastery_path`；复杂分析 → `deep_solve` | 前后端共享有界 registry；能力会进入请求校验和 system prompt，Agent 仍按现有训练阶段执行 |
 | ToolRegistry | AgentScope tools、知识库检索、记忆工具、题库和动画工具 | 工具继续由 Python Agent 注册，前端不直接调用模型或工具 |
 | Practice | 本地算法题练习、样例运行、提交、复盘记录 | 使用 DeepTutor 对应的可解释 SM-2 风格冷启动规则；保留每次自评事件 |
-| Mastery Path | 本地知识图谱、弱点主题和模式推荐 | 当前推荐由既有 Agent 与 mastery 数据驱动，尚未形成独立 path runner |
+| Mastery Path | `GET /memory/mastery-path` + 知识图谱“下一步学习路径” | 独立 path runner 读取当前 workspace 的 mastery、共同训练关系和到期复习队列；到期项优先，同一优先级按掌握度升序，返回每一步的原因和建议动作 |
 | Knowledge Center | `KnowledgeBasePage` 与本地知识库索引 | 资料文件和索引按 workspace 隔离，embedding Provider 配置在本机共享 |
 | Learning Notebook | `/notebook` 学习笔记页 + 复盘队列 | 笔记支持标题、正文、标签、保存和删除，并按 workspace key 存储；复盘笔记仍保留在独立复盘队列 |
 | Task Board / Calendar | `/home` 本周计划、练习/复盘日期与本地任务板 | 任务以 workspace key 持久化，可安排下一页练习或到期复盘并标记完成；更完整的跨设备 calendar 留作后续 |
@@ -21,6 +21,17 @@ AlgoCoach 参考 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 的公开
 当前发行版是单用户、本地多 workspace，默认 ID 为 `local-default`；设置页可以创建或切换 workspace，切换后应用重载。浏览器 localStorage 的练习本、复盘队列、学习空间布局、任务板、草稿和专注记录通过 `workspaceStorageKey` 归属 workspace；默认 workspace 保留旧 key 以兼容已有数据，其他 workspace 使用隔离后缀。Agent SQLite 训练记忆、ReMe 对话目录、资料索引和题目向量索引按 workspace 隔离；非默认 workspace 的题目和错误向量文档随记忆 JSON 导出。Gateway SQLite 保存平台 Cookie 和判题事实。题目代码只在本轮 REVIEW 请求中发送，不写入长期记忆。
 
 跨设备同步尚未实现。
+
+## Mastery Path 的确定性边界
+
+`GET /api/agent/memory/mastery-path?workspaceId=<id>&limit=6` 由 Gateway 固定代理到 Agent。计算过程只读取当前 workspace：
+
+1. 读取 semantic mastery、练习次数、待加强子主题和 related topics；
+2. 读取 review schedule 中已经到期的题目，把它们映射回对应知识点；
+3. 用真实练习记录的共同出现关系补充相关节点；
+4. 到期复习优先，同一优先级内掌握度最低的知识点优先，输出 `reason`、`recommendedAction`、`dueReviews` 和相关知识点。
+
+路径是可解释的执行清单，不把共同出现关系自动宣称为严格前置关系；没有任何本地证据时返回空步骤和引导文案。Agent 的 `mastery_path` capability 会调用同一个 `get_mastery_path` 工具，避免聊天回复和图谱入口使用两套排序规则。
 
 ## Durable turn 当前边界
 

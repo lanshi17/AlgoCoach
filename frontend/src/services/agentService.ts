@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { nanoid } from 'nanoid'
-import type { AgentProfile, AnimationJob, CoachStyle, KnowledgeEmbeddingConfig, KnowledgeSource, KnowledgeStatus, ModelProviderConfig, TrainingGoal, TrainingPhase } from '@/types'
+import type { AgentProfile, AnimationJob, CoachStyle, KnowledgeEmbeddingConfig, KnowledgeSource, KnowledgeStatus, MasteryPath, ModelProviderConfig, TrainingGoal, TrainingPhase } from '@/types'
 import { capabilityForMode, getWorkspaceId, type DeepTutorCapability } from './deepTutorCapabilities'
 
 interface ChatReply {
@@ -145,6 +145,14 @@ export const agentService = {
       .finally(() => { profileRequests.delete(workspaceId) })
     profileRequests.set(workspaceId, request)
     return request
+  },
+
+  async getMasteryPath(limit = 6): Promise<MasteryPath> {
+    const workspaceId = getWorkspaceId()
+    const query = new URLSearchParams({ limit: String(Math.max(1, Math.min(12, Math.trunc(limit)))) })
+    if (workspaceId !== 'local-default') query.set('workspaceId', workspaceId)
+    const { data } = await axios.get<MasteryPath>(`/api/agent/memory/mastery-path?${query.toString()}`)
+    return data
   },
 
   async exportMemory(): Promise<Blob> {

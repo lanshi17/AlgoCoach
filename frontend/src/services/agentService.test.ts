@@ -206,4 +206,16 @@ describe('focus chat guard', () => {
     )
     localStorage.clear()
   })
+
+  it('reads a bounded mastery path in the active workspace', async () => {
+    localStorage.setItem('algocoach.workspaceId', 'team-a')
+    const get = vi.spyOn(axios, 'get').mockResolvedValue({
+      data: { workspaceId: 'team-a', generatedAt: '', steps: [], emptyReason: null, sourceSummary: { topics: 0, dueReviews: 0 } },
+    })
+
+    await agentService.getMasteryPath(99)
+
+    expect(get).toHaveBeenCalledWith('/api/agent/memory/mastery-path?limit=12&workspaceId=team-a')
+    localStorage.clear()
+  })
 })

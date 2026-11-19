@@ -6,7 +6,7 @@ from uuid import uuid4
 from typing import Any
 
 import anthropic
-from fastapi import APIRouter, HTTPException, Request, Response, UploadFile, File
+from fastapi import APIRouter, HTTPException, Query, Request, Response, UploadFile, File
 from fastapi.responses import StreamingResponse
 from openai import APIConnectionError as OpenAIAPIConnectionError
 from openai import APIStatusError as OpenAIAPIStatusError
@@ -318,6 +318,19 @@ async def memory_profile(request: Request):
         or request.query_params.get("workspace_id")
     )
     return await memory.profile_snapshot(workspace_id=workspace_id)
+
+
+@router.get("/memory/mastery-path")
+async def memory_mastery_path(
+    request: Request,
+    limit: int = Query(default=6, ge=1, le=12),
+):
+    """Return the next explainable learning steps for one workspace."""
+    workspace_id = normalize_workspace_id(
+        request.query_params.get("workspaceId")
+        or request.query_params.get("workspace_id")
+    )
+    return await memory.mastery_path(limit=limit, workspace_id=workspace_id)
 
 
 @router.get("/memory/export")

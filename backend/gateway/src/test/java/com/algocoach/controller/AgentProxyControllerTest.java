@@ -138,6 +138,19 @@ class AgentProxyControllerTest {
     }
 
     @Test
+    void getMemoryMasteryPathForwardsToTheFixedAgentRoute() throws Exception {
+        upstreamResponse.set(jsonResponse(HttpStatus.OK, "{\"steps\":[]}"));
+
+        performAsync(get(PREFIX + "/memory/mastery-path").queryParam("limit", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.steps").isEmpty());
+
+        assertThat(captured.get().getMethod()).isEqualTo(HttpMethod.GET);
+        assertThat(captured.get().getURI().getPath()).isEqualTo("/memory/mastery-path");
+        assertThat(captured.get().getURI().getRawQuery()).isEqualTo("limit=4");
+    }
+
+    @Test
     void preservesQueryBodyContentTypeAndAuthorizationWhileDroppingOtherHeaders() throws Exception {
         upstreamResponse.set(jsonResponse(HttpStatus.OK, "{\"content\":\"hello\"}"));
 

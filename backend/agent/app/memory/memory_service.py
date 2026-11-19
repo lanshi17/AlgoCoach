@@ -16,6 +16,8 @@ from io import BytesIO
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 from collections import Counter
+from collections import defaultdict
+from typing import Any
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -38,6 +40,9 @@ from app.memory.vector_store import vector_store, workspace_vector_store
 
 # One notification per problem per day; the batch never exceeds three.
 MAX_REVIEW_PUSHES_PER_DAY = 3
+# A path is deliberately short enough to act on in one sitting. The API may
+# request fewer steps, but never expands the response beyond this bound.
+MAX_MASTERY_PATH_STEPS = 12
 # A push reschedules the problem. The formula can return one day for very weak
 # topics, but a notification is not evidence the user practised, so the push
 # cadence floors at two days to avoid the same problem appearing every day.
@@ -710,6 +715,173 @@ class MemoryService:
             result = candidates[:limit]
             await s.commit()
             return result
+
+    async def mastery_path(
+        self,
+        now: datetime | None = None,
+        limit: int = 6,
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
+    ) -> dict:
+        """Build a short, explainable learning path from local evidence.
+
+        This is the deterministic counterpart to the ``mastery_path`` agent
+        capability. It combines semantic mastery, observed topic relations and
+        durable review schedules, while keeping every query scoped to one
+        workspace. Due reviews lead the path; within the same urgency bucket,
+        lower mastery is ordered first. Unknown topics found only in a review
+        schedule are retained at the neutral 0.5 baseline so a due item never
+        disappears from the learner's next steps.
+        """
+        now = now or utcnow()
+        workspace = normalize_workspace_id(workspace_id)
+        try:
+            requested_limit = int(limit)
+        except (TypeError, ValueError):
+            requested_limit = 6
+        limit = max(1, min(MAX_MASTERY_PATH_STEPS, requested_limit))
+
+        async with SessionLocal() as s:
+            nodes = list((await s.execute(
+                select(SemanticNode)
+                .where(SemanticNode.workspace_id == workspace)
+                .order_by(SemanticNode.mastery, SemanticNode.topic)
+            )).scalars())
+            schedules = list((await s.execute(
+                select(ReviewSchedule)
+                .where(ReviewSchedule.workspace_id == workspace)
+            )).scalars())
+            hot_episodes = list((await s.execute(
+                select(EpisodicRecord)
+                .where(EpisodicRecord.workspace_id == workspace)
+            )).scalars())
+            archived_episodes = list((await s.execute(
+                select(EpisodicArchive)
+                .where(EpisodicArchive.workspace_id == workspace)
+            )).scalars())
+
+        node_by_topic = {
+            _logical_key(node.topic, workspace): node for node in nodes
+        }
+        all_topics = set(node_by_topic)
+        due_by_topic: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        due_problems: dict[str, dict[str, Any]] = {}
+        for schedule in schedules:
+            due_at = _parse_iso(schedule.due_at)
+            if due_at is None or due_at > now:
+                continue
+            topics = [
+                _logical_key(topic, workspace)
+                for topic in _json_list(schedule.topics)
+            ]
+            if not topics:
+                continue
+            problem_id = _logical_key(schedule.problem_id, workspace)
+            due_item: dict[str, Any] = {
+                "problemId": problem_id,
+                "dueAt": schedule.due_at,
+                "intervalDays": int(schedule.interval_days or 1),
+                "topics": topics,
+            }
+            due_problems[problem_id] = due_item
+            all_topics.update(topics)
+            for topic in topics:
+                due_by_topic[topic].append(due_item)
+
+        # ``related_topics`` is a lightweight semantic relation supplied by the
+        # agent. Co-occurrence from real attempts fills the graph for topics
+        # that have no explicit relation yet.
+        related: dict[str, set[str]] = defaultdict(set)
+        for topic, semantic_node in node_by_topic.items():
+            for relation in _json_list(semantic_node.related_topics):
+                relation = _logical_key(relation, workspace)
+                if relation and relation != topic:
+                    related[topic].add(relation)
+                    related[relation].add(topic)
+
+        observed_topics = set(node_by_topic)
+        episodes: list[EpisodicRecord | EpisodicArchive] = [
+            *hot_episodes, *archived_episodes
+        ]
+        for episode in episodes:
+            episode_topics = sorted(
+                set(_logical_key(topic, workspace) for topic in _json_list(episode.topics))
+                & observed_topics
+            )
+            for index, left in enumerate(episode_topics):
+                for right in episode_topics[index + 1:]:
+                    related[left].add(right)
+                    related[right].add(left)
+
+        candidates: list[dict[str, Any]] = []
+        for topic in all_topics:
+            candidate_node = node_by_topic.get(topic)
+            mastery = float(candidate_node.mastery) if candidate_node is not None else 0.5
+            attempts = int(candidate_node.attempts) if candidate_node is not None else 0
+            due = sorted(
+                due_by_topic.get(topic, []),
+                key=lambda item: (item["dueAt"], item["problemId"]),
+            )
+            weak_subtopics = _json_list(candidate_node.weak_subtopics) if candidate_node is not None else []
+            related_topics = sorted(
+                relation for relation in related.get(topic, set())
+                if relation in all_topics and relation != topic
+            )
+
+            if due:
+                action = "review"
+                reason = f"有 {len(due)} 个复习题已到期，先回收间隔复习证据"
+            elif attempts == 0:
+                action = "practice"
+                reason = "还没有练习证据，先完成一个基础练习"
+            elif mastery < 0.4:
+                action = "reinforce"
+                reason = f"掌握度仅 {round(mastery * 100)}%，是当前最薄弱的知识点"
+            elif mastery < 0.7:
+                action = "practice"
+                reason = f"掌握度为 {round(mastery * 100)}%，需要通过变式练习巩固"
+            else:
+                action = "apply"
+                reason = f"掌握度为 {round(mastery * 100)}%，适合用综合题验证迁移"
+
+            if weak_subtopics:
+                reason += f"；待加强：{'、'.join(weak_subtopics[:3])}"
+
+            candidates.append({
+                "topic": topic,
+                "mastery": round(max(0.0, min(1.0, mastery)), 4),
+                "attempts": attempts,
+                "lastSeen": candidate_node.last_seen if candidate_node is not None else "",
+                "weakSubtopics": weak_subtopics,
+                "relatedTopics": related_topics,
+                "recommendedAction": action,
+                "reason": reason,
+                "dueReviews": due,
+                # Due work is an explicit urgency signal. Mastery then breaks
+                # ties, which keeps the weakest topic first when no reviews are
+                # waiting and makes the ordering easy to explain to the user.
+                "_sort": (0 if due else 1, mastery, topic),
+            })
+
+        candidates.sort(key=lambda item: item["_sort"])
+        steps = []
+        for position, candidate in enumerate(candidates[:limit], start=1):
+            candidate.pop("_sort", None)
+            candidate["position"] = position
+            steps.append(candidate)
+
+        return {
+            "workspaceId": workspace,
+            "generatedAt": _iso(now),
+            "steps": steps,
+            "emptyReason": (
+                "当前还没有可用的知识点证据；完成一次练习后，系统会生成学习路径。"
+                if not steps else None
+            ),
+            "sourceSummary": {
+                "topics": len(node_by_topic),
+                "dueReviews": len(due_problems),
+            },
+        }
 
     async def mark_review_pushed(
         self,

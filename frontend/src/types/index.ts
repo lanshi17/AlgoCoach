@@ -168,6 +168,32 @@ export interface AgentProfile {
   }
 }
 
+export interface MasteryPathStep {
+  position: number
+  topic: string
+  mastery: number
+  attempts: number
+  lastSeen: string
+  weakSubtopics: string[]
+  relatedTopics: string[]
+  recommendedAction: 'review' | 'reinforce' | 'practice' | 'apply'
+  reason: string
+  dueReviews: Array<{
+    problemId: string
+    dueAt: string
+    intervalDays: number
+    topics: string[]
+  }>
+}
+
+export interface MasteryPath {
+  workspaceId: string
+  generatedAt: string
+  steps: MasteryPathStep[]
+  emptyReason: string | null
+  sourceSummary: { topics: number; dueReviews: number }
+}
+
 export interface KnowledgeEmbeddingConfig {
   provider: 'local' | 'openai-compatible'
   model: string

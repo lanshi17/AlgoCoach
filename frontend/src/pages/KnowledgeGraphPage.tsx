@@ -1,16 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, BarChart3, BookOpen, Loader2, RefreshCw } from 'lucide-react'
+import { AlertCircle, ArrowRight, BarChart3, BookOpen, Clock3, Loader2, RefreshCw, Route } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { agentService } from '@/services/agentService'
 import Button from '@/components/Common/Button'
 import PageHeader from '@/components/Common/PageHeader'
 import Segmented from '@/components/Common/Segmented'
 import { makeGraph } from './graphLayout'
-import type { AgentProfile } from '@/types'
+import type { AgentProfile, MasteryPath } from '@/types'
 
 export default function KnowledgeGraphPage() {
   const navigate = useNavigate()
   const [profile, setProfile] = useState<AgentProfile | null>(null)
+  const [masteryPath, setMasteryPath] = useState<MasteryPath | null>(null)
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
   const [listView, setListView] = useState(false)
   const [draggingTopic, setDraggingTopic] = useState<string | null>(null)
@@ -31,6 +32,11 @@ export default function KnowledgeGraphPage() {
       setSelectedTopic(current => current && next.topics.some(topic => topic.topic === current)
         ? current
         : next.topics[0]?.topic ?? null)
+      // The graph remains useful if an older/offline Agent does not expose the
+      // path endpoint yet; path failures are intentionally non-blocking.
+      const nextPath = await agentService.getMasteryPath().catch(() => null)
+      if (seq !== requestSeq.current) return
+      setMasteryPath(nextPath)
     } catch {
       if (seq !== requestSeq.current) return
       setError('无法读取本地知识点记录，请确认 Agent 服务正在运行。')
@@ -76,8 +82,11 @@ export default function KnowledgeGraphPage() {
             <BarChart3 size={28} className="text-text-muted dark:text-text-dark-muted" />
             <p className="text-sm text-text-secondary dark:text-text-dark-secondary">完成并提交题目后，掌握度图谱会从真实训练记录中逐步生成。</p>
           </div>
-        ) : listView ? (
-          <div className="overflow-hidden rounded-card border border-border bg-surface dark:border-border-dark dark:bg-surface-dark">
+        ) : (
+          <>
+            {masteryPath && <MasteryPathCard path={masteryPath} onOpenCoach={() => navigate('/workspace', { state: { openPanel: 'chat' } })} />}
+            {listView ? (
+              <div className="overflow-hidden rounded-card border border-border bg-surface dark:border-border-dark dark:bg-surface-dark">
             <div className="grid grid-cols-[minmax(0,1fr)_50px_32px] gap-2 border-b border-border bg-surface-soft px-2 py-3 text-xs text-text-muted dark:border-border-dark dark:bg-surface-dark-soft dark:text-text-dark-muted sm:grid-cols-[1fr_100px_90px] sm:gap-3 sm:px-4">
               <span className="whitespace-nowrap">知识点</span><span className="whitespace-nowrap">掌握度</span>
               <span className="whitespace-nowrap"><span className="sm:hidden">次数</span><span className="hidden sm:inline">训练次数</span></span>
@@ -92,9 +101,9 @@ export default function KnowledgeGraphPage() {
               <span className="text-text-secondary dark:text-text-dark-secondary">{Math.round(topic.mastery * 100)}%</span>
               <span className="text-text-secondary dark:text-text-dark-secondary">{topic.attempts}</span>
             </button>)}
-          </div>
-        ) : (
-          <div className="space-y-5">
+              </div>
+            ) : (
+              <div className="space-y-5">
             <div className="overflow-auto rounded-panel border border-border bg-surface p-5 dark:border-border-dark dark:bg-surface-dark">
               <svg ref={svgRef} viewBox={`0 0 ${graph.width} ${graph.height}`} role="group"
                 onPointerMove={event => {
@@ -188,11 +197,48 @@ export default function KnowledgeGraphPage() {
                 最近记录：{selected.lastSeen ? new Date(selected.lastSeen).toLocaleDateString() : '暂无'}
               </p>
             </section>}
-          </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </main>
   )
+}
+
+function MasteryPathCard({ path, onOpenCoach }: { path: MasteryPath; onOpenCoach: () => void }) {
+  const actionLabel: Record<MasteryPath['steps'][number]['recommendedAction'], string> = {
+    review: '到期复习', reinforce: '强化基础', practice: '变式练习', apply: '综合应用',
+  }
+
+  return <section className="mb-5 rounded-panel border border-accent/30 bg-surface p-5 dark:bg-surface-dark">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent"><Route size={19} /></span>
+        <div>
+          <p className="text-xs uppercase tracking-[0.16em] text-accent">Mastery Path</p>
+          <h2 className="mt-1 text-base font-semibold text-text-primary dark:text-text-dark-primary">下一步学习路径</h2>
+          <p className="mt-1 text-xs text-text-secondary dark:text-text-dark-secondary">按到期复习与当前掌握度排序，每一步都说明为什么现在做。</p>
+        </div>
+      </div>
+      <button type="button" onClick={onOpenCoach} className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">让导师带我走 <ArrowRight size={14} /></button>
+    </div>
+    {path.steps.length ? <div className="mt-4 grid gap-2 md:grid-cols-2">
+      {path.steps.slice(0, 6).map(step => <div key={`${step.position}-${step.topic}`} className="rounded-card border border-border bg-surface-soft p-3 dark:border-border-dark dark:bg-surface-dark-soft">
+        <div className="flex items-start gap-3">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-white">{step.position}</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="truncate text-sm font-semibold text-text-primary dark:text-text-dark-primary">{step.topic}</h3>
+              <span className="text-xs text-text-secondary dark:text-text-dark-secondary">{Math.round(step.mastery * 100)}% · {actionLabel[step.recommendedAction]}</span>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-text-secondary dark:text-text-dark-secondary">{step.reason}</p>
+            {step.dueReviews.length > 0 && <p className="mt-2 flex items-center gap-1 text-[11px] text-accent"><Clock3 size={12} /> {step.dueReviews.length} 个复习题到期</p>}
+          </div>
+        </div>
+      </div>)}
+    </div> : <p className="mt-4 rounded-card bg-surface-soft px-3 py-3 text-xs text-text-secondary dark:bg-surface-dark-soft dark:text-text-dark-secondary">{path.emptyReason ?? '完成一次练习后，这里会出现可执行的学习路径。'}</p>}
+  </section>
 }
 
 function shortLabel(value: string): string {

@@ -185,6 +185,26 @@ TOOLS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "get_mastery_path",
+        "description": (
+            "Build a short, workspace-scoped learning path from mastery evidence, "
+            "related topics and due reviews. Use it for the mastery_path capability "
+            "or when the learner asks what to study next; explain the returned reason "
+            "and recommended action instead of inventing prerequisites."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 12,
+                    "description": "How many ordered learning steps to return, default 6",
+                },
+            },
+        },
+    },
+    {
         "name": "request_animation",
         "description": (
             "Trigger generation of a Remotion algorithm visualization animation. "
@@ -910,6 +930,18 @@ class AlgoCoach:
             threshold = inputs.get("threshold", 0.6)
             return await memory.weak_topics(
                 threshold=threshold,
+                workspace_id=_active_workspace_id.get(),
+            )
+
+        if name == "get_mastery_path":
+            requested_limit = inputs.get("limit")
+            limit = (
+                requested_limit
+                if isinstance(requested_limit, int) and not isinstance(requested_limit, bool)
+                else 6
+            )
+            return await memory.mastery_path(
+                limit=limit,
                 workspace_id=_active_workspace_id.get(),
             )
 
