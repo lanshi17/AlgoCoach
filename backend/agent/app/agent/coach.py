@@ -369,8 +369,8 @@ class AlgoCoach:
         # ReMe index rebuild before its first search can see seeded documents.
         self._managed_memory = reme_middleware is None
         self._reme_index_ready: set[str] = set()
-        self._agents: dict[tuple[str, str], Agent] = {}
-        self._locks: dict[tuple[str, str], asyncio.Lock] = {}
+        self._agents: dict[str | tuple[str, str], Agent] = {}
+        self._locks: dict[str | tuple[str, str], asyncio.Lock] = {}
         self._init_lock = asyncio.Lock()
         self._provider_fingerprint: str | None = None
         # Successful gateway problem metadata, keyed by slug (process-local).
@@ -386,7 +386,13 @@ class AlgoCoach:
     ) -> Agent:
         """Return the per-session Agent in its workspace-scoped runtime."""
         workspace_id = normalize_workspace_id(workspace_id)
-        runtime_key = (workspace_id, session_id)
+        # Keep the default workspace's historic private key shape for local
+        # integrations; non-default workspaces use a composite key so a
+        # caller reusing a session id cannot cross the workspace boundary.
+        runtime_key: str | tuple[str, str] = (
+            session_id if workspace_id == DEFAULT_WORKSPACE_ID
+            else (workspace_id, session_id)
+        )
         async with self._init_lock:
             fingerprint = self._fingerprint_provider(provider)
             if self._provider_fingerprint not in (None, fingerprint) and self._memories:
@@ -707,7 +713,11 @@ class AlgoCoach:
         )
 
         agent = await self._get_agent(session_id, provider, workspace_id)
-        lock = self._locks[(workspace_id, session_id)]
+        runtime_key = (
+            session_id if workspace_id == DEFAULT_WORKSPACE_ID
+            else (workspace_id, session_id)
+        )
+        lock = self._locks[runtime_key]
 
         async with lock:
             # The domain memory snapshot (weak topics, recent problems,
@@ -817,7 +827,11 @@ class AlgoCoach:
             if resolved_goal is UserGoal.CONTEST else ""
         user_content = f"{training_context}\n{message}" if training_context else message
         agent = await self._get_agent(session_id, provider, workspace_id)
-        lock = self._locks[(workspace_id, session_id)]
+        runtime_key = (
+            session_id if workspace_id == DEFAULT_WORKSPACE_ID
+            else (workspace_id, session_id)
+        )
+        lock = self._locks[runtime_key]
 
         async with lock:
             ctx = await _workspace_context_snapshot(workspace_id)
