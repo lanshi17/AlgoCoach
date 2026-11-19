@@ -18,9 +18,9 @@ AlgoCoach 是一个本地优先的算法训练工作台。它把题目、编辑�
 | Monaco 本地代码补全 | 已实现 | 编辑器 |
 | 本地练习本与离线桌面工作区 | 已实现 | 工作区 / 刷题进度 |
 | 本地 Python 样例运行 | 初步实现 | 两道内置题；自定义输入显示返回值，尚无完整判题 |
-| 本地 FSRS 复习调度 | 初步实现 | 借鉴 OpenTutor 默认参数；用户自评后安排下一次复习 |
+| 本地 SM-2 风格复习调度 | 初步实现 | 借鉴 DeepTutor 的可解释冷启动规则；用户自评后安排下一次复习 |
 | 本地练习同步 Agent 记忆 | 初步实现 | 在线时同步，离线保留重试队列；幂等键避免重复记忆；样例结果分开记录 |
-| OpenTutor 式 Block 学习空间 | 已实现 | `/home` |
+| DeepTutor 式 Workspace 学习空间 | 已实现 | `/home` |
 | macOS / Linux 桌面壳 | 初步实现 | `desktop/`；Linux x86_64 包已验证，macOS arm64 由 runner 构建检查 |
 | 预置 Remotion 动画 | 可选，默认关闭 | `REMOTION_ENABLED=true` |
 | 生成式动画沙箱 | 可选，默认关闭 | 需要额外安全运行环境 |
@@ -34,19 +34,19 @@ AlgoCoach 是一个本地优先的算法训练工作台。它把题目、编辑�
 5. 点击开始做题进入 FOCUS。教练保持静默，编辑器继续提供本地语法和常用结构补全。
 6. 运行样例或提交代码。提交成功后进入 REVIEW，教练会读取当前语言和代码，结合判题结果分析正确性、边界、复杂度和下一步。
 
-## OpenTutor 二创方向
+## DeepTutor 二创方向
 
-本项目借鉴 OpenTutor 的本地优先和自适应教学闭环，但把学习对象换成算法与代码：
+本项目借鉴 [DeepTutor](https://github.com/HKUDS/DeepTutor) 的本地优先教学闭环、Workspace、Capability/Tool 分层和可解释练习调度，把学习对象换成算法与代码：
 
 ```
 选择学习模式 → 今日摘要 → Agent 推荐练习 → 写代码 → 判题 / 自测 → 复盘 → 知识图谱与下一轮计划
 ```
 
-`/home` 是可整理的 Block 学习空间，目前包含今日摘要、继续练习、复盘队列、知识地图、本周计划和 Agent 洞察。算法 Agent 继续复用现有题库、Monaco 编辑器、判题、REVIEW 和知识图谱；Block 布局与学习模式保存在本地，后续可由 Agent 根据行为提出增删和排序建议。
+`/home` 是 Workspace 的当前 UI 表现层，目前包含今日摘要、继续练习、复盘队列、知识地图、本周计划和 Agent 洞察。算法 Agent 继续复用现有题库、Monaco 编辑器、判题、REVIEW 和知识图谱；这些 Block 是可替换的视图组件，业务边界由 Workspace、Capability、Tool、练习记录和对话 turn 定义。
 
 `desktop/` 提供 macOS / Linux Electron 壳，发布顺序为 macOS Apple Silicon arm64、macOS Intel x64、Linux x86_64。开发时它启动 Vite 并把 `/api`、`/animations` 转发到本地 Gateway；设置 `ALGOCOACH_AUTOSTART_SERVICES=1` 后会尝试管理本地 Gateway / Agent 子进程，生产打包入口已经准备好。
 
-本项目的学习空间、Block 组织和复习闭环参考 [OpenTutor](https://github.com/zijinz456/OpenTutor)（MIT）。当前仓库实际移植的是其 FSRS 默认调度参数，并以算法题目、代码练习和现有 Agent 流程重新组织；对应许可文本见 [`frontend/public/licenses/OpenTutor-MIT.txt`](frontend/public/licenses/OpenTutor-MIT.txt)。
+本项目是对 DeepTutor 的独立适配：复用其公开的架构理念和实践调度思路，并以算法题目、代码练习和现有 Agent 流程重新组织。DeepTutor 采用 Apache License 2.0；对应许可文本见 [`frontend/public/licenses/DeepTutor-Apache-2.0.txt`](frontend/public/licenses/DeepTutor-Apache-2.0.txt)，适配边界见 [`docs/deeptutor-adaptation.md`](docs/deeptutor-adaptation.md)。
 
 ## 仓库结构
 

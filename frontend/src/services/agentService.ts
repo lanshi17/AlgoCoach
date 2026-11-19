@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { nanoid } from 'nanoid'
 import type { AgentProfile, AnimationJob, CoachStyle, KnowledgeEmbeddingConfig, KnowledgeSource, KnowledgeStatus, ModelProviderConfig, TrainingGoal, TrainingPhase } from '@/types'
+import { capabilityForMode, LOCAL_WORKSPACE_ID, type DeepTutorCapability } from './deepTutorCapabilities'
 
 interface ChatReply {
   content: string
@@ -62,6 +63,8 @@ export function canCommitChatReply(
 
 interface ChatCtx {
   mode: string
+  capability?: DeepTutorCapability
+  workspaceId?: string
   problemId?: string
   platform?: string
   code?: string
@@ -137,6 +140,8 @@ export const agentService = {
       body: JSON.stringify({
         message,
         ...rest,
+        capability: ctx.capability ?? capabilityForMode(ctx.mode),
+        workspaceId: ctx.workspaceId ?? LOCAL_WORKSPACE_ID,
         conversationId,
         ...(shouldSendProvider ? { provider } : {}),
       }),

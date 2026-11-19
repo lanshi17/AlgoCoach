@@ -1,0 +1,31 @@
+# DeepTutor 适配边界
+
+AlgoCoach 参考 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 的公开架构和教学流程，做的是面向 OI / xCPC 算法训练的独立适配。本文记录概念映射，避免把 UI 组件、Agent 运行时和学习数据边界混为一谈。
+
+## 概念映射
+
+| DeepTutor | AlgoCoach 当前实现 | 适配说明 |
+| --- | --- | --- |
+| Workspace | `/home` 学习空间 + 当前题目的本地算法 workspace | 当前是本地单 workspace；页面上的 Block 是视图组件，不是业务核心 |
+| TurnApplicationService / TurnEngine | `agentService.chatStream` → Gateway → Python Agent | 当前保留 SSE 一次性流；turn 持久化、事件序号和断线 replay 是后续阶段 |
+| Capability | `PREP` → `chat`，`FOCUS` → `practice`，`REVIEW` → `review`；知识图谱建议 → `mastery_path`；复杂分析 → `deep_solve` | capability 作为请求上下文传递，Agent 仍按现有训练阶段执行 |
+| ToolRegistry | AgentScope tools、知识库检索、记忆工具、题库和动画工具 | 工具继续由 Python Agent 注册，前端不直接调用模型或工具 |
+| Practice | 本地算法题练习、样例运行、提交、复盘记录 | 使用 DeepTutor 对应的可解释 SM-2 风格冷启动规则；保留每次自评事件 |
+| Mastery Path | 本地知识图谱、弱点主题和模式推荐 | 当前推荐由既有 Agent 与 mastery 数据驱动，尚未形成独立 path runner |
+| Knowledge Center | `KnowledgeBasePage` 与本地知识库索引 | 文件、索引和 Provider 配置保留在本机运行时目录 |
+| Learning Notebook | 本地复盘队列、练习本和笔记视图 | 当前没有单独 Notebook 服务，数据仍由前端本地状态和 Agent 记忆承载 |
+| Task Board / Calendar | `/home` 本周计划与练习/复盘日期 | 当前是轻量视图，后续再拆出真实 task/calendar 数据模型 |
+
+## Workspace 与数据边界
+
+当前发行版是单用户、单本地 workspace：浏览器 localStorage 保存草稿和本地练习记录，Agent 的 SQLite、Chroma 和 ReMe 目录保存训练记忆，Gateway SQLite 保存平台 Cookie 和判题事实。题目代码只在本轮 REVIEW 请求中发送，不写入长期记忆。
+
+后续扩展多 workspace 时，`workspaceId` 必须成为练习记录、复盘队列、Agent session、知识库索引和 turn 的共同隔离键；迁移不能只在 UI 上增加 workspace 下拉框。
+
+## Durable turn 计划
+
+当前 SSE 事件只有 thinking、text、done、error，刷新或断线后不能从服务端 replay。下一阶段会为每个 turn 增加 `turnId`、单调递增的 event sequence、terminal state 和 reconnect/replay 合约，再让桌面壳把本地未完成 turn 安全恢复。当前实现不把一次性 SSE 宣称为 DeepTutor 的 durable turn。
+
+## 许可证与来源
+
+本仓库没有复制 DeepTutor 的完整业务代码；适配的是公开架构、教学流程和练习调度思路。DeepTutor 的 Apache License 2.0 文本保存在 [`frontend/public/licenses/DeepTutor-Apache-2.0.txt`](../frontend/public/licenses/DeepTutor-Apache-2.0.txt)。本仓库自己的代码仍按根目录许可证发布，第三方运行时许可证继续在 `frontend/public/licenses/` 中单独列出。

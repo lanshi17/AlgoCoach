@@ -63,6 +63,20 @@ def test_chat_request_defaults_keep_the_old_contract():
     assert req.trainingPhase == DEFAULT_TRAINING_PHASE.value == "auto"
     assert req.timeRemainingSec is None
     assert req.goal is None
+    assert req.capability == "chat"
+    assert req.workspaceId == "local-default"
+
+
+@pytest.mark.parametrize("capability", ["chat", "deep_solve", "practice", "mastery_path", "review"])
+def test_chat_request_accepts_deeptutor_capability_context(capability):
+    req = _request(capability=capability, workspaceId="algorithms")
+    assert req.capability == capability
+    assert req.workspaceId == "algorithms"
+
+
+def test_chat_request_rejects_unknown_deeptutor_capability():
+    with pytest.raises(ValidationError):
+        _request(capability="unknown")
 
 
 @pytest.mark.parametrize("goal", ["contest", "interview_prep", "casual"])

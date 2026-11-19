@@ -605,6 +605,8 @@ class AlgoCoach:
         mode: str,
         problem_id: str | None = None,
         *,
+        capability: str = "chat",
+        workspace_id: str = "local-default",
         goal: str | UserGoal | None = DEFAULT_GOAL,
         training_phase: str | TrainingPhase | None = DEFAULT_TRAINING_PHASE,
         time_remaining_sec: int | None = None,
@@ -673,7 +675,7 @@ class AlgoCoach:
             ).format(memory_context=json.dumps(ctx, ensure_ascii=False, indent=2)) + (
                 "\n\n当前界面状态（以本轮为准，高于历史对话和记忆）："
                 "如果用户只是问候或闲聊，先自然回应这条消息，不要擅自转成训练、代码复盘或换题引导。"
-                f"模式={mode}；" + (
+                f"workspace={workspace_id}；能力={capability}；模式={mode}；" + (
                     "已选择题目。" if problem_id else "尚未选择题目。"
                 ) + (
                     f"当前题目平台={platform}；题目标识={problem_id}。" if problem_id and platform else ""
@@ -711,6 +713,8 @@ class AlgoCoach:
         mode: str,
         problem_id: str | None = None,
         *,
+        capability: str = "chat",
+        workspace_id: str = "local-default",
         goal: str | UserGoal | None = DEFAULT_GOAL,
         training_phase: str | TrainingPhase | None = DEFAULT_TRAINING_PHASE,
         time_remaining_sec: int | None = None,
@@ -771,7 +775,7 @@ class AlgoCoach:
             ).format(memory_context=json.dumps(ctx, ensure_ascii=False, indent=2)) + (
                 "\n\n当前界面状态（以本轮为准，高于历史对话和记忆）："
                 "如果用户只是问候或闲聊，先自然回应这条消息，不要擅自转成训练、代码复盘或换题引导。"
-                f"模式={mode}；" + ("已选择题目。" if problem_id else "尚未选择题目。") + (
+                f"workspace={workspace_id}；能力={capability}；模式={mode}；" + ("已选择题目。" if problem_id else "尚未选择题目。") + (
                     f"当前题目平台={platform}；题目标识={problem_id}。"
                     if problem_id and platform else ""
                 ) + (

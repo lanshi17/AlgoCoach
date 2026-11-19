@@ -8,7 +8,7 @@
 ## 1. 模块职责和边界
 
 ### 职责
-- 渲染 OpenTutor 风格的 Block 学习空间与三栏编码工作区（题目描述 / 代码编辑器 / AI 对话）
+- 渲染 DeepTutor Workspace 风格的学习空间与三栏编码工作区（题目描述 / 代码编辑器 / AI 对话）
 - 维护 `AgentMode` 状态机，强制执行 FOCUS 模式下的 AI 静默约束
 - 通过 Java 网关 (`/api/*`) 拉取题目、提交代码、管理 Cookie 认证
 - 通过 Java 网关 (`/api/agent/*`) 与 Python Agent 对话、请求动画
@@ -79,7 +79,7 @@ frontend/
         ├── KnowledgeBasePage.tsx   # 用户知识库、Embedding 与源文件管理
         └── graphLayout.ts          # 图布局算法
 
-题目列表视图内嵌在 `ProblemPanel`；工作区和其他路径由 `AppShell` 管理，没有独立的 `ProblemListPage` / `WorkspacePage` 文件。`/home` 复用 OpenTutor 的学习模式和 Block 思路，编码练习仍由现有 Agent 工作区承载。知识图谱和进度页面已接入本地 Agent profile。
+题目列表视图内嵌在 `ProblemPanel`；工作区和其他路径由 `AppShell` 管理，没有独立的 `ProblemListPage` / `WorkspacePage` 文件。`/home` 复用 DeepTutor 的 Workspace 和 Capability 思路，Block 只是工作区视图，编码练习仍由现有 Agent 工作区承载。知识图谱和进度页面已接入本地 Agent profile。
 ```
 
 ---
@@ -803,7 +803,7 @@ Playwright 浏览器冒烟脚本位于 `e2e/training_flow.py`，通过 route moc
 
 ### 本地复习调度
 
-本地复盘条目借鉴 OpenTutor 的 FSRS 默认参数安排复习日期。应用不会把显示提醒视为完成复习，用户需要先回忆、展开笔记并自评；这是一套本地默认调度，尚未根据个人数据训练参数。
+本地复盘条目借鉴 DeepTutor 的可解释 SM-2 风格冷启动规则安排复习日期。应用不会把显示提醒视为完成复习，用户需要先回忆、展开笔记并自评；这是一套本地默认调度，尚未根据个人数据拟合参数，也不宣称是 FSRS。
 
 
 本地专注记录会排入本地同步队列；Agent 可用时通过 `/api/agent/memory/record` 写入本地记忆，离线时保留队列并在下一次打开工作区时重试；每条记录带客户端幂等键，服务端会拒绝重复写入。`LOCAL_PRACTICE` 只创建知识点占位，不把未运行的专注时长误算成通过或失败；本地样例通过和失败会分别同步为 `LOCAL_ACCEPTED` / `LOCAL_FAILED`。

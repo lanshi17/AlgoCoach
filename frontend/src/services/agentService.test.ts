@@ -116,6 +116,8 @@ describe('focus chat guard', () => {
     expect(thinking).toEqual(['先看约束。'])
     expect(text).toEqual(['复杂度是 O(n)。'])
     expect(fetch).toHaveBeenCalledWith('/api/agent/chat/stream', expect.objectContaining({ method: 'POST' }))
+    const requestBody = JSON.parse(fetch.mock.calls[0][1].body as string) as { capability: string; workspaceId: string }
+    expect(requestBody).toMatchObject({ capability: 'chat', workspaceId: 'local-default' })
     Object.defineProperty(window, 'fetch', { configurable: true, value: nativeFetch })
     Object.defineProperty(window, 'ReadableStream', { configurable: true, value: nativeReadableStream })
   })

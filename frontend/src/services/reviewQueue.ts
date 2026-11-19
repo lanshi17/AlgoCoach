@@ -1,5 +1,5 @@
 import type { LocalPracticeRecord } from './localProgress'
-import { isReviewCard, newReviewCard, reviewCard, type ReviewCard, type ReviewRating } from './openTutorScheduler'
+import { isReviewCard, newReviewCard, reviewCard, type ReviewCard, type ReviewRating } from './deepTutorScheduler'
 
 const REVIEW_KEY = 'algocoach.localReviewEntries'
 
@@ -45,6 +45,23 @@ function isReviewEntry(value: unknown): value is LocalReviewEntry {
 function scheduleFor(entry: LocalReviewEntry | undefined): ReviewCard | null {
   if (!entry) return null
   if (isReviewCard(entry.schedule)) return entry.schedule
+  // Entries written by the pre-DeepTutor scheduler used different fields but
+  // still carried a trustworthy due timestamp. Preserve that timestamp while
+  // upgrading the rest of the card to the new replayable shape.
+  const legacy = entry.schedule as { due?: unknown; lastReview?: unknown; reps?: unknown } | undefined
+  if (legacy && typeof legacy.due === 'string' && Number.isFinite(Date.parse(legacy.due))) {
+    const reviewedAt = Date.parse(entry.reviewedAt)
+    const card = newReviewCard(new Date(Number.isFinite(reviewedAt) ? reviewedAt : Date.parse(legacy.due)))
+    const reps = typeof legacy.reps === 'number' && Number.isSafeInteger(legacy.reps) && legacy.reps >= 0 ? legacy.reps : 0
+    return {
+      ...card,
+      due: legacy.due,
+      lastReview: typeof legacy.lastReview === 'string' && Number.isFinite(Date.parse(legacy.lastReview)) ? legacy.lastReview : card.lastReview,
+      reviewCount: reps,
+      reps,
+      state: reps > 0 ? 'review' : 'new',
+    }
+  }
   const time = Date.parse(entry.reviewedAt)
   return Number.isFinite(time) ? newReviewCard(new Date(time)) : null
 }

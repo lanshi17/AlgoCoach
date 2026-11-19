@@ -135,7 +135,7 @@ async def knowledge_status():
 def _session_id(req: ChatRequest) -> str:
     """Derive the AgentScope state namespace from the current page context."""
     identity = json.dumps(
-        [req.conversationId, req.platform, req.problemId],
+        [req.workspaceId, req.conversationId, req.platform, req.problemId],
         ensure_ascii=False,
         separators=(",", ":"),
     )
@@ -158,6 +158,8 @@ async def chat_stream(req: ChatRequest):
                 "session_id": session_id,
                 "message": req.message,
                 "mode": req.mode,
+                "capability": req.capability,
+                "workspace_id": req.workspaceId,
                 "problem_id": req.problemId,
                 "code": req.code,
                 "code_language": req.codeLanguage,

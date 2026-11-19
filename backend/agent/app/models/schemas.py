@@ -16,6 +16,10 @@ from app.agent.prompts import (
     resolve_training_phase,
 )
 
+DeepTutorCapability = Literal[
+    "chat", "deep_solve", "practice", "mastery_path", "review",
+]
+
 
 class ChatRequest(BaseModel):
     """Body of ``POST /chat/stream``.
@@ -26,6 +30,8 @@ class ChatRequest(BaseModel):
 
     message: str
     mode: str                       # IDLE | PREP | FOCUS | REVIEW
+    capability: DeepTutorCapability = "chat"
+    workspaceId: str = Field(default="local-default", min_length=1, max_length=128)
     problemId: str | None = None
     platform: str | None = None
     code: str | None = Field(default=None, max_length=50_000)

@@ -11,7 +11,7 @@ import Button from '@/components/Common/Button'
 import { agentService } from '@/services/agentService'
 import type { AgentProfile } from '@/types'
 import { dueReviewEntries, rateReviewEntry, readReviewEntries, saveReviewEntry, type LocalReviewEntry } from '@/services/reviewQueue'
-import type { ReviewRating } from '@/services/openTutorScheduler'
+import type { ReviewRating } from '@/services/deepTutorScheduler'
 import { recommendLearningMode } from '@/services/modeRecommendation'
 import { prepareReviewDiscussion, reviewUnavailableReason } from '@/services/reviewDiscussion'
 
