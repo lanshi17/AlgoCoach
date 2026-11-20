@@ -46,6 +46,7 @@
   "build": {
     "appId": "com.algocoach.desktop",
     "productName": "算法练习室",
+    "artifactName": "AlgoCoach-${version}-${arch}.${ext}",
     "files": [
       "main.mjs",
       "server.mjs",
