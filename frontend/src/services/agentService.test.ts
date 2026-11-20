@@ -28,6 +28,10 @@ describe('getAgentErrorMessage', () => {
 
     expect(getAgentErrorMessage(error)).toBe('模型或 Responses API 路径不存在，请检查 Base URL。')
   })
+
+  it('explains an empty terminal reply instead of hiding it as a generic network error', () => {
+    expect(getAgentErrorMessage(new Error('教练没有返回内容，请重试。'))).toBe('教练没有返回内容，请重试。')
+  })
 })
 
 describe('getAgentErrorAction', () => {
@@ -145,6 +149,25 @@ describe('focus chat guard', () => {
     }
   })
 
+  it('uses streamed text when a provider sends an empty terminal content field', async () => {
+    const nativeFetch = window.fetch
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(
+          'data: {"type":"text","delta":"复盘结论"}\n\n'
+          + 'data: {"type":"done","content":""}\n\n',
+        ))
+        controller.close()
+      },
+    })
+    Object.defineProperty(window, 'fetch', { configurable: true, value: vi.fn().mockResolvedValue(new Response(body)) })
+    try {
+      await expect(agentService.chatStream('复盘', { mode: 'REVIEW' })).resolves.toMatchObject({ content: '复盘结论' })
+    } finally {
+      Object.defineProperty(window, 'fetch', { configurable: true, value: nativeFetch })
+    }
+  })
+
   it('uses a stable conversation identifier for requests in this page', async () => {
     const nativeFetch = window.fetch
     const fetch = vi.fn().mockImplementation(() => new Response(
@@ -196,6 +219,29 @@ describe('focus chat guard', () => {
     expect(fetch).toHaveBeenCalledTimes(2)
     expect(fetch.mock.calls[1][0]).toBe('/api/agent/chat/replay')
     Object.defineProperty(window, 'fetch', { configurable: true, value: nativeFetch })
+  })
+
+  it('reconstructs a replayed answer when its terminal event has no content', async () => {
+    const nativeFetch = window.fetch
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response('data: {"type":"text","delta":"增量答案"}\n\n', {
+        status: 200, headers: { 'Content-Type': 'text/event-stream' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        turnId: 'empty-done-turn', workspaceId: 'local-default', conversationId: 'page-1',
+        capability: 'chat', state: 'completed',
+        events: [
+          { type: 'text', delta: '增量答案', event_id: 1 },
+          { type: 'done', content: '', turn_id: 'empty-done-turn', event_id: 2 },
+        ],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    Object.defineProperty(window, 'fetch', { configurable: true, value: fetch })
+
+    try {
+      await expect(agentService.chatStream('hello', { mode: 'PREP' })).resolves.toMatchObject({ content: '增量答案' })
+    } finally {
+      Object.defineProperty(window, 'fetch', { configurable: true, value: nativeFetch })
+    }
   })
 
   it('deduplicates concurrent profile reads and releases the request after failure', async () => {

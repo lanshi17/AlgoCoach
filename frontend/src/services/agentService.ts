@@ -47,8 +47,12 @@ async function replayPersistedTurn(turnId: string, afterSequence = 0): Promise<T
 function completedReplay(replay: TurnReplay, fallbackTurnId: string): ChatReply | null {
   const done = [...replay.events].reverse().find(event => event.type === 'done')
   if (!done) return null
+  const streamedContent = replay.events
+    .filter(event => event.type === 'text')
+    .map(event => event.delta ?? event.content ?? '')
+    .join('')
   return {
-    content: done.content ?? '',
+    content: done.content?.trim() ? done.content : streamedContent,
     animationId: done.animation_id ?? undefined,
     turnId: done.turn_id ?? fallbackTurnId,
   }
@@ -66,6 +70,9 @@ export function getAgentErrorMessage(error: unknown): string {
       if (error.response?.status === 504) return '模型回复超时了，请稍后重试。'
       return message
     }
+  }
+  if (error instanceof Error && error.message.trim()) {
+    if (error.message.includes('教练没有返回内容')) return error.message
   }
   return '教练暂时无法连接。请检查模型 Provider 设置后重试。'
 }
@@ -237,6 +244,9 @@ export const agentService = {
     const decoder = new TextDecoder()
     let buffer = ''
     let reply: ChatReply | null = null
+    // Keep a private copy even when the caller does not need live streaming
+    // callbacks (the automatic post-submit review is one such caller).
+    let streamedContent = ''
     const consume = (frame: string) => {
       const line = frame.split(/\r?\n/).find(item => item.startsWith('data:'))
       if (!line) return
@@ -250,7 +260,10 @@ export const agentService = {
         detail?: unknown
       }
       if (event.type === 'thinking' && event.delta) handlers.onThinking?.(event.delta)
-      if (event.type === 'text' && event.delta) handlers.onText?.(event.delta)
+      if (event.type === 'text' && event.delta) {
+        streamedContent += event.delta
+        handlers.onText?.(event.delta)
+      }
       if (event.type === 'error') {
         const error = new Error('chat stream failed') as Error & {
           isAxiosError: boolean
@@ -262,7 +275,7 @@ export const agentService = {
       }
       if (event.type === 'done') {
         reply = {
-          content: event.content ?? '',
+          content: event.content?.trim() ? event.content : streamedContent,
           animationId: event.animation_id ?? undefined,
           turnId: event.turn_id ?? turnId,
         }
@@ -286,8 +299,10 @@ export const agentService = {
       const recovered = replay ? completedReplay(replay, turnId) : null
       if (recovered) return recovered
     }
-    if (!reply) throw new Error('聊天流提前结束')
-    return reply
+    const finalReply = reply as ChatReply | null
+    if (finalReply === null) throw new Error('聊天流提前结束')
+    if (!finalReply.content.trim()) throw new Error('教练没有返回内容，请重试。')
+    return finalReply
   },
 
   async replayTurn(turnId: string, afterSequence = 0): Promise<TurnReplay> {
