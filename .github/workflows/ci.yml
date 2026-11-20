@@ -115,7 +115,7 @@ jobs:
         working-directory: desktop
       - run: npm run verify:packaged-python
         working-directory: desktop
-      - run: APPIMAGE_EXTRACT_AND_RUN=1 ALGOCOACH_DESKTOP_BINARY="$PWD/dist/算法练习室-0.2.0.AppImage" npm run verify:packaged-python
+      - run: APPIMAGE_EXTRACT_AND_RUN=1 ALGOCOACH_DESKTOP_BINARY="$PWD/dist/AlgoCoach-0.2.0-x64.AppImage" npm run verify:packaged-python
         working-directory: desktop
       - run: npm run verify:linux
         working-directory: desktop
