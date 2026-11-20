@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Link } from 'react-router-dom'
+import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { useAppStore } from '@/stores/useAppStore'
@@ -42,7 +43,9 @@ export default function ChatMessage({ message }: { message: Msg }) {
         ) : (
           <div className="prose prose-sm max-w-none dark:prose-invert">
             <ReactMarkdown
-              remarkPlugins={[remarkMath]}
+              // GFM enables tables, task lists and strikethrough while the
+              // math plugin keeps the existing KaTeX support.
+              remarkPlugins={[remarkGfm, remarkMath]}
               rehypePlugins={[[rehypeKatex, KATEX_OPTIONS]]}
               components={{
                 code({ className, children, ...props }) {

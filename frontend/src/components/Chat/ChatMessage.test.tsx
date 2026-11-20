@@ -31,6 +31,13 @@ describe('ChatMessage math rendering', () => {
     expect(html).not.toContain('$$')
   })
 
+  it('renders GFM tables as semantic table markup', () => {
+    const html = markup('| 结论 | 证据 |\n| --- | --- |\n| AC | 40/40 |')
+    expect(html).toContain('<table>')
+    expect(html).toContain('<th>结论</th>')
+    expect(html).toContain('<td>40/40</td>')
+  })
+
   it('keeps malformed LaTeX from breaking the message', () => {
     const html = markup('坏公式 $\\frac{1}{$ 也要显示')
     expect(html).toContain('坏公式')
