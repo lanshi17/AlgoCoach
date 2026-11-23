@@ -4,16 +4,20 @@ import { agentService } from '@/services/agentService'
 import type { KnowledgeEmbeddingConfig, KnowledgeSource, KnowledgeStatus } from '@/types'
 import Button from '@/components/Common/Button'
 import PageHeader from '@/components/Common/PageHeader'
+import { useNavigate } from 'react-router-dom'
 
 const field = 'mt-1 w-full rounded-md border border-border bg-surface-soft px-3 py-2 text-sm dark:border-border-dark dark:bg-surface-dark-soft'
 
 export default function KnowledgeBasePage() {
+  const navigate = useNavigate()
   const inputRef = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState<KnowledgeStatus | null>(null)
   const [draft, setDraft] = useState({ provider: 'local' as KnowledgeEmbeddingConfig['provider'], model: 'all-MiniLM-L6-v2', baseUrl: '', apiKey: '', dimensions: '' })
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [patterns, setPatterns] = useState<Array<{ id: number; description: string; frequency: number; lastSeen: string }>>([])
+  const [memoryError, setMemoryError] = useState('')
 
   const load = async () => {
     setError('')
@@ -26,7 +30,7 @@ export default function KnowledgeBasePage() {
     }
   }
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => { void load(); void agentService.getMemoryPatterns().then(setPatterns).catch(() => setMemoryError('无法读取个性化记忆点。')) }, [])
 
   const saveConfig = async () => {
     setBusy(true); setMessage(''); setError('')
@@ -76,11 +80,19 @@ export default function KnowledgeBasePage() {
 
   return <main className="flex-1 min-h-0 overflow-y-auto bg-surface px-6 py-7 dark:bg-surface-dark">
     <div className="mx-auto max-w-4xl">
-      <PageHeader title="知识库" icon={<BookOpen size={18} />} actions={<Button size="sm" onClick={() => void load()} disabled={busy}><RefreshCw size={14} />刷新</Button>} />
+      <PageHeader title="知识库" icon={<BookOpen size={18} />} actions={<><Button size="sm" onClick={() => navigate('/knowledge/graph')}>掌握度图谱</Button><Button size="sm" onClick={() => void load()} disabled={busy}><RefreshCw size={14} />刷新</Button></>} />
       <p className="mb-6 max-w-2xl text-sm leading-6 text-text-secondary dark:text-text-dark-secondary">把自己的笔记、题解和课程资料放进 AlgoCoach。源文件保存在 Agent 所在设备。选择远程 embedding 或对话模型时，文本片段可能发送给对应服务。</p>
 
       {error && <div role="alert" className="mb-4 rounded-md border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger">{error}</div>}
       {message && <div role="status" className="mb-4 rounded-md border border-success/30 bg-success/5 px-3 py-2 text-sm text-success">{message}</div>}
+
+      <section className="mb-4 rounded-lg border border-border p-5 dark:border-border-dark" aria-label="个性化记忆点">
+        <h2 className="font-medium">个性化记忆点</h2>
+        <p className="mt-1 text-xs text-text-muted">这里管理教练记录的学习习惯与常见错误；删除只影响这些记忆点。训练记录及其他对话记忆不会在此删除。</p>
+        {memoryError && <p role="alert" className="mt-2 text-sm text-danger">{memoryError}</p>}
+        {!patterns.length && !memoryError && <p className="mt-3 text-sm text-text-muted">暂无记忆点。</p>}
+        <ul className="mt-3 space-y-2">{patterns.map(pattern => <li key={pattern.id} className="flex items-start justify-between gap-3 text-sm"><span>{pattern.description} <span className="text-xs text-text-muted">· {pattern.frequency} 次</span></span><button type="button" aria-label={`删除记忆点：${pattern.description}`} className="shrink-0 text-danger" onClick={() => { void agentService.deleteMemoryPattern(pattern.id).then(() => setPatterns(current => current.filter(item => item.id !== pattern.id))).catch(() => setMemoryError('删除记忆点失败。')) }}>删除</button></li>)}</ul>
+      </section>
 
       <section className="space-y-4 rounded-lg border border-border p-5 dark:border-border-dark">
         <div className="flex items-center gap-2"><Database size={16} className="text-accent" /><h2 className="font-medium">Embedding 模型</h2></div>

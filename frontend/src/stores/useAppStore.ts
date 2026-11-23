@@ -284,6 +284,7 @@ interface AppState {
   messages: ChatMessage[]
   messagesByProblem: Record<string, ChatMessage[]>
   addMessage: (m: ChatMessage) => void
+  updateMessage: (id: string, patch: Partial<ChatMessage>) => void
   clearMessages: () => void
   chatDrafts: Record<string, string>
   setChatDraft: (draft: string) => void
@@ -516,6 +517,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   addMessage: m => set(state => {
     const key = state.activeProblem ? problemKey(state.activeProblem) : '__global__'
     const messages = [...state.messages, m]
+    return { messages, messagesByProblem: { ...state.messagesByProblem, [key]: messages } }
+  }),
+  updateMessage: (id, patch) => set(state => {
+    if (!state.messages.some(message => message.id === id)) return {}
+    const key = state.activeProblem ? problemKey(state.activeProblem) : '__global__'
+    const messages = state.messages.map(message => message.id === id ? { ...message, ...patch, id } : message)
     return { messages, messagesByProblem: { ...state.messagesByProblem, [key]: messages } }
   }),
   clearMessages: () => set(state => {

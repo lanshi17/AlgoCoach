@@ -165,6 +165,14 @@ export default function Header() {
       })
       const reviewController = new AbortController()
       reviewRequestRef.current = reviewController
+      const replyId = nanoid()
+      let streamed = ''
+      const stillCurrent = () => {
+        const current = useAppStore.getState()
+        return canCommitChatReply('REVIEW', current.mode, reviewController.signal.aborted)
+          && current.activeProblem?.platform === activeProblem.platform
+          && current.activeProblem?.platformId === activeProblem.platformId
+      }
       void agentService.chatStream(reviewText, {
         mode: 'REVIEW',
         problemId: activeProblem.platformId,
@@ -174,15 +182,17 @@ export default function Header() {
         goal,
         trainingPhase: 'review',
         provider,
-      }, {}, reviewController.signal).then(reply => {
-        const current = useAppStore.getState()
-        if (!canCommitChatReply('REVIEW', current.mode, reviewController.signal.aborted)
-          || current.activeProblem?.platform !== activeProblem.platform
-          || current.activeProblem?.platformId !== activeProblem.platformId) return
-        addMessage({
-          id: nanoid(), role: 'agent', content: reply.content,
-          timestamp: new Date().toISOString(), mode: 'REVIEW', animationId: reply.animationId,
-        })
+      }, { onText: delta => {
+        if (!stillCurrent()) return
+        streamed += delta
+        if (!useAppStore.getState().messages.some(message => message.id === replyId)) {
+          addMessage({ id: replyId, role: 'agent', content: streamed, timestamp: new Date().toISOString(), mode: 'REVIEW' })
+        } else useAppStore.getState().updateMessage(replyId, { content: streamed })
+      } }, reviewController.signal).then(reply => {
+        if (!stillCurrent()) return
+        if (streamed) useAppStore.getState().updateMessage(replyId, { content: reply.content, animationId: reply.animationId })
+        else addMessage({ id: replyId, role: 'agent', content: reply.content,
+          timestamp: new Date().toISOString(), mode: 'REVIEW', animationId: reply.animationId })
       }).catch(error => {
         const current = useAppStore.getState()
         if (reviewController.signal.aborted || current.mode === 'FOCUS'

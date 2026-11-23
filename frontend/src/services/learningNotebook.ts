@@ -10,6 +10,7 @@ export interface NotebookEntry {
   tags: string[]
   createdAt: string
   updatedAt: string
+  author?: 'user' | 'ai'
 }
 
 export function readNotebookEntries(): NotebookEntry[] {
@@ -21,7 +22,7 @@ export function readNotebookEntries(): NotebookEntry[] {
   }
 }
 
-export function saveNotebookEntry(input: { id?: string; title: string; body: string; tags: string[] }): NotebookEntry[] {
+export function saveNotebookEntry(input: { id?: string; title: string; body: string; tags: string[]; author?: 'user' | 'ai' }): NotebookEntry[] {
   const entries = readNotebookEntries()
   const now = new Date().toISOString()
   const current = input.id ? entries.find(entry => entry.id === input.id) : undefined
@@ -32,6 +33,7 @@ export function saveNotebookEntry(input: { id?: string; title: string; body: str
     tags: [...new Set(input.tags.map(tag => tag.trim()).filter(Boolean))].slice(0, 12),
     createdAt: current?.createdAt ?? now,
     updatedAt: now,
+    author: current?.author ?? input.author ?? 'user',
   }
   const next = [nextEntry, ...entries.filter(entry => entry.id !== nextEntry.id)].slice(0, 200)
   persist(next)

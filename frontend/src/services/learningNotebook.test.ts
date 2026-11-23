@@ -4,6 +4,13 @@ import { deleteNotebookEntry, readNotebookEntries, saveNotebookEntry } from './l
 afterEach(() => localStorage.clear())
 
 describe('learning notebook', () => {
+  it('preserves authorship when an AI note is edited alongside a user note', () => {
+    const own = saveNotebookEntry({ title: '我的笔记', body: '内容', tags: [] })[0]
+    const ai = saveNotebookEntry({ title: 'AI 笔记', body: '讲解', tags: [], author: 'ai' })[0]
+    saveNotebookEntry({ id: ai.id, title: '修改', body: '补充', tags: [], author: 'user' })
+    expect(readNotebookEntries().find(entry => entry.id === own.id)?.author).toBe('user')
+    expect(readNotebookEntries().find(entry => entry.id === ai.id)?.author).toBe('ai')
+  })
   it('creates and updates a tagged note', () => {
     const created = saveNotebookEntry({ title: '单调栈', body: '维护一个递减栈。', tags: ['栈', '栈'] })[0]
     expect(created).toMatchObject({ title: '单调栈', body: '维护一个递减栈。', tags: ['栈'] })

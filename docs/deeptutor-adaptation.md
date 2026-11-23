@@ -6,15 +6,21 @@ AlgoCoach 参考 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 的公开
 
 | DeepTutor | AlgoCoach 当前实现 | 适配说明 |
 | --- | --- | --- |
-| Workspace | `/home` 学习空间 + 当前题目的本地算法 workspace | 当前是本地单 workspace；页面上的 Block 是视图组件，不是业务核心 |
+| Workspace | `/home` 分阶段学习对话 + `/workspace` 算法练习 | 学习进度按当前浏览器会话和 workspace 保存；原学习记录与模块入口位于 `/learning/dashboard` |
 | TurnApplicationService / TurnEngine | `agentService.chatStream` → Gateway → Python Agent → 本地 `agent_turns` ledger | 每个 turn 有稳定 ID、事件序号和 completed/failed 状态；已完成 turn 可通过 replay API 恢复，不重复调用模型 |
 | Capability | `PREP` → `chat`，`FOCUS` → `practice`，`REVIEW` → `review`；知识图谱建议 → `mastery_path`；复杂分析 → `deep_solve` | 前后端共享有界 registry；能力会进入请求校验和 system prompt，Agent 仍按现有训练阶段执行 |
 | ToolRegistry | AgentScope tools、知识库检索、记忆工具、题库和动画工具 | 工具继续由 Python Agent 注册，前端不直接调用模型或工具 |
 | Practice | 本地算法题练习、样例运行、提交、复盘记录 | 使用 DeepTutor 对应的可解释 SM-2 风格冷启动规则；保留每次自评事件 |
 | Mastery Path | `GET /memory/mastery-path` + 知识图谱“下一步学习路径” | 独立 path runner 读取当前 workspace 的 mastery、共同训练关系和到期复习队列；到期项优先，同一优先级按掌握度升序，返回每一步的原因和建议动作 |
 | Knowledge Center | `KnowledgeBasePage` 与本地知识库索引 | 资料文件和索引按 workspace 隔离，embedding Provider 配置在本机共享 |
-| Learning Notebook | `/notebook` 学习笔记页 + 复盘队列 | 笔记支持标题、正文、标签、保存和删除，并按 workspace key 存储；复盘笔记仍保留在独立复盘队列 |
-| Task Board / Calendar | `/home` 本周计划、练习/复盘日期与本地任务板 | 任务以 workspace key 持久化，可安排下一页练习或到期复盘并标记完成；更完整的跨设备 calendar 留作后续 |
+| Learning Notebook | `/notebook` 学习笔记页 + 复盘队列 | 用户笔记与 AI 笔记分开；支持生成预览、保存、删除，并按 workspace key 存储 |
+| Task Board / Calendar | `/learning/dashboard` 的本周计划和本地任务板 | 任务以 workspace key 持久化；更完整的跨设备 calendar 留作后续 |
+
+## 引导式学习
+
+参考 DeepTutor 的 Mastery Study、Mastery Question Card 和 mastery loop：先讲解，再出单选题、简答题、编程题并复盘；题目作答与自由追问使用不同入口。可识别的四选一题目显示为可点击选项，其他格式仍可在文本框作答。只有教练明确评价通过，才解锁下一阶段；无法判定时保持在当前阶段。
+
+这里的评价是模型的辅助反馈，不是 DeepTutor 的结构化题目与独立评分引擎，也不等于代码已经运行或通过判题。当前使用模型响应中的评价标记作为本地阶段切换信号；模型未按约定返回标记时不会推进。尚未实现题目持久化、确定性选择题判分、学习大纲编辑或跨会话掌握度同步。流式中断不计为通过。
 
 ## Workspace 与数据边界
 

@@ -106,3 +106,18 @@ async def test_review_queue_and_recommendation_baseline_stay_in_workspace():
     assert await memory.due_reviews(
         now=now + timedelta(days=3), workspace_id="local-default"
     ) == []
+
+
+@pytest.mark.asyncio
+async def test_pattern_management_is_workspace_scoped(client):
+    await memory.upsert_pattern('scope-pattern', 'alpha memory', workspace_id='alpha')
+    await memory.upsert_pattern('scope-pattern', 'beta memory', workspace_id='beta')
+    alpha = await memory.list_patterns(workspace_id='alpha')
+    beta = await memory.list_patterns(workspace_id='beta')
+    alpha_item = next(item for item in alpha if item['description'] == 'alpha memory')
+    beta_item = next(item for item in beta if item['description'] == 'beta memory')
+    assert (await client.get('/memory/patterns?workspaceId=alpha')).json() == alpha
+    assert (await client.delete(f"/memory/patterns/{beta_item['id']}?workspaceId=alpha")).status_code == 404
+    assert (await client.delete(f"/memory/patterns/{alpha_item['id']}?workspaceId=alpha")).status_code == 200
+    assert all(item['id'] != alpha_item['id'] for item in await memory.list_patterns(workspace_id='alpha'))
+    assert any(item['id'] == beta_item['id'] for item in await memory.list_patterns(workspace_id='beta'))

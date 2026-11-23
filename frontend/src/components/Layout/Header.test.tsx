@@ -334,3 +334,26 @@ it('runs a Python local practice sample without enabling online submission', asy
   act(() => root.unmount())
   element.remove()
 })
+
+it('shows automatic review text as it arrives and replaces it with the final answer', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.getState().setActiveProblem({ id: '1', platform: 'LEETCODE', platformId: 'one', title: 'One', difficulty: 'EASY', contentHtml: '', topics: [], sampleTestCases: '', codeSnippets: [] })
+  useAppStore.getState().enterFocus()
+  vi.spyOn(leetcodeService, 'submit').mockResolvedValue({ id: '1', status: 'ACCEPTED', runtimeMs: 1, memoryMb: 1, passedTests: 1, totalTests: 1, errorMessage: null, durationSec: 1 })
+  let emit!: (delta: string) => void
+  let finish!: (reply: { content: string }) => void
+  vi.spyOn(agentService, 'chatStream').mockImplementation((_message, _ctx, handlers) => {
+    emit = handlers?.onText ?? (() => {})
+    return new Promise(resolve => { finish = resolve })
+  })
+  const element = document.createElement('div'); document.body.appendChild(element)
+  const root = createRoot(element)
+  act(() => root.render(<Header />))
+  await act(async () => { element.querySelector<HTMLButtonElement>('button[aria-label="提交"]')!.click(); await Promise.resolve() })
+  act(() => { emit('复盘第一段'); emit('，第二段') })
+  expect(useAppStore.getState().messages.filter(message => message.role === 'agent').map(message => message.content)).toEqual(['复盘第一段，第二段'])
+  await act(async () => finish({ content: '完整复盘' }))
+  expect(useAppStore.getState().messages.filter(message => message.role === 'agent').map(message => message.content)).toEqual(['完整复盘'])
+  act(() => root.unmount()); element.remove()
+})

@@ -320,6 +320,18 @@ async def memory_profile(request: Request):
     return await memory.profile_snapshot(workspace_id=workspace_id)
 
 
+@router.get("/memory/patterns")
+async def list_memory_patterns(workspaceId: str = "local-default"):
+    return await memory.list_patterns(workspace_id=workspaceId)
+
+
+@router.delete("/memory/patterns/{pattern_id}")
+async def delete_memory_pattern(pattern_id: int, workspaceId: str = "local-default"):
+    if not await memory.delete_pattern(pattern_id, workspace_id=workspaceId):
+        raise HTTPException(404, detail="找不到该记忆点")
+    return {"ok": True}
+
+
 @router.get("/memory/mastery-path")
 async def memory_mastery_path(
     request: Request,

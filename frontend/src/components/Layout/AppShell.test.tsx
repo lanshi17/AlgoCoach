@@ -1,4 +1,5 @@
 import React, { act } from 'react'
+import { useAppStore } from '@/stores/useAppStore'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import axios from 'axios'
@@ -149,4 +150,18 @@ it('starts a fresh auth check when the user retries after a gateway failure', as
   expect(element.textContent).toContain('工作区')
   act(() => root.unmount())
   element.remove()
+})
+
+it('closes the coach sidebar and removes its tab during focus', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.getState().setActiveProblem({ id: 'focus', platform: 'LEETCODE', platformId: 'focus', title: 'Focus', difficulty: 'EASY', contentHtml: '', topics: [], sampleTestCases: '', codeSnippets: [] })
+  vi.spyOn(axios, 'get').mockResolvedValue({ data: { authenticated: false } })
+  const element = document.createElement('div'); document.body.appendChild(element)
+  const root = createRoot(element)
+  await act(async () => root.render(<MemoryRouter initialEntries={['/workspace']}><AppShell /></MemoryRouter>))
+  act(() => useAppStore.getState().enterFocus())
+  expect(element.querySelector('[data-testid="chat-panel"]')?.parentElement?.className).toMatch(/^hidden /)
+  expect(Array.from(element.querySelectorAll('nav[aria-label="工作区面板"] button')).some(button => button.textContent === 'AI 教练')).toBe(false)
+  act(() => root.unmount()); element.remove()
 })

@@ -111,6 +111,7 @@ export function canCommitChatReply(
 
 interface ChatCtx {
   mode: string
+  conversationId?: string
   capability?: DeepTutorCapability
   workspaceId?: string
   turnId?: string
@@ -143,6 +144,14 @@ function workspaceScopedPath(path: string): string {
  * Python FastAPI agent through the Java gateway at /api/agent/*
  */
 export const agentService = {
+  async getMemoryPatterns(): Promise<Array<{ id: number; description: string; frequency: number; lastSeen: string }>> {
+    const { data } = await axios.get(workspaceScopedPath('/api/agent/memory/patterns'))
+    return data
+  },
+
+  async deleteMemoryPattern(id: number): Promise<void> {
+    await axios.delete(workspaceScopedPath(`/api/agent/memory/patterns/${id}`))
+  },
   async getProfile(): Promise<AgentProfile> {
     const workspaceId = getWorkspaceId()
     const existing = profileRequests.get(workspaceId)
@@ -214,7 +223,7 @@ export const agentService = {
           workspaceId: ctx.workspaceId ?? getWorkspaceId(),
           turnId,
           afterSequence: ctx.afterSequence ?? 0,
-          conversationId,
+          conversationId: ctx.conversationId ?? conversationId,
           ...(shouldSendProvider ? { provider } : {}),
         }),
         signal,

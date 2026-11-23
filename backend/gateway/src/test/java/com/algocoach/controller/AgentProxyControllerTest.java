@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -123,6 +124,18 @@ class AgentProxyControllerTest {
 
         assertThat(captured.get().getMethod()).isEqualTo(HttpMethod.GET);
         assertThat(captured.get().getURI().getPath()).isEqualTo("/memory/profile");
+    }
+
+    @Test
+    void memoryPatternsAreForwardedWithWorkspace() throws Exception {
+        upstreamResponse.set(jsonResponse(HttpStatus.OK, "{}"));
+        performAsync(get(PREFIX + "/memory/patterns").queryParam("workspaceId", "alpha"))
+                .andExpect(status().isOk());
+        assertThat(captured.get().getURI().toString()).endsWith("/memory/patterns?workspaceId=alpha");
+        performAsync(delete(PREFIX + "/memory/patterns/42").queryParam("workspaceId", "alpha"))
+                .andExpect(status().isOk());
+        assertThat(captured.get().getMethod()).isEqualTo(HttpMethod.DELETE);
+        assertThat(captured.get().getURI().toString()).endsWith("/memory/patterns/42?workspaceId=alpha");
     }
 
     @Test

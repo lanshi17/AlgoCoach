@@ -1217,6 +1217,28 @@ class MemoryService:
                 for r in rows.scalars()
             ]
 
+    async def list_patterns(self, workspace_id: str = DEFAULT_WORKSPACE_ID) -> list[dict]:
+        workspace = normalize_workspace_id(workspace_id)
+        async with SessionLocal() as session:
+            rows = (await session.execute(
+                select(ProceduralPattern).where(ProceduralPattern.workspace_id == workspace)
+                .order_by(ProceduralPattern.last_seen.desc())
+            )).scalars()
+            return [{"id": row.id, "description": row.description, "frequency": row.frequency,
+                     "lastSeen": row.last_seen} for row in rows]
+
+    async def delete_pattern(self, pattern_id: int, workspace_id: str = DEFAULT_WORKSPACE_ID) -> bool:
+        workspace = normalize_workspace_id(workspace_id)
+        async with SessionLocal() as session:
+            row = (await session.execute(select(ProceduralPattern).where(
+                ProceduralPattern.id == pattern_id, ProceduralPattern.workspace_id == workspace,
+            ))).scalar_one_or_none()
+            if row is None:
+                return False
+            await session.delete(row)
+            await session.commit()
+            return True
+
     # ── Composite context for agent prompt ───────────────────
 
     async def build_context_snapshot(

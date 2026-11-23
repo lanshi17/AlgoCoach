@@ -27,6 +27,7 @@ function checkAuthStatus(): Promise<unknown> {
 
 const ProgressPage = lazy(() => import('@/pages/ProgressPage'))
 const LearningSpacePage = lazy(() => import('@/pages/LearningSpacePage'))
+const GuidedLearningPage = lazy(() => import('@/pages/GuidedLearningPage'))
 const KnowledgeGraphPage = lazy(() => import('@/pages/KnowledgeGraphPage'))
 const KnowledgeBasePage = lazy(() => import('@/pages/KnowledgeBasePage'))
 const NotebookPage = lazy(() => import('@/pages/NotebookPage'))
@@ -150,10 +151,12 @@ function AppRoutes() {
     <Suspense fallback={<PageLoading />}>
       <Routes>
         <Route path="/" element={<Navigate to="/home" replace />} />
-        <Route path="/home" element={<LearningSpacePage />} />
+        <Route path="/home" element={<GuidedLearningPage />} />
+        <Route path="/learning/dashboard" element={<LearningSpacePage />} />
         <Route path="/workspace" element={<Workspace />} />
         <Route path="/progress" element={<ProgressPage />} />
-        <Route path="/knowledge" element={<KnowledgeGraphPage />} />
+        <Route path="/knowledge" element={<KnowledgeBasePage />} />
+        <Route path="/knowledge/graph" element={<KnowledgeGraphPage />} />
         <Route path="/knowledge/library" element={<KnowledgeBasePage />} />
         <Route path="/notebook" element={<NotebookPage />} />
         <Route path="/settings" element={<SettingsPage />} />
@@ -207,7 +210,7 @@ function Workspace() {
       <Header />
       <nav aria-label="工作区面板" className="flex shrink-0 gap-1 bg-canvas px-3 py-2 dark:bg-[#0B0C0F] xl:hidden">
         {([
-          ['problem', '题目'], ['editor', '编辑器'], ['chat', 'AI 教练'],
+          ['problem', '题目'], ['editor', '编辑器'], ...(mode === 'FOCUS' ? [] : [['chat', 'AI 教练']] as const),
         ] as const).map(([value, label]) => (
           <button key={value} type="button" aria-pressed={panel === value}
             onClick={() => setPanel(value)}
@@ -227,7 +230,7 @@ function Workspace() {
         <div className={`${panel === 'editor' ? 'flex' : 'hidden'} flex min-w-0 flex-1 flex-col overflow-hidden bg-surface xl:rounded-card xl:border xl:border-border xl:shadow-none dark:bg-surface-dark xl:flex`}>
           {(isWide || panel === 'editor') && <EditorPanel />}
         </div>
-        <div className={`${panel === 'chat' ? 'block' : 'hidden'} w-full min-w-0 overflow-hidden bg-surface xl:rounded-card xl:border xl:border-border xl:shadow-none dark:bg-surface-dark xl:block xl:w-[360px] xl:shrink-0`}>
+        <div className={`${mode === 'FOCUS' ? 'hidden' : `${panel === 'chat' ? 'block' : 'hidden'} xl:block xl:w-[360px] xl:shrink-0`} w-full min-w-0 overflow-hidden bg-surface xl:rounded-card xl:border xl:border-border xl:shadow-none dark:bg-surface-dark`}>
           {/* Keep the chat mounted on narrow screens while it is hidden. A
               pending coach reply must survive a panel switch; ChatPanel
               already aborts requests when its problem or mode changes. */}

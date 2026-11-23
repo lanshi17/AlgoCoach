@@ -172,6 +172,16 @@ public class AgentProxyController {
         return forward(HttpMethod.GET, MEMORY_PROFILE_PATH, request, null);
     }
 
+    @GetMapping("/memory/patterns")
+    public Mono<ResponseEntity<byte[]>> memoryPatterns(HttpServletRequest request) {
+        return forward(HttpMethod.GET, "/memory/patterns", request, null);
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/memory/patterns/{patternId}")
+    public Mono<ResponseEntity<byte[]>> deleteMemoryPattern(@PathVariable long patternId, HttpServletRequest request) {
+        return forward(HttpMethod.DELETE, "/memory/patterns/" + patternId, request, null);
+    }
+
     @GetMapping("/memory/mastery-path")
     public Mono<ResponseEntity<byte[]>> memoryMasteryPath(HttpServletRequest request) {
         return forward(HttpMethod.GET, MEMORY_MASTERY_PATH, request, null);
