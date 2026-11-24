@@ -9,7 +9,7 @@ import type { ChatMessage as Msg, TrainingPhase } from '@/types'
 import { agentService, canCommitChatReply, getAgentErrorAction, getAgentErrorMessage } from '@/services/agentService'
 import { usePollAnimation } from '@/hooks/usePollAnimation'
 import { nanoid } from 'nanoid'
-import { capabilityForMode, getWorkspaceId } from '@/services/deepTutorCapabilities'
+import { getWorkspaceId, takeTurnCapability } from '@/services/deepTutorCapabilities'
 
 const TRAINING_PHASES: ReadonlyArray<{ value: TrainingPhase; label: string }> = [
   { value: 'auto', label: '自动判断' },
@@ -135,7 +135,7 @@ export default function ChatPanel() {
       const currentEditor = useAppStore.getState()
       const reply = await agentService.chatStream(userMsg.content, {
         mode: requestMode,
-        capability: capabilityForMode(requestMode),
+        capability: takeTurnCapability(requestMode),
         workspaceId: getWorkspaceId(),
         problemId: activeProblem?.platformId,
         platform: activeProblem?.platform,

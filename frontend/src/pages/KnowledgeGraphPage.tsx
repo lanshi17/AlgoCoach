@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, ArrowRight, BarChart3, BookOpen, Clock3, Loader2, RefreshCw, Route } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { agentService } from '@/services/agentService'
+import { queueCapabilityHandoff } from '@/services/deepTutorCapabilities'
 import Button from '@/components/Common/Button'
 import PageHeader from '@/components/Common/PageHeader'
 import Segmented from '@/components/Common/Segmented'
@@ -84,7 +85,7 @@ export default function KnowledgeGraphPage() {
           </div>
         ) : (
           <>
-            {masteryPath && <MasteryPathCard path={masteryPath} onOpenCoach={() => navigate('/workspace', { state: { openPanel: 'chat' } })} />}
+            {masteryPath && <MasteryPathCard path={masteryPath} onOpenCoach={() => { queueCapabilityHandoff('mastery_path'); navigate('/workspace', { state: { openPanel: 'chat' } }) }} />}
             {listView ? (
               <div className="overflow-hidden rounded-card border border-border bg-surface dark:border-border-dark dark:bg-surface-dark">
             <div className="grid grid-cols-[minmax(0,1fr)_50px_32px] gap-2 border-b border-border bg-surface-soft px-2 py-3 text-xs text-text-muted dark:border-border-dark dark:bg-surface-dark-soft dark:text-text-dark-muted sm:grid-cols-[1fr_100px_90px] sm:gap-3 sm:px-4">

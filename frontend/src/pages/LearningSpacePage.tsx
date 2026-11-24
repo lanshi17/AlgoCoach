@@ -14,7 +14,7 @@ import { dueReviewEntries, rateReviewEntry, readReviewEntries, saveReviewEntry, 
 import type { ReviewRating } from '@/services/deepTutorScheduler'
 import { recommendLearningMode } from '@/services/modeRecommendation'
 import { prepareReviewDiscussion, reviewUnavailableReason } from '@/services/reviewDiscussion'
-import { createLearningTask, readLearningTasks, toggleLearningTask, type LearningTask, type LearningTaskKind } from '@/services/learningTasks'
+import { createLearningTask, moveLearningTask, NEXT_TASK_STATUS, readLearningTasks, setLearningTaskArchived, TASK_STATUS_LABEL, type LearningTask, type LearningTaskKind, type LearningTaskStatus } from '@/services/learningTasks'
 
 export default function LearningSpacePage() {
   const navigate = useNavigate()
@@ -56,7 +56,6 @@ export default function LearningSpacePage() {
   const removeBlock = (id: LearningBlockId) => saveLayout({ ...layout, blocks: layout.blocks.map(block => block.id === id ? { ...block, visible: false } : block) })
   const restoreBlocks = () => saveLayout({ ...layout, blocks: layout.blocks.map(block => ({ ...block, visible: true })) })
   const addTask = (task: { title: string; kind: LearningTaskKind; dueDate: string; problemId?: string }) => setTasks(createLearningTask(task))
-  const toggleTask = (taskId: string) => setTasks(toggleLearningTask(taskId))
   const visibleBlocks = layout.blocks.filter(block => block.visible)
   const taskDate = new Date().toISOString().slice(0, 10)
 
@@ -111,7 +110,7 @@ export default function LearningSpacePage() {
       {suggestion && <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-card border border-accent/30 bg-surface px-4 py-3 text-sm dark:bg-surface-dark"><span className="text-text-secondary dark:text-text-dark-secondary"><span className="font-medium text-text-primary dark:text-text-dark-primary">模式建议（基于练习记录）：</span>{suggestion.reason}</span><button type="button" onClick={() => saveLayout(buildModeLayout(suggestion.suggestedMode))} className="inline-flex h-8 items-center rounded-full bg-[#111317] px-3 text-xs font-medium tracking-cn text-white transition-opacity hover:opacity-90">切换模式</button></div>}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {visibleBlocks.map(block => <React.Fragment key={block.id}>{renderBlock(block.id, { navigate, records, pendingRecords, dueReviews, weekActivity, nextProblem, activeProblem, topicCounts, mode, editing, removeBlock, profile, onReviewSaved: setReviewEntries, tasks, onTaskCreate: addTask, onTaskToggle: toggleTask, taskDate })}</React.Fragment>)}
+        {visibleBlocks.map(block => <React.Fragment key={block.id}>{renderBlock(block.id, { navigate, records, pendingRecords, dueReviews, weekActivity, nextProblem, activeProblem, topicCounts, mode, editing, removeBlock, profile, onReviewSaved: setReviewEntries, tasks, onTaskCreate: addTask, onTaskMove: (taskId, status) => setTasks(moveLearningTask(taskId, status)), onTaskArchive: (taskId, archived) => setTasks(setLearningTaskArchived(taskId, archived)), taskDate })}</React.Fragment>)}
       </div>
       {!visibleBlocks.length && <section className="rounded-panel bg-surface p-10 text-center dark:bg-surface-dark"><p className="text-sm text-text-secondary dark:text-text-dark-secondary">学习空间是空的。</p><button type="button" onClick={restoreBlocks} className="mt-3 font-medium text-accent hover:underline">恢复默认模块</button></section>}
     </div>
@@ -134,12 +133,13 @@ type RenderContext = {
   onReviewSaved: (entries: LocalReviewEntry[]) => void
   tasks: LearningTask[]
   onTaskCreate: (task: { title: string; kind: LearningTaskKind; dueDate: string; problemId?: string }) => void
-  onTaskToggle: (taskId: string) => void
+  onTaskMove: (taskId: string, status: LearningTaskStatus) => void
+  onTaskArchive: (taskId: string, archived: boolean) => void
   taskDate: string
 }
 
 function renderBlock(id: LearningBlockId, context: RenderContext) {
-  const { navigate, records, pendingRecords, dueReviews, weekActivity, nextProblem, activeProblem, topicCounts, mode, editing, removeBlock, profile, onReviewSaved, tasks, onTaskCreate, onTaskToggle, taskDate } = context
+  const { navigate, records, pendingRecords, dueReviews, weekActivity, nextProblem, activeProblem, topicCounts, mode, editing, removeBlock, profile, onReviewSaved, tasks, onTaskCreate, onTaskMove, onTaskArchive, taskDate } = context
   const remove = editing ? () => removeBlock(id) : undefined
 
   if (id === 'digest') return (
@@ -239,23 +239,28 @@ function renderBlock(id: LearningBlockId, context: RenderContext) {
       <p className="mt-3 text-xs text-text-secondary dark:text-text-dark-secondary">实心标记练习，空心标记复盘</p>
       <div className="mt-5 border-t border-border pt-4 dark:border-border-dark">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">任务板 · {tasks.filter(task => !task.completed).length} 待办</p>
+          <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">任务板 · {tasks.filter(task => !task.archived && task.status !== 'done').length} 未完成</p>
           <span className="text-[11px] text-text-muted dark:text-text-dark-muted">本地保存</span>
         </div>
         <div className="mt-3 space-y-2">
-          {tasks.slice().sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 4).map(task => (
-            <button key={task.id} type="button" onClick={() => onTaskToggle(task.id)} className="flex w-full items-center gap-2 rounded-card px-2 py-1.5 text-left text-xs transition-colors hover:bg-surface-muted dark:hover:bg-surface-dark-muted">
-              <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${task.completed ? 'border-accent bg-accent text-white' : 'border-border dark:border-border-dark'}`}>{task.completed && <Check size={11} />}</span>
-              <span className={`min-w-0 flex-1 truncate ${task.completed ? 'text-text-muted line-through dark:text-text-dark-muted' : 'text-text-secondary dark:text-text-dark-secondary'}`}>{task.title}</span>
+          {tasks.filter(task => !task.archived).sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 4).map(task => (
+            <div key={task.id} className="flex items-center gap-2 px-2 py-1.5 text-xs">
+              <button type="button" aria-label={`${task.title}：${TASK_STATUS_LABEL[task.status]}，切换为${TASK_STATUS_LABEL[NEXT_TASK_STATUS[task.status]]}`} onClick={() => onTaskMove(task.id, NEXT_TASK_STATUS[task.status])} className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] text-text-secondary hover:bg-surface-muted dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">{TASK_STATUS_LABEL[task.status]}</button>
+              <span className={`min-w-0 flex-1 truncate ${task.status === 'done' ? 'text-text-muted line-through dark:text-text-dark-muted' : 'text-text-secondary dark:text-text-dark-secondary'}`}>{task.title}</span>
               <span className="shrink-0 text-[10px] text-text-muted dark:text-text-dark-muted">{task.dueDate}</span>
-            </button>
+              {task.status === 'done' && <button type="button" onClick={() => onTaskArchive(task.id, true)} className="shrink-0 text-[11px] font-medium text-accent hover:underline">归档</button>}
+            </div>
           ))}
-          {!tasks.length && <p className="text-xs text-text-muted dark:text-text-dark-muted">还没有任务。把下一页练习或到期复盘加入计划。</p>}
+          {!tasks.some(task => !task.archived) && <p className="text-xs text-text-muted dark:text-text-dark-muted">还没有任务。把下一页练习或到期复盘加入计划。</p>}
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" onClick={() => onTaskCreate({ title: `练习：${nextProblem.titleCn ?? nextProblem.title}`, kind: 'practice', dueDate: taskDate, problemId: `${nextProblem.platform}:${nextProblem.platformId}` })} className="text-xs font-medium text-accent hover:underline">+ 安排下一页练习</button>
           {dueReviews[0] && <button type="button" onClick={() => onTaskCreate({ title: `复盘：${dueReviews[0].title ?? '到期笔记'}`, kind: 'review', dueDate: taskDate, problemId: dueReviews[0].problemKey })} className="text-xs font-medium text-accent hover:underline">+ 安排到期复盘</button>}
         </div>
+        {tasks.some(task => task.archived) && <details className="mt-3 text-xs text-text-secondary dark:text-text-dark-secondary">
+          <summary className="cursor-pointer">已归档 · {tasks.filter(task => task.archived).length}</summary>
+          <div className="mt-2 space-y-2">{tasks.filter(task => task.archived).map(task => <div key={task.id} className="flex items-center gap-2"><span className="min-w-0 flex-1 truncate">{task.title}</span><button type="button" onClick={() => onTaskArchive(task.id, false)} className="shrink-0 font-medium text-accent hover:underline">恢复</button></div>)}</div>
+        </details>}
       </div>
     </BlockCard>
   )

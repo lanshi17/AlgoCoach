@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentService } from '@/services/agentService'
 import { useAppStore } from '@/stores/useAppStore'
+import { queueCapabilityHandoff } from '@/services/deepTutorCapabilities'
 import type { ChatMessage as Msg, Problem } from '@/types'
 import ChatPanel, { toRemainingSeconds } from './ChatPanel'
 
@@ -387,5 +388,20 @@ describe('chat when changing training context', () => {
     )
     expect(useAppStore.getState().messages.filter(message => message.role === 'user')).toHaveLength(1)
     expect(element.textContent).toContain('自动复盘重试成功。')
+  })
+
+  it('runs the next coach turn under the queued mastery path capability', async () => {
+    queueCapabilityHandoff('mastery_path')
+    useAppStore.getState().setActiveProblem(problem)
+    const chat = vi.spyOn(agentService, 'chatStream').mockResolvedValue({ content: '好的，按路径来。' })
+    act(() => renderChatPanel(root))
+    const textarea = element.querySelector<HTMLTextAreaElement>('textarea[aria-label="发送给 AI 教练的消息"]')!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, '带我走下一步')
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+    expect(chat).toHaveBeenCalledWith('带我走下一步', expect.objectContaining({ capability: 'mastery_path' }), expect.any(Object), expect.any(AbortSignal))
+    expect(sessionStorage.getItem('algocoach.capabilityHandoff')).toBeNull()
   })
 })

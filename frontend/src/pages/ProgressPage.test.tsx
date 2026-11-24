@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import ProgressPage from './ProgressPage'
 import { LOCAL_PRACTICE_PROBLEMS } from '@/services/localPractice'
-import { saveReviewEntry } from '@/services/reviewQueue'
+import { readReviewEntries, readReviewEvents, REVIEW_ROUND_LIMIT, saveReviewEntry } from '@/services/reviewQueue'
 import { agentService } from '@/services/agentService'
 import { useAppStore } from '@/stores/useAppStore'
 
@@ -85,4 +85,32 @@ it('shows due reviews without exposing their notes, then schedules after self-ra
   const entry = JSON.parse(localStorage.getItem('algocoach.localReviewEntries')!)[0]
   expect(entry.schedule.reps).toBe(1)
   expect(Date.parse(entry.schedule.due)).toBeGreaterThan(Date.now())
+  expect(readReviewEvents()).toHaveLength(1)
+  expect(readReviewEvents()[0]).toMatchObject({ problemId: record.id, rating: 3 })
+})
+
+it('shows one review round at a time and keeps the rest due until earlier ones are rated', async () => {
+  localStorage.setItem('algocoach.localReviewEntries', JSON.stringify(Array.from({ length: 25 }, (_, index) => ({ problemId: `note-${index}`, note: `笔记 ${index}`, reviewedAt: '2020-01-01T00:00:00.000Z' }))))
+  useAppStore.setState({ activeProblem: null, mode: 'PREP', localPracticeRecords: [] })
+  await renderPage()
+  expect(element.textContent).toContain('今日回想 · 25')
+  expect(element.textContent?.split('先试着回忆解法')).toHaveLength(REVIEW_ROUND_LIMIT + 1)
+  expect(element.textContent).toContain('其余 5 条')
+  act(() => Array.from(element.querySelectorAll('button')).find(button => button.textContent === '显示笔记')!.click())
+  act(() => Array.from(element.querySelectorAll('button')).find(button => button.textContent === '想起来了')!.click())
+  expect(element.textContent).toContain('今日回想 · 24')
+  expect(element.textContent?.split('先试着回忆解法')).toHaveLength(REVIEW_ROUND_LIMIT + 1)
+})
+
+it('pauses a pending note once it is marked mastered and resumes when the mark is cleared', async () => {
+  saveReviewEntry(record.id, '能独立写出来', record)
+  useAppStore.setState({ activeProblem: null, mode: 'PREP', localPracticeRecords: [record] })
+  await renderPage()
+  act(() => Array.from(element.querySelectorAll('button')).find(button => button.textContent === '标记已掌握')!.click())
+  expect(readReviewEntries()[0].mastered).toBe(true)
+  expect(element.textContent).toContain('已掌握 · ')
+  expect(element.textContent).toContain('已暂停每日安排')
+  act(() => Array.from(element.querySelectorAll('button')).find(button => button.textContent === '取消已掌握')!.click())
+  expect(readReviewEntries()[0].mastered).toBe(false)
+  expect(element.textContent).toContain('下次复习')
 })

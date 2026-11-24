@@ -77,3 +77,26 @@ export function capabilityForMode(mode: string): DeepTutorCapability {
   if (mode === 'REVIEW') return 'review'
   return 'chat'
 }
+
+const CAPABILITY_HANDOFF_KEY = 'algocoach.capabilityHandoff'
+const CAPABILITIES: readonly DeepTutorCapability[] = ['chat', 'deep_solve', 'practice', 'mastery_path', 'review']
+
+/** Asks the next PREP or IDLE turn to run under `capability`, e.g. from the knowledge graph's guide entry. */
+export function queueCapabilityHandoff(capability: DeepTutorCapability): void {
+  try { window.sessionStorage.setItem(CAPABILITY_HANDOFF_KEY, capability) } catch { /* keep the mode's default capability */ }
+}
+
+/** Picks the capability for one chat turn. FOCUS and REVIEW keep their own; a queued handoff is consumed once. */
+export function takeTurnCapability(mode: string): DeepTutorCapability {
+  if (mode === 'FOCUS' || mode === 'REVIEW') return capabilityForMode(mode)
+  let queued: string | null = null
+  try {
+    queued = window.sessionStorage.getItem(CAPABILITY_HANDOFF_KEY)
+    window.sessionStorage.removeItem(CAPABILITY_HANDOFF_KEY)
+  } catch { /* storage is optional; fall back to the mode's capability */ }
+  return isCapability(queued) ? queued : capabilityForMode(mode)
+}
+
+function isCapability(value: string | null): value is DeepTutorCapability {
+  return CAPABILITIES.some(capability => capability === value)
+}

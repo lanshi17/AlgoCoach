@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { createWorkspace, getWorkspaceId, LOCAL_WORKSPACE_ID, readWorkspaceManifests, switchWorkspace, workspaceStorageKey } from './deepTutorCapabilities'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { createWorkspace, getWorkspaceId, LOCAL_WORKSPACE_ID, queueCapabilityHandoff, readWorkspaceManifests, switchWorkspace, takeTurnCapability, workspaceStorageKey } from './deepTutorCapabilities'
 
 afterEach(() => localStorage.clear())
 
@@ -27,5 +27,27 @@ describe('workspace identity', () => {
     switchWorkspace(created.id)
     expect(getWorkspaceId()).toBe(created.id)
     expect(readWorkspaceManifests()).toContainEqual(created)
+  })
+})
+
+describe('turn capability handoff', () => {
+  beforeEach(() => sessionStorage.clear())
+
+  it('applies a queued capability once, to the next chat turn', () => {
+    queueCapabilityHandoff('mastery_path')
+    expect(takeTurnCapability('PREP')).toBe('mastery_path')
+    expect(takeTurnCapability('PREP')).toBe('chat')
+  })
+
+  it('keeps FOCUS and REVIEW on their own capability and leaves the handoff queued', () => {
+    queueCapabilityHandoff('mastery_path')
+    expect(takeTurnCapability('REVIEW')).toBe('review')
+    expect(takeTurnCapability('FOCUS')).toBe('practice')
+    expect(takeTurnCapability('IDLE')).toBe('mastery_path')
+  })
+
+  it('ignores a stored value that is not a registered capability', () => {
+    sessionStorage.setItem('algocoach.capabilityHandoff', 'not_a_capability')
+    expect(takeTurnCapability('PREP')).toBe('chat')
   })
 })

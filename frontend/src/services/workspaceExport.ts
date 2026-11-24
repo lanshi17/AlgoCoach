@@ -3,7 +3,7 @@ import { readLearningSpaceLayout } from './learningSpace'
 import { readNotebookEntries } from './learningNotebook'
 import { readLearningTasks } from './learningTasks'
 import { readLocalPracticeRecords } from './localProgress'
-import { readReviewEntries } from './reviewQueue'
+import { readReviewEntries, readReviewEvents } from './reviewQueue'
 
 /** A portable snapshot of the active workspace's browser-managed learning data. */
 export function createWorkspaceExport() {
@@ -15,6 +15,7 @@ export function createWorkspaceExport() {
     tasks: readLearningTasks(),
     practiceRecords: readLocalPracticeRecords(),
     reviews: readReviewEntries(),
+    reviewEvents: readReviewEvents(),
     layout: readLearningSpaceLayout(),
   }
 }
