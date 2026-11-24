@@ -174,7 +174,7 @@ CAPABILITY_GUIDANCE: dict[DeepTutorCapability, str] = {
     ),
     DeepTutorCapability.MASTERY_PATH: (
         "当前能力是 mastery_path：结合弱点主题、前置关系和最近练习，给出下一步可执行的"
-        "学习路径；先调用 get_mastery_path 获取有序步骤，再区分已有证据与待验证的掌握度，"
+        "学习路径；若本轮已给出学习路径快照则直接使用，否则先调用 get_mastery_path 获取有序步骤，再区分已有证据与待验证的掌握度，"
         "不要把相关知识点未经证据当成硬性前置关系。"
     ),
     DeepTutorCapability.REVIEW: (

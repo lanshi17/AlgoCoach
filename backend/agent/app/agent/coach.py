@@ -361,6 +361,26 @@ async def _workspace_context_snapshot(workspace_id: str) -> dict:
         return await memory.build_context_snapshot()
 
 
+async def _mastery_path_snapshot(capability: str, workspace_id: str) -> str:
+    """Read the learning path once for a mastery_path turn.
+
+    Like DeepTutor's mastery turn grounding, the snapshot is read fresh for each
+    turn and is never cached across turns. If the read fails the turn still runs,
+    and get_mastery_path stays available as an explicit tool call.
+    """
+    if capability != "mastery_path":
+        return ""
+    try:
+        path = await memory.mastery_path(workspace_id=workspace_id)
+    except Exception:
+        logger.warning("mastery path snapshot unavailable", exc_info=True)
+        return ""
+    return (
+        "\n\n[本轮学习路径快照]（回答前已读取，直接使用；需要更新时再调用 get_mastery_path）\n"
+        + json.dumps(path, ensure_ascii=False, indent=2)
+    )
+
+
 class AlgoCoach:
     """Single-process AgentScope runtime for the coach's ``POST /chat/stream`` route.
 
@@ -745,6 +765,7 @@ class AlgoCoach:
             # mistakes) still personalises the Soul. ReMe handles conversational
             # long-term memory through the middleware hooks.
             ctx = await _workspace_context_snapshot(workspace_id)
+            mastery_snapshot = await _mastery_path_snapshot(capability, workspace_id)
             # AgentScope keeps the constructor prompt on the private attr and
             # has no public setter; update it in place so every turn gets the
             # current domain-memory snapshot and training context.
@@ -768,7 +789,7 @@ class AlgoCoach:
                     "只有用户提供的提交或代码事实才可用于复盘；不要假定已查看代码。"
                     if mode == "REVIEW" else
                     "不要推测用户是否开始做题或提交。"
-                ) + _code_review_context(mode, code, code_language)
+                ) + _code_review_context(mode, code, code_language) + mastery_snapshot
             )
 
             sink: dict = {}
@@ -856,6 +877,7 @@ class AlgoCoach:
 
         async with lock:
             ctx = await _workspace_context_snapshot(workspace_id)
+            mastery_snapshot = await _mastery_path_snapshot(capability, workspace_id)
             agent._system_prompt = get_system_prompt(
                 resolved_goal,
                 training_phase=phase,
@@ -875,7 +897,7 @@ class AlgoCoach:
                     "只有用户提供的提交或代码事实才可用于复盘；不要假定已查看代码。"
                     if mode == "REVIEW" else
                     "不要推测用户是否开始做题或提交。"
-                ) + _code_review_context(mode, code, code_language)
+                ) + _code_review_context(mode, code, code_language) + mastery_snapshot
             )
 
             sink: dict = {}
