@@ -20,14 +20,14 @@ AlgoCoach 是一个本地优先的算法训练工作台。它把题目、编辑�
 | 本地 Python 样例运行 | 初步实现 | 两道内置题；自定义输入显示返回值，尚无完整判题 |
 | 本地 SM-2 风格复习调度 | 初步实现 | 借鉴 DeepTutor 的可解释冷启动规则；用户自评后安排下一次复习 |
 | 本地练习同步 Agent 记忆 | 初步实现 | 在线时同步，离线保留重试队列；幂等键避免重复记忆；样例结果分开记录 |
-| DeepTutor 式 Workspace 学习空间 | 已实现 | `/home` |
+| DeepTutor 式 Workspace 学习空间 | 已实现 | `/learning/dashboard`（学习页“学习记录”入口） |
 | macOS / Linux 桌面壳 | 初步实现 | `desktop/`；Linux x86_64 包已验证，macOS arm64 由 runner 构建检查 |
 | 预置 Remotion 动画 | 可选，默认关闭 | `REMOTION_ENABLED=true` |
 | 生成式动画沙箱 | 可选，默认关闭 | 需要额外安全运行环境 |
 
 ## 五分钟了解项目
 
-1. 打开前端后即可从“本地练习本”开始写代码；网关未启动时仍可保存草稿、专注时间和本地进度。
+1. 打开前端后默认进入侧栏的“学习空间”（`/home`，分阶段引导式学习页）；要从“本地练习本”开始写代码，进入“编码练习”（`/workspace`）。网关未启动时仍可保存草稿、专注时间和本地进度。
 2. 在设置页配置模型 Provider；需要使用 LeetCode、AcWing 时再粘贴对应 Cookie。
 3. 在题目选择器中按平台、专项、难度或关键词选题。已 AC 的 LeetCode 题默认隐藏，可随时打开显示。
 4. PREP 阶段让教练解释概念、约束和建模方向。
@@ -42,7 +42,7 @@ AlgoCoach 是一个本地优先的算法训练工作台。它把题目、编辑�
 选择学习模式 → 今日摘要 → Agent 推荐练习 → 写代码 → 判题 / 自测 → 复盘 → 知识图谱与下一轮计划
 ```
 
-`/home` 是 Workspace 的当前 UI 表现层，目前包含今日摘要、继续练习、复盘队列、知识地图、本周计划/任务板和 Agent 洞察；`/notebook` 提供独立的本地学习笔记。计划可以安排下一页练习或到期复盘并在本机标记完成。算法 Agent 继续复用现有题库、Monaco 编辑器、判题、REVIEW 和知识图谱；这些 Block 是可替换的视图组件，业务边界由 Workspace、Capability、Tool、练习记录和对话 turn 定义。
+`/learning/dashboard`（从学习页的“学习记录”进入）是 Workspace 的当前 UI 表现层，目前包含今日摘要、继续练习、复盘队列、知识地图、本周计划/任务板和 Agent 洞察；`/home` 是分阶段引导式学习页，`/notebook` 提供独立的本地学习笔记。计划可以安排下一页练习或到期复盘并在本机标记完成。算法 Agent 继续复用现有题库、Monaco 编辑器、判题、REVIEW 和知识图谱；这些 Block 是可替换的视图组件，业务边界由 Workspace、Capability、Tool、练习记录和对话 turn 定义。
 
 `desktop/` 提供 macOS / Linux Electron 壳，发布顺序为 macOS Apple Silicon arm64、macOS Intel x64、Linux x86_64。开发时它启动 Vite 并把 `/api`、`/animations` 转发到本地 Gateway；设置 `ALGOCOACH_AUTOSTART_SERVICES=1` 后会尝试管理本地 Gateway / Agent 子进程，生产打包入口已经准备好。
 
