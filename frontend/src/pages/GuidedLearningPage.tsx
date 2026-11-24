@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { nanoid } from 'nanoid'
 import { agentService, getAgentErrorMessage } from '@/services/agentService'
@@ -7,6 +7,7 @@ import { useAppStore } from '@/stores/useAppStore'
 import ChatMessage from '@/components/Chat/ChatMessage'
 import type { ChatMessage as Message } from '@/types'
 import { workspaceStorageKey } from '@/services/deepTutorCapabilities'
+import { optionLine, parseChoiceAnswer, parseChoices, visibleReply } from '@/services/guidedChoice'
 import { ArrowRight, BookOpen, Check, Circle, MessageCircle, Plus, Send, Sparkles } from 'lucide-react'
 
 const stages = [
@@ -17,24 +18,7 @@ const stages = [
   { name: '复盘', instruction: '根据本次对话中实际给出的回答和代码进行复盘，区分已验证事实与待验证风险，指出下一步。没有提交代码时明确说明。' },
 ] as const
 
-const optionLine = /^[ \t]*(?:[-*][ \t]*)?(?:\*\*)?([A-D])[.、:：)）][ \t]*(?:\*\*)?[ \t]*(\S.*?)\s*$/gm
-
 type ChoiceQuestion = { correct: string; attempts: string[] }
-
-function parseChoices(text: string) {
-  const choices = [...text.matchAll(optionLine)]
-    .map(match => ({ label: match[1], body: match[2] }))
-  return choices.length === 4 && new Set(choices.map(choice => choice.label)).size === 4 ? choices : []
-}
-
-function visibleReply(text: string, marker: string): string {
-  const start = text.lastIndexOf('[[')
-  if (start >= 0 && (marker.startsWith(text.slice(start)) || text.slice(start).startsWith(marker))) {
-    return text.slice(0, start).trimEnd()
-  }
-  if (text.endsWith('[')) return text.slice(0, -1)
-  return text
-}
 
 export default function GuidedLearningPage() {
   const navigate = useNavigate()
@@ -108,9 +92,7 @@ export default function GuidedLearningPage() {
       } }, request.signal)
       if (request.signal.aborted) return null
       const content = visible(response.content)
-      const correct = kind === 'choice'
-        ? response.content.match(/(?:^|\n)[ \t]*\[\[答案:([A-D])\]\]\s*$/)?.[1]
-        : undefined
+      const correct = kind === 'choice' ? parseChoiceAnswer(response.content) : undefined
       if (kind === 'choice' && (!correct || parseChoices(content).length !== 4 || !content.replace(optionLine, '').trim())) {
         setError('这次未能生成完整的选择题，请重新出题。')
         return null
