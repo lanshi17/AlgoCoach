@@ -9,6 +9,8 @@ export interface GuidedStage {
   instruction: string
 }
 
+export const MAX_GUIDED_INSTRUCTION_LENGTH = 600
+
 const GOAL_LABELS: Record<TrainingGoal, string> = {
   interview_prep: '面试准备',
   contest: '竞赛训练',
@@ -72,9 +74,14 @@ export const GUIDED_STAGE_TYPE_LABEL: Record<GuidedStageType, string> = {
   review: '复盘',
 }
 
+/** The coach instruction used when a type is created or switched without custom text. */
+export function defaultGuidedInstruction(type: GuidedStageType): string {
+  return STAGE_INSTRUCTIONS[type]
+}
+
 /** Creates a stage with the default coach instruction for its type. */
 export function newGuidedStage(type: GuidedStageType, name: string, id: string): GuidedStage {
-  return { id, name, type, instruction: STAGE_INSTRUCTIONS[type] }
+  return { id, name, type, instruction: defaultGuidedInstruction(type) }
 }
 
 /**
@@ -87,6 +94,9 @@ export function validateGuidedOutline(stages: GuidedStage[]): string | null {
   const names = stages.map(stage => stage.name.trim())
   if (names.some(name => !name)) return '阶段名称不能为空。'
   if (new Set(names).size !== names.length) return '阶段名称不能重复。'
+  const instructions = stages.map(stage => stage.instruction.trim())
+  if (instructions.some(instruction => !instruction)) return '教练指令不能为空。'
+  if (instructions.some(instruction => instruction.length > MAX_GUIDED_INSTRUCTION_LENGTH)) return `教练指令最多 ${MAX_GUIDED_INSTRUCTION_LENGTH} 个字符。`
   if (stages.filter(stage => stage.type === 'review').length !== 1) return '只能保留一个复盘阶段。'
   if (stages[stages.length - 1].type !== 'review') return '最后一个阶段必须是复盘。'
   if (!stages.some(stage => stage.type === 'code')) return '至少保留一个编程阶段。'
@@ -151,7 +161,7 @@ function normalizePlan(value: unknown): GuidedStage[] | null {
     if (!name || !type) continue
     const instruction = textField(
       record.instruction ?? record.prompt ?? record.description ?? record.goal,
-      600,
+      MAX_GUIDED_INSTRUCTION_LENGTH,
     ) || STAGE_INSTRUCTIONS[type]
     stages.push({ id: `plan-stage-${stages.length + 1}`, name, type, instruction })
   }

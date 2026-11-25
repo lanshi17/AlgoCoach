@@ -480,3 +480,65 @@ it('edits the outline while keeping the current stage and blocks invalid names',
   expect(Array.from(restoredOutline.querySelectorAll('li')).map(item => item.lastElementChild?.textContent)).toEqual(['自定义概念', '问答题', '编程题', '新阶段', '复盘'])
   act(() => restoredRoot.unmount()); restored.remove()
 })
+
+it('edits a stage type and instruction, resets the current question, and offers a re-ask', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.setState({ mode: 'PREP' })
+  const chat = vi.spyOn(agentService, 'chatStream').mockImplementation(async message => ({
+    content: message.includes('学习规划师') ? defaultPlan : message.includes('请实现二分查找') ? '请实现一个二分查找函数。' : '先理解区间。',
+  }))
+  const element = document.createElement('div'); document.body.appendChild(element)
+  const root = createRoot(element)
+  await act(async () => root.render(<MemoryRouter><GuidedLearningPage /></MemoryRouter>))
+  const input = element.querySelector<HTMLInputElement>('input[aria-label="学习知识点"]')!
+  const setInputValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+  const setTextareaValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
+  const button = (label: string) => Array.from(element.querySelectorAll('button')).find(item => item.textContent?.trim() === label)!
+  await act(async () => { setInputValue.call(input, '二分'); input.dispatchEvent(new Event('input', { bubbles: true })) })
+  await act(async () => { button('开始学习').click() })
+
+  await act(async () => { (element.querySelector('[aria-label="编辑学习大纲"]') as HTMLButtonElement).click() })
+  const typeSelect = element.querySelector<HTMLSelectElement>('select[aria-label="阶段 1 类型"]')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(typeSelect, 'code')
+    typeSelect.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+  const instruction = element.querySelector<HTMLTextAreaElement>('textarea[aria-label="阶段 1 教练指令"]')!
+  expect(instruction.value).toContain('编程练习')
+  await act(async () => {
+    setTextareaValue.call(instruction, '请实现二分查找，并说明左右边界的含义。')
+    instruction.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => { button('保存大纲').click() })
+
+  const saved = JSON.parse(localStorage.getItem('algocoach.guidedLearning')!).session
+  expect(saved.stages[0]).toMatchObject({ type: 'code', instruction: '请实现二分查找，并说明左右边界的含义。' })
+  expect(saved.planSource).toBe('edited')
+  expect(element.querySelector('textarea[aria-label="编程题代码编辑器"]')).not.toBeNull()
+  expect(button('重新出题')).toBeTruthy()
+
+  await act(async () => { button('重新出题').click() })
+  expect(chat.mock.calls[chat.mock.calls.length - 1][0]).toContain('请实现二分查找，并说明左右边界的含义。')
+  expect(element.textContent).toContain('请实现一个二分查找函数。')
+  expect(button('重新出题')).toBeFalsy()
+
+  const editor = element.querySelector<HTMLTextAreaElement>('textarea[aria-label="编程题代码编辑器"]')!
+  await act(async () => {
+    setTextareaValue.call(editor, 'def search(nums, target):\n    return -1')
+    editor.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+
+  await act(async () => { (element.querySelector('[aria-label="编辑学习大纲"]') as HTMLButtonElement).click() })
+  const updatedInstruction = element.querySelector<HTMLTextAreaElement>('textarea[aria-label="阶段 1 教练指令"]')!
+  await act(async () => {
+    setTextareaValue.call(updatedInstruction, '改用左闭右开区间实现二分查找。')
+    updatedInstruction.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => { button('保存大纲').click() })
+  expect(JSON.parse(localStorage.getItem('algocoach.guidedLearning')!).session.stages[0].instruction).toBe('改用左闭右开区间实现二分查找。')
+  expect(button('重新出题')).toBeTruthy()
+  await act(async () => { button('重新出题').click() })
+  expect((element.querySelector('textarea[aria-label="编程题代码编辑器"]') as HTMLTextAreaElement).value).toContain('def search(nums, target)')
+  act(() => root.unmount()); element.remove()
+})

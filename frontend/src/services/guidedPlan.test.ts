@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { DEFAULT_GUIDED_STAGES, MAX_GUIDED_STAGES, newGuidedStage, parseGuidedPlan, sanitizeGuidedStages, stageNeedsAnswer, validateGuidedOutline } from './guidedPlan'
+import { DEFAULT_GUIDED_STAGES, MAX_GUIDED_INSTRUCTION_LENGTH, MAX_GUIDED_STAGES, newGuidedStage, parseGuidedPlan, sanitizeGuidedStages, stageNeedsAnswer, validateGuidedOutline, defaultGuidedInstruction } from './guidedPlan'
 
 it('parses a fenced outline and adds the programming stage the page needs', () => {
   const plan = parseGuidedPlan('```json\n{"stages":[\n  {"name":"概念热身","type":"concept","instruction":"讲解区间收缩。"},\n  {"name":"选择检查","type":"choice","instruction":"出一道单选题。"},\n  {"name":"复盘","type":"review","instruction":"总结本次学习。"}\n]}\n```')
@@ -32,6 +32,10 @@ it('validates learner-edited outlines and names the blocking invariant', () => {
   expect(validateGuidedOutline(emptyName)).toContain('不能为空')
   const duplicateName = DEFAULT_GUIDED_STAGES.map((stage, index) => index === 1 ? { ...stage, name: DEFAULT_GUIDED_STAGES[0].name } : stage)
   expect(validateGuidedOutline(duplicateName)).toContain('重复')
+  const emptyInstruction = DEFAULT_GUIDED_STAGES.map((stage, index) => index === 0 ? { ...stage, instruction: '  ' } : stage)
+  expect(validateGuidedOutline(emptyInstruction)).toContain('教练指令不能为空')
+  const longInstruction = DEFAULT_GUIDED_STAGES.map((stage, index) => index === 0 ? { ...stage, instruction: 'x'.repeat(MAX_GUIDED_INSTRUCTION_LENGTH + 1) } : stage)
+  expect(validateGuidedOutline(longInstruction)).toContain(`最多 ${MAX_GUIDED_INSTRUCTION_LENGTH} 个字符`)
   expect(validateGuidedOutline([...DEFAULT_GUIDED_STAGES, newGuidedStage('concept', '额外', 'extra')])).toContain('复盘')
   const tooMany = Array.from({ length: MAX_GUIDED_STAGES + 1 }, (_, index) => ({ ...DEFAULT_GUIDED_STAGES[0], id: `s-${index}` }))
   expect(validateGuidedOutline(tooMany)).toContain(`最多保留 ${MAX_GUIDED_STAGES}`)
@@ -41,4 +45,6 @@ it('creates a stage with the default instruction for its type', () => {
   const stage = newGuidedStage('code', '自定义编程', 'custom-stage')
   expect(stage).toMatchObject({ id: 'custom-stage', name: '自定义编程', type: 'code' })
   expect(stage.instruction).toContain('编程练习')
+  expect(defaultGuidedInstruction('review')).toContain('复盘')
+  expect(defaultGuidedInstruction('choice')).toContain('单选题')
 })

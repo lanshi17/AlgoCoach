@@ -15,9 +15,9 @@ import { useLayoutStorageSync } from '@/components/Layout/useLayoutStorageSync'
 import type { ChatMessage as Message, CodeLanguage } from '@/types'
 import { workspaceStorageKey } from '@/services/deepTutorCapabilities'
 import {
-  DEFAULT_GUIDED_STAGES, buildGuidedPlanPrompt, GUIDED_STAGE_TYPE_LABEL, MAX_GUIDED_STAGES,
-  newGuidedStage, parseGuidedPlan, sanitizeGuidedStages, stageNeedsAnswer, validateGuidedOutline,
-  type GuidedStage,
+  DEFAULT_GUIDED_STAGES, buildGuidedPlanPrompt, defaultGuidedInstruction, GUIDED_STAGE_TYPE_LABEL,
+  MAX_GUIDED_INSTRUCTION_LENGTH, MAX_GUIDED_STAGES, newGuidedStage, parseGuidedPlan, sanitizeGuidedStages,
+  stageNeedsAnswer, validateGuidedOutline, type GuidedStage, type GuidedStageType,
 } from '@/services/guidedPlan'
 import { LANGUAGE_OPTIONS } from '@/services/languages'
 import { guidedCodeTemplate, isGuidedCodeTemplate } from '@/services/guidedCodeTemplates'
@@ -83,6 +83,7 @@ export default function GuidedLearningPage() {
   const [editingOutline, setEditingOutline] = useState(false)
   const [outlineDraft, setOutlineDraft] = useState<GuidedStage[]>([])
   const [outlineError, setOutlineError] = useState('')
+  const [editedInstructionIds, setEditedInstructionIds] = useState<string[]>([])
   const [planning, setPlanning] = useState(false)
   const [stage, setStage] = useState(0)
   const [messages, setMessages] = useState<Message[]>([])
@@ -107,6 +108,8 @@ export default function GuidedLearningPage() {
   const followReply = useRef(true)
   const currentStage = stages[stage]
   const isCodeStage = currentStage?.type === 'code'
+  const currentQuestion = questionId ? messages.find(message => message.id === questionId) : undefined
+  const currentQuestionMissing = !currentQuestion || (currentStage?.type === 'choice' && !choiceQuestions[questionId!])
   const [layout, setLayout] = useState<GuidedLayout>(readGuidedLayout)
   const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth)
   const [workspaceWidth, setWorkspaceWidth] = useState(0)
@@ -340,7 +343,7 @@ export default function GuidedLearningPage() {
     const question = await ask(`当前学习主题：${topicValue}。${next.instruction}`, `进入${next.name}`, next.type === 'choice' ? 'choice' : undefined)
     if (!question) return
     if (question.correct) setChoiceQuestions(current => ({ ...current, [question.id]: { correct: question.correct!, attempts: [] } }))
-    if (next.type === 'code') setCode(guidedCodeTemplate(codeLang))
+    if (next.type === 'code' && nextStage !== stage) setCode(guidedCodeTemplate(codeLang))
     setStage(nextStage)
     setAnswered(false)
     setQuestionId(question.id)
@@ -416,23 +419,42 @@ export default function GuidedLearningPage() {
     setActiveTopic(''); setTopic(''); setMessages([]); setStages(DEFAULT_GUIDED_STAGES); setPlanSource('default')
     setStage(0); setAnswered(false); setQuestionId(null); setChoiceQuestions({}); setPicked(''); setFeedback('')
     setConversationId(nanoid()); setError(''); setErrorAction(null); setCode(guidedCodeTemplate('python3')); setCodeLang('python3'); setNoteStatus(''); setDraft('')
-    setEditingOutline(false); setOutlineDraft([]); setOutlineError('')
+    setEditingOutline(false); setOutlineDraft([]); setOutlineError(''); setEditedInstructionIds([])
   }
 
   const beginOutlineEdit = () => {
     setOutlineDraft(stages.map(stage => ({ ...stage })))
     setOutlineError('')
     setEditingOutline(true)
+    setEditedInstructionIds([])
   }
 
   const cancelOutlineEdit = () => {
     setEditingOutline(false)
     setOutlineDraft([])
     setOutlineError('')
+    setEditedInstructionIds([])
   }
 
   const renameOutlineStage = (index: number, name: string) => {
     setOutlineDraft(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, name } : item))
+    setOutlineError('')
+  }
+
+  const changeOutlineStageType = (index: number, type: GuidedStageType) => {
+    setOutlineDraft(current => current.map((item, itemIndex) => {
+      if (itemIndex !== index) return item
+      // Keep only instructions the learner edited in this editing session; otherwise use the new type's default.
+      const custom = editedInstructionIds.includes(item.id)
+      return { ...item, type, instruction: custom ? item.instruction : defaultGuidedInstruction(type) }
+    }))
+    setOutlineError('')
+  }
+
+  const renameOutlineInstruction = (index: number, instruction: string) => {
+    const id = outlineDraft[index]?.id
+    setOutlineDraft(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, instruction } : item))
+    if (id) setEditedInstructionIds(current => current.includes(id) ? current : [...current, id])
     setOutlineError('')
   }
 
@@ -464,21 +486,35 @@ export default function GuidedLearningPage() {
   }
 
   const saveOutlineEdit = () => {
-    const cleaned = outlineDraft.map(item => ({ ...item, name: item.name.trim() }))
+    const cleaned = outlineDraft.map(item => ({
+      ...item,
+      name: item.name.trim(),
+      instruction: item.instruction.trim().slice(0, MAX_GUIDED_INSTRUCTION_LENGTH),
+    }))
     const invalid = validateGuidedOutline(cleaned)
     if (invalid) { setOutlineError(invalid); return }
-    const currentId = stages[stage]?.id
+    const previousCurrent = stages[stage]
     setStages(cleaned)
     setPlanSource('edited')
-    const nextStageIndex = cleaned.findIndex(item => item.id === currentId)
+    const nextStageIndex = cleaned.findIndex(item => item.id === previousCurrent?.id)
     if (nextStageIndex >= 0) {
       setStage(nextStageIndex)
+      const current = cleaned[nextStageIndex]
+      const typeChanged = Boolean(previousCurrent && current.type !== previousCurrent.type)
+      const instructionChanged = Boolean(previousCurrent && current.instruction !== previousCurrent.instruction.trim())
+      if (typeChanged || instructionChanged) {
+        // The old question was generated from different coach instructions; make the learner request a new one.
+        setAnswered(false); setQuestionId(null); setPicked(''); setFeedback('')
+        if (typeChanged && current.type === 'code') {
+          setCode(currentCode => !currentCode.trim() || isGuidedCodeTemplate(currentCode) ? guidedCodeTemplate(codeLang) : currentCode)
+        }
+      }
     } else {
       // Deleting the current stage is blocked in the editor; this is a safety net.
       setStage(Math.min(stage, cleaned.length - 1))
       setAnswered(false); setQuestionId(null); setPicked(''); setFeedback('')
     }
-    setEditingOutline(false); setOutlineDraft([]); setOutlineError('')
+    setEditingOutline(false); setOutlineDraft([]); setOutlineError(''); setEditedInstructionIds([])
   }
 
   const resetLayout = () => {
@@ -505,7 +541,8 @@ export default function GuidedLearningPage() {
         </div>
       </header>
       <div ref={workspaceRef} className="guided-workspace min-h-0 flex-1" style={{ '--guided-cols': guidedColumns } as CSSProperties}>
-        {leftOpen && <aside className="relative min-w-0 rounded-panel border border-border bg-surface p-4 dark:border-border-dark dark:bg-surface-dark" aria-label="学习大纲">
+        {leftOpen && <aside className="relative flex min-h-0 min-w-0 flex-col rounded-panel border border-border bg-surface p-4 dark:border-border-dark dark:bg-surface-dark" aria-label="学习大纲">
+          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
           <div className="flex items-center gap-2 text-sm font-semibold text-text-primary dark:text-text-dark-primary"><Sparkles size={16} className="text-accent" />学习路径<span className="ml-auto whitespace-nowrap rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">{editingOutline ? '编辑中' : planning ? '规划中' : activeTopic ? (planSource === 'ai' ? 'AI 规划' : planSource === 'edited' ? '已编辑' : '默认路径') : '待规划'}</span>{activeTopic && !editingOutline && <button type="button" disabled={busy || planning} aria-label="编辑学习大纲" title="编辑学习大纲" onClick={beginOutlineEdit} className="shrink-0 rounded p-1 text-text-muted transition-colors hover:bg-surface-muted hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 dark:text-text-dark-muted dark:hover:bg-surface-dark-muted"><Pencil size={13} /></button>}</div>
           <p className="mt-1 text-xs leading-5 text-text-muted dark:text-text-dark-muted">{editingOutline ? '调整阶段名称、顺序或数量；最后必须是复盘，并至少保留一个编程阶段。' : planning ? 'AI 正在根据主题规划学习阶段…' : '由 AI 教练根据主题自动规划，理解概念、逐步练习，再回顾思路。'}</p>
           {editingOutline ? <div className="mt-3">
@@ -526,20 +563,33 @@ export default function GuidedLearningPage() {
                     className="w-full rounded border border-border bg-surface px-2 py-1 text-xs tracking-cn text-text-primary outline-none transition-colors focus:border-accent dark:border-border-dark dark:bg-surface-dark dark:text-text-dark-primary"
                   />
                   <div className="mt-1 flex items-center gap-1 text-text-muted dark:text-text-dark-muted">
-                    <span className="rounded-full bg-surface-muted px-1.5 py-0.5 text-[10px] dark:bg-surface-dark-muted">{GUIDED_STAGE_TYPE_LABEL[item.type]}</span>
+                    <select
+                      value={item.type}
+                      aria-label={`阶段 ${index + 1} 类型`}
+                      onChange={event => changeOutlineStageType(index, event.target.value as GuidedStageType)}
+                      className="rounded border border-border bg-surface px-1 py-0.5 text-[10px] text-text-secondary outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark dark:text-text-dark-secondary"
+                    >
+                      {Object.entries(GUIDED_STAGE_TYPE_LABEL).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
                     <button type="button" aria-label={`上移阶段：${label}`} disabled={index === 0} onClick={() => moveOutlineStage(index, -1)} className="ml-auto rounded p-1 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-surface-dark-muted"><ArrowUp size={12} /></button>
                     <button type="button" aria-label={`下移阶段：${label}`} disabled={index === outlineDraft.length - 1} onClick={() => moveOutlineStage(index, 1)} className="rounded p-1 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-surface-dark-muted"><ArrowDown size={12} /></button>
                     <button type="button" aria-label={`删除阶段：${label}`} title={deleteTitle} disabled={deleteDisabled} onClick={() => removeOutlineStage(index)} className="rounded p-1 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-surface-dark-muted"><Trash2 size={12} /></button>
                   </div>
+                  <details className="mt-1 text-[10px] text-text-muted dark:text-text-dark-muted">
+                    <summary className="cursor-pointer select-none">教练指令</summary>
+                    <textarea
+                      value={item.instruction}
+                      maxLength={MAX_GUIDED_INSTRUCTION_LENGTH}
+                      rows={3}
+                      aria-label={`阶段 ${index + 1} 教练指令`}
+                      onChange={event => renameOutlineInstruction(index, event.target.value)}
+                      className="mt-1 w-full resize-y rounded border border-border bg-surface px-2 py-1 text-[11px] leading-4 tracking-cn text-text-primary outline-none transition-colors focus:border-accent dark:border-border-dark dark:bg-surface-dark dark:text-text-dark-primary"
+                    />
+                    <span className="mt-0.5 block text-right tabular-nums text-text-muted dark:text-text-dark-muted">{item.instruction.length}/{MAX_GUIDED_INSTRUCTION_LENGTH}</span>
+                  </details>
                 </li>
               })}
             </ol>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <button type="button" disabled={outlineDraft.length >= MAX_GUIDED_STAGES} onClick={addOutlineStage} className="inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-40"><Plus size={12} />添加阶段</button>
-              <button type="button" onClick={saveOutlineEdit} className="rounded-full bg-[#111317] px-2.5 py-1 text-[11px] font-medium text-white transition-opacity hover:opacity-90">保存大纲</button>
-              <button type="button" onClick={cancelOutlineEdit} className="rounded-full border border-border px-2.5 py-1 text-[11px] text-text-secondary hover:bg-surface-muted dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">取消</button>
-            </div>
-            {outlineError && <p role="alert" className="mt-2 text-[11px] leading-4 text-danger">{outlineError}</p>}
           </div> : <ol aria-label="学习阶段" className="mt-4 grid grid-cols-2 gap-1 sm:grid-cols-5 lg:grid-cols-1">
             {stages.map((item, index) => <li key={item.id} aria-current={activeTopic && index === stage ? 'step' : undefined} className={`flex items-center gap-2 rounded-card px-2.5 py-2.5 text-xs ${activeTopic && index === stage ? 'bg-accent/10 font-medium text-accent' : 'text-text-secondary dark:text-text-dark-secondary'}`}>
               {activeTopic && index < stage ? <Check size={15} className="shrink-0 text-accent" /> : index === stage && activeTopic ? <span className="flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full bg-accent text-[9px] text-white">{index + 1}</span> : <Circle size={15} className="shrink-0 opacity-40" />}
@@ -547,6 +597,15 @@ export default function GuidedLearningPage() {
             </li>)}
           </ol>}
           <div className="mt-4 hidden border-t border-border pt-4 text-xs leading-5 text-text-muted dark:border-border-dark dark:text-text-dark-muted lg:block">{activeTopic ? '可以随时向教练追问。准备好后，再进入下一阶段。' : '选择一个想掌握的知识点，开始这次学习。'}</div>
+          </div>
+          {editingOutline && <div className="mt-2 shrink-0 border-t border-border pt-2 dark:border-border-dark">
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" disabled={outlineDraft.length >= MAX_GUIDED_STAGES} onClick={addOutlineStage} className="inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-40"><Plus size={12} />添加阶段</button>
+              <button type="button" onClick={saveOutlineEdit} className="rounded-full bg-[#111317] px-2.5 py-1 text-[11px] font-medium text-white transition-opacity hover:opacity-90">保存大纲</button>
+              <button type="button" onClick={cancelOutlineEdit} className="rounded-full border border-border px-2.5 py-1 text-[11px] text-text-secondary hover:bg-surface-muted dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">取消</button>
+            </div>
+            {outlineError && <p role="alert" className="mt-1 text-[11px] leading-4 text-danger">{outlineError}</p>}
+          </div>}
           <ColumnResizer side="right" width={leftWidth} min={LEFT_MIN} max={leftLimit} defaultWidth={DEFAULT_GUIDED_LAYOUT.leftWidth} label="调整大纲宽度" onResize={width => setLayout(current => ({ ...current, leftWidth: width }))} />
         </aside>}
         <section className="flex min-h-0 flex-col overflow-hidden rounded-panel border border-border bg-surface dark:border-border-dark dark:bg-surface-dark">
@@ -592,7 +651,7 @@ export default function GuidedLearningPage() {
             <div ref={bottomRef} />
           </div>
           <div className="shrink-0 border-t border-border p-3 dark:border-border-dark sm:p-4">
-            {!activeTopic ? <div className="flex gap-2"><input aria-label="学习知识点" value={topic} onChange={event => setTopic(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) void start() }} placeholder="输入知识点，例如二分查找" className="min-w-0 flex-1 rounded-card border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft" /><button disabled={!topic.trim() || busy || mode === 'FOCUS'} onClick={() => void start()} className="inline-flex items-center gap-1.5 rounded-card bg-accent px-4 text-sm text-white disabled:opacity-50">开始学习 <ArrowRight size={15} /></button></div> : <div className="space-y-2"><textarea aria-label="回复教练" value={draft} onChange={event => setDraft(event.target.value)} placeholder={isCodeStage ? '对题目有疑问？在这里追问教练…' : '输入回答、问题或代码…'} className="w-full resize-y rounded-card border border-border bg-surface p-3 text-sm outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft" rows={2} /><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-text-muted dark:text-text-dark-muted">{currentStage?.type === 'choice' && !answered ? '从题卡中选择一项。' : currentStage?.type === 'short' && !answered ? '提交答案后，教练会给出反馈。' : isCodeStage && !answered ? <>在代码区完成实现，然后提交代码。{!rightOpen && <button type="button" onClick={() => setLayout(current => ({ ...current, rightOpen: true }))} className="ml-1 text-accent hover:underline">打开代码区</button>}</> : ''}</span><div className="flex gap-2">{stage < stages.length - 1 && <button disabled={busy || mode === 'FOCUS' || (stageNeedsAnswer(currentStage) && !answered)} onClick={() => void enterStage(stage + 1)} className="rounded-card border border-border px-3 py-2 text-sm disabled:opacity-40 dark:border-border-dark">下一步：{stages[stage + 1].name}</button>}{currentStage?.type === 'choice' && !answered && (!questionId || !choiceQuestions[questionId]) && <button disabled={busy || mode === 'FOCUS'} onClick={() => void enterStage(stage)} className="rounded-card border border-border px-3 py-2 text-sm disabled:opacity-50">重新出选择题</button>}{currentStage?.type === 'short' && !answered && <button disabled={busy || !draft.trim() || mode === 'FOCUS'} onClick={() => void submitAnswer(draft)} className="rounded-card bg-accent px-4 py-2 text-sm text-white disabled:opacity-50">提交答案</button>}<button disabled={busy || !draft.trim() || mode === 'FOCUS'} onClick={() => void send()} className="inline-flex items-center gap-1.5 rounded-card border border-border px-4 py-2 text-sm text-text-primary disabled:opacity-50 dark:border-border-dark dark:text-text-dark-primary">追问 <Send size={14} /></button></div></div></div>}
+            {!activeTopic ? <div className="flex gap-2"><input aria-label="学习知识点" value={topic} onChange={event => setTopic(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) void start() }} placeholder="输入知识点，例如二分查找" className="min-w-0 flex-1 rounded-card border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft" /><button disabled={!topic.trim() || busy || mode === 'FOCUS'} onClick={() => void start()} className="inline-flex items-center gap-1.5 rounded-card bg-accent px-4 text-sm text-white disabled:opacity-50">开始学习 <ArrowRight size={15} /></button></div> : <div className="space-y-2"><textarea aria-label="回复教练" value={draft} onChange={event => setDraft(event.target.value)} placeholder={isCodeStage ? '对题目有疑问？在这里追问教练…' : '输入回答、问题或代码…'} className="w-full resize-y rounded-card border border-border bg-surface p-3 text-sm outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft" rows={2} /><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-text-muted dark:text-text-dark-muted">{currentStage?.type === 'choice' && !answered ? '从题卡中选择一项。' : currentStage?.type === 'short' && !answered ? '提交答案后，教练会给出反馈。' : isCodeStage && !answered ? <>在代码区完成实现，然后提交代码。{!rightOpen && <button type="button" onClick={() => setLayout(current => ({ ...current, rightOpen: true }))} className="ml-1 text-accent hover:underline">打开代码区</button>}</> : ''}</span><div className="flex gap-2">{stage < stages.length - 1 && <button disabled={busy || mode === 'FOCUS' || (stageNeedsAnswer(currentStage) && !answered)} onClick={() => void enterStage(stage + 1)} className="rounded-card border border-border px-3 py-2 text-sm disabled:opacity-40 dark:border-border-dark">下一步：{stages[stage + 1].name}</button>}{stageNeedsAnswer(currentStage) && !answered && currentQuestionMissing && <button disabled={busy || mode === 'FOCUS'} onClick={() => void enterStage(stage)} className="rounded-card border border-border px-3 py-2 text-sm disabled:opacity-50">重新出题</button>}{currentStage?.type === 'short' && !answered && <button disabled={busy || !draft.trim() || mode === 'FOCUS'} onClick={() => void submitAnswer(draft)} className="rounded-card bg-accent px-4 py-2 text-sm text-white disabled:opacity-50">提交答案</button>}<button disabled={busy || !draft.trim() || mode === 'FOCUS'} onClick={() => void send()} className="inline-flex items-center gap-1.5 rounded-card border border-border px-4 py-2 text-sm text-text-primary disabled:opacity-50 dark:border-border-dark dark:text-text-dark-primary">追问 <Send size={14} /></button></div></div></div>}
             {mode === 'FOCUS' && <p className="mt-2 text-sm text-text-muted">专注解题期间教练已静默，结束专注后继续学习。</p>}
           </div>
         </section>

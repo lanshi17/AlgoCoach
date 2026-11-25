@@ -193,6 +193,7 @@
   @media (min-width: 1024px) {
     .guided-workspace {
       grid-template-columns: var(--guided-cols);
+      grid-template-rows: minmax(0, 1fr);
     }
   }
 
