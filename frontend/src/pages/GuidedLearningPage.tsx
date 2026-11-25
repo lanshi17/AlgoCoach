@@ -21,9 +21,9 @@ import {
 import { LANGUAGE_OPTIONS } from '@/services/languages'
 import { guidedCodeTemplate, isGuidedCodeTemplate } from '@/services/guidedCodeTemplates'
 import { optionLine, parseChoiceAnswer, parseChoices, visibleReply } from '@/services/guidedChoice'
+import { clearGuidedSession, readGuidedSession, saveGuidedSession, type GuidedChoiceQuestion } from '@/services/guidedSession'
 import { ArrowRight, BookOpen, Check, Circle, Code2, ExternalLink, MessageCircle, PanelLeft, PanelTop, Plus, RotateCcw, Send, Sparkles } from 'lucide-react'
 
-type ChoiceQuestion = { correct: string; attempts: string[] }
 type PlanSource = 'ai' | 'default'
 
 type GuidedLayout = {
@@ -72,20 +72,6 @@ function readGuidedLayout(): GuidedLayout {
   }
 }
 
-type RestoredSession = {
-  topic: string
-  stage: number
-  messages: Message[]
-  passed?: boolean
-  questionId?: string | null
-  conversationId?: string
-  choiceQuestions?: Record<string, ChoiceQuestion>
-  stages?: unknown
-  planSource?: PlanSource
-  code?: string
-  codeLang?: CodeLanguage
-}
-
 export default function GuidedLearningPage() {
   const navigate = useNavigate()
   const { provider, goal, coachPrefs, mode } = useAppStore(state => ({ provider: state.provider, goal: state.goal, coachPrefs: state.coachPrefs, mode: state.mode }))
@@ -103,7 +89,7 @@ export default function GuidedLearningPage() {
   const [noteStatus, setNoteStatus] = useState('')
   const [answered, setAnswered] = useState(false)
   const [questionId, setQuestionId] = useState<string | null>(null)
-  const [choiceQuestions, setChoiceQuestions] = useState<Record<string, ChoiceQuestion>>({})
+  const [choiceQuestions, setChoiceQuestions] = useState<Record<string, GuidedChoiceQuestion>>({})
   const [picked, setPicked] = useState('')
   const [feedback, setFeedback] = useState('')
   const [streamedReply, setStreamedReply] = useState('')
@@ -203,12 +189,9 @@ export default function GuidedLearningPage() {
     if (mode === 'FOCUS') controller.current?.abort()
   }, [mode])
 
-  const [restored] = useState<RestoredSession | null>(() => {
-    try { return JSON.parse(sessionStorage.getItem(workspaceStorageKey('algocoach.guidedLearning')) ?? 'null') as RestoredSession | null }
-    catch { return null }
-  })
+  const [restored] = useState(() => readGuidedSession())
   useEffect(() => {
-    if (!restored || typeof restored.topic !== 'string' || !Array.isArray(restored.messages)) return
+    if (!restored) return
     const restoredStages = sanitizeGuidedStages(restored.stages) ?? DEFAULT_GUIDED_STAGES
     const restoredStage = Number.isInteger(restored.stage) && restored.stage >= 0 && restored.stage < restoredStages.length
       ? restored.stage
@@ -239,11 +222,11 @@ export default function GuidedLearningPage() {
   useEffect(() => {
     if (!hydrated.current) { hydrated.current = true; return }
     try {
-      if (activeTopic) sessionStorage.setItem(workspaceStorageKey('algocoach.guidedLearning'), JSON.stringify({
+      if (activeTopic) saveGuidedSession({
         topic: activeTopic, stage, messages, passed: answered, questionId, conversationId,
         choiceQuestions, stages, planSource, code, codeLang,
-      }))
-      else sessionStorage.removeItem(workspaceStorageKey('algocoach.guidedLearning'))
+      })
+      else clearGuidedSession()
     } catch { /* keep the current session usable in memory */ }
   }, [activeTopic, stage, messages, answered, questionId, conversationId, choiceQuestions, stages, planSource, code, codeLang])
   useEffect(() => () => { controller.current?.abort() }, [])

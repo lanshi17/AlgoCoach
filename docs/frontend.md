@@ -276,9 +276,11 @@ frontend/
 - `messages`、`draft`、`busy`、`planning`、`error`、`errorAction`：对话流与错误修复入口
 - `code` / `codeLang`：编程阶段的作答与语言
 - `layout`：大纲/代码栏宽度、折叠状态、代码浮窗位置，写入 `workspaceStorageKey('algocoach.guidedLayout')`（版本信封 + 120ms 防抖 + 跨标签页同步）
+- 学习会话快照：主题、大纲、当前阶段、消息、选择题作答、代码与语言写入 `workspaceStorageKey('algocoach.guidedLearning')` 的 localStorage（版本信封）；旧版 sessionStorage 数据在首次读取时自动迁移，重置主题时清除。快照只在本机浏览器，不写入 Agent 记忆或工作区导出。
 
 **关键逻辑**：
 - 「开始学习」先调用 `planOutline()` 让 Agent 输出 JSON 大纲，`parseGuidedPlan()` 归一化类型、补齐编程阶段、保证唯一复盘阶段并限制为 8 个阶段；解析失败回退默认路径
+- 刷新页面、关闭标签页或重启浏览器后恢复上次大纲、阶段、对话和代码；恢复不重新调用规划，已持久化的 `questionId`、作答与阶段进度共同决定解锁状态
 - 每个阶段只发一次进入指令；作答通过 `[[评价:通过]]` / `[[评价:再练]]` / `[[评价:未评分]]` 判定，未通过时「下一步」保持禁用
 - 编程阶段显示右侧代码区（`lg` 以下为堆叠），隐藏/浮动态与宽度均可调整；切换语言时，只有初始模板会被替换，用户代码保持不变
 - 错误回复通过 `getAgentErrorAction()` 显示跳转设置页的修复入口

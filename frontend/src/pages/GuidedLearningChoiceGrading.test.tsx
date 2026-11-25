@@ -16,7 +16,7 @@ const plan = JSON.stringify({ stages: [
   { name: '复盘', type: 'review', instruction: '复盘本次学习。' },
 ] })
 
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); sessionStorage.clear() })
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); sessionStorage.clear(); localStorage.clear() })
 
 function setup() {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)

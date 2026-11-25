@@ -392,3 +392,32 @@ it('keeps guided code editable in focus while blocking the coach assessment', as
   expect(button('提交代码')?.disabled).toBe(false)
   act(() => root.unmount()); element.remove()
 })
+
+it('restores the planned outline and messages after the tab session is gone', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.setState({ mode: 'PREP' })
+  const chat = vi.spyOn(agentService, 'chatStream').mockImplementation(async message => ({
+    content: message.includes('学习规划师') ? defaultPlan : '先理解区间不变量，再写循环。',
+  }))
+  const first = document.createElement('div'); document.body.appendChild(first)
+  const firstRoot = createRoot(first)
+  await act(async () => firstRoot.render(<MemoryRouter><GuidedLearningPage /></MemoryRouter>))
+  const input = first.querySelector<HTMLInputElement>('input[aria-label="学习知识点"]')!
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+  await act(async () => { setValue.call(input, '二分'); input.dispatchEvent(new Event('input', { bubbles: true })) })
+  await act(async () => { Array.from(first.querySelectorAll('button')).find(item => item.textContent?.trim() === '开始学习')!.click() })
+  expect(first.textContent).toContain('AI 规划')
+  expect(first.textContent).toContain('先理解区间不变量')
+  act(() => firstRoot.unmount()); first.remove()
+  sessionStorage.clear()
+
+  const second = document.createElement('div'); document.body.appendChild(second)
+  const secondRoot = createRoot(second)
+  await act(async () => secondRoot.render(<MemoryRouter><GuidedLearningPage /></MemoryRouter>))
+  expect(second.textContent).toContain('二分')
+  expect(second.textContent).toContain('AI 规划')
+  expect(second.textContent).toContain('先理解区间不变量，再写循环。')
+  expect(chat).toHaveBeenCalledTimes(2)
+  act(() => secondRoot.unmount()); second.remove()
+})
