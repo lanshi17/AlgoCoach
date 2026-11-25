@@ -8,6 +8,13 @@ import GuidedLearningPage from './GuidedLearningPage'
 
 const validChoice = '请选择正确的选项：\nA. 第一项\nB. 第二项\nC. 第三项\nD. 第四项\n[[答案:A]]'
 const incompleteChoice = '请选择正确的选项：\nA. 第一项\nB. 第二项\nC. 第三项'
+const plan = JSON.stringify({ stages: [
+  { name: '学习知识点', type: 'concept', instruction: '讲解这个知识点的核心概念。' },
+  { name: '选择题', type: 'choice', instruction: '出一道单选题。' },
+  { name: '问答题', type: 'short', instruction: '出一道简答题。' },
+  { name: '编程题', type: 'code', instruction: '给出一道编程练习。' },
+  { name: '复盘', type: 'review', instruction: '复盘本次学习。' },
+] })
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); sessionStorage.clear() })
 
@@ -47,6 +54,7 @@ it('regenerates an incomplete choice without advancing, and keeps the next stage
   setup()
   let choiceCalls = 0
   const chat = vi.spyOn(agentService, 'chatStream').mockImplementation(async message => {
+    if (message.includes('学习规划师')) return { content: plan }
     if (!message.includes('单选题')) return { content: '讲解。' }
     choiceCalls += 1
     return { content: choiceCalls === 1 ? incompleteChoice : validChoice }
@@ -64,7 +72,7 @@ it('regenerates an incomplete choice without advancing, and keeps the next stage
   expect(optionButtons(element)).toHaveLength(4)
   expect(element.textContent).not.toContain('[[答案')
   expect(button(element, '下一步：问答题').disabled).toBe(true)
-  expect(chat).toHaveBeenCalledTimes(3)
+  expect(chat).toHaveBeenCalledTimes(4)
 
   act(() => root.unmount())
   element.remove()
@@ -73,7 +81,7 @@ it('regenerates an incomplete choice without advancing, and keeps the next stage
 it('restores a wrong choice after a reload, then unlocks the next stage after a correct retry', async () => {
   setup()
   const chat = vi.spyOn(agentService, 'chatStream').mockImplementation(async message => ({
-    content: message.includes('单选题') ? validChoice : '解释。',
+    content: message.includes('学习规划师') ? plan : message.includes('单选题') ? validChoice : '解释。',
   }))
 
   const first = newContainer()

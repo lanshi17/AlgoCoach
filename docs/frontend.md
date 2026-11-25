@@ -48,6 +48,8 @@ frontend/
     │   ├── hduService.ts           # axios → /api/hdu/*（按卷分页）
     │   ├── platformCookieService.ts # /api/platforms/* Cookie 状态与保存
     │   ├── languages.ts            # 语言键、下拉标签、Monaco 映射
+    │   ├── guidedPlan.ts           # AI 大纲解析、阶段校验与默认路径
+    │   ├── guidedCodeTemplates.ts  # 引导式编程阶段的语言模板
     │   └── agentService.ts         # axios → /api/agent/* (Gateway → Python agent)
     ├── hooks/
     │   └── usePollAnimation.ts     # 轮询动画渲染状态
@@ -55,9 +57,17 @@ frontend/
     │   ├── Layout/
     │   │   ├── AppShell.tsx        # 顶层布局：Sidebar + Header + 三栏
     │   │   ├── Sidebar.tsx         # Qwen 风格可折叠左侧导航
-    │   │   └── Header.tsx          # 题目标题、mode 徽章、运行/提交按钮
+    │   │   ├── Header.tsx          # 题目标题、mode 徽章、运行/提交按钮
+    │   │   ├── ColumnResizer.tsx   # 可拖拽/键盘调整的分隔条（只报告宽度）
+    │   │   ├── FloatingPanelChrome.tsx      # 浮窗标题栏：拖动、最大化、嵌入
+    │   │   ├── FloatingPanelResizeHandle.tsx # 浮窗右下角缩放柄
+    │   │   ├── floatingPanel.ts    # FloatRect 校验与视口钳制
+    │   │   ├── layoutStorage.ts    # 版本化布局信封的打包/解包
+    │   │   ├── useLayoutStorageSync.ts      # 跨标签页布局同步
+    │   │   └── README.md           # 布局与面板子系统规格
     │   ├── Editor/
     │   │   ├── EditorPanel.tsx     # Monaco 编辑器容器 + PREP 蒙层
+    │   │   ├── GuidedCodeEditor.tsx # 引导式编程阶段的代码区与提交
     │   │   ├── TestCasePanel.tsx   # 底部测试用例 tab
     │   │   └── SubmissionResult.tsx # 提交后结果展示
     │   ├── Chat/
@@ -88,17 +98,26 @@ frontend/
 
 ### 3.1 AppShell.tsx
 
-**职责**：顶层布局容器，组合 Sidebar + Header + 三栏工作区。
+**职责**：顶层布局容器，组合 Sidebar + Header + 三栏工作区，并管理三栏的宽度、停靠/浮动状态和持久化。
 
 **Props**：无（从 store 读取所有状态）
 
 **内部逻辑**：
 - `useEffect` 监听 `theme` 变化，切换 `<html>` 的 `dark` class
 - 当 `mode === 'FOCUS'` 时，在顶部渲染 `focus-mode-bar`（红色细条 + 脉冲动画）
-- 三栏宽度：题目栏 `var(--problem-w)=420px`（固定）、编辑器栏 `flex-1`（自适应）、对话栏 `360px`（固定）
+- 三栏宽度由 `WorkspaceLayout` 状态驱动：题目栏默认 `420px`、对话栏默认 `360px`（各 280–720 / 260–560），编辑器栏 `flex-1`。`>=1280px` 时在每个面板边缘渲染 `ColumnResizer`，宽度写入 CSS 变量 `--problem-w` / `--chat-w`
+- `xl` 布局工具条提供四个预设（均衡 / 宽编辑器 / 宽题目 / 宽教练）、「我的布局」保存、重置，以及每个面板的「独立/嵌入」开关
+- 面板「独立」后改为 `position: fixed` 浮窗，由 `FloatingPanelChrome` 拖动、最大化，由 `FloatingPanelResizeHandle` 缩放；被浮动的面板在网格中留下同宽占位块，内容组件始终挂载，切换停靠状态不会重建 Monaco 或聊天
+- 布局通过 `layoutStorage.packLayout`（版本信封）写入 `workspaceStorageKey('algocoach.workspaceLayout')`，120ms 防抖；`useLayoutStorageSync` 接收其他标签页的 `storage` 事件
+- `useLayoutStorageSync` / `ResizeObserver` 分别处理跨标签页和窗口尺寸变化；窗口缩放时用 `clampFloatRect` 把浮窗拉回视口
+
+**FOCUS 语义**：
+- 对话面板在停靠和浮动两种形态下都隐藏；窄屏标签页同步移除「AI 教练」，宽屏布局工具条也隐藏该面板的独立开关
+- 隐藏而不是强制停靠：`ChatPanel` 保持挂载，聊天状态与浮窗位置在结束专注后原样恢复
 
 **已实现**：
 - `<React.Suspense>` 包裹 Monaco 编辑器，实现懒加载
+- `ProblemPanel` / `EditorPanel` / `ChatPanel` 经 `React.memo` 隔离拖拽重渲染
 - React Router 按 URL 切换工作区、进度、知识图谱和设置页面
 
 ### 3.2 Sidebar.tsx
@@ -244,6 +263,54 @@ frontend/
 
 题库登录统一使用 `/settings/platforms`，LeetCode 的 Cookie / cURL 粘贴与校验在该页的 LeetCode 卡片里完成。
 
+### 3.10 GuidedLearningPage.tsx
+
+**路由**：`/home`
+
+**职责**：分阶段引导式学习页。先用 Agent 规划大纲，再由教练按阶段讲解、出选择题/简答题/编程题，最后复盘。
+
+**内部状态**：
+- `topic` / `activeTopic`：待开始与进行中的学习主题
+- `stages` / `planSource`：当前大纲；`ai` 表示由 `buildGuidedPlanPrompt` 返回并解析，`default` 表示使用 `DEFAULT_GUIDED_STAGES`
+- `stage` / `answered` / `questionId` / `choiceQuestions`：阶段推进与选择题判分
+- `messages`、`draft`、`busy`、`planning`、`error`、`errorAction`：对话流与错误修复入口
+- `code` / `codeLang`：编程阶段的作答与语言
+- `layout`：大纲/代码栏宽度、折叠状态、代码浮窗位置，写入 `workspaceStorageKey('algocoach.guidedLayout')`（版本信封 + 120ms 防抖 + 跨标签页同步）
+
+**关键逻辑**：
+- 「开始学习」先调用 `planOutline()` 让 Agent 输出 JSON 大纲，`parseGuidedPlan()` 归一化类型、补齐编程阶段、保证唯一复盘阶段并限制为 8 个阶段；解析失败回退默认路径
+- 每个阶段只发一次进入指令；作答通过 `[[评价:通过]]` / `[[评价:再练]]` / `[[评价:未评分]]` 判定，未通过时「下一步」保持禁用
+- 编程阶段显示右侧代码区（`lg` 以下为堆叠），隐藏/浮动态与宽度均可调整；切换语言时，只有初始模板会被替换，用户代码保持不变
+- 错误回复通过 `getAgentErrorAction()` 显示跳转设置页的修复入口
+
+**FOCUS 语义**：教练静默，代码编辑器保持可编辑（本地写代码不是 AI 能力），但「提交代码」禁用并在状态栏提示「专注模式 · 教练静默」；结束专注后可继续提交评估。
+
+### 3.11 GuidedCodeEditor.tsx
+
+**职责**：引导式编程阶段的 Monaco 代码区、语言切换、模板恢复与提交。
+
+**Props**：
+```typescript
+{
+  code: string
+  language: CodeLanguage
+  disabled: boolean        // 编辑锁定（请求中 / 尚无题目）
+  busy: boolean
+  submitted: boolean
+  focusQuiet?: boolean     // FOCUS：可编辑，但禁止 AI 评估提交
+  onChange: (code: string) => void
+  onLanguageChange: (language: CodeLanguage) => void
+  onResetTemplate: () => void
+  onSubmit: () => void
+}
+```
+
+**约束**：
+- 初始模板来自 `GUIDED_CODE_TEMPLATES`；`isGuidedCodeTemplate()` 为真时禁用提交并提示「请先在模板基础上实现解法」
+- 「恢复模板」需 `window.confirm` 二次确认，避免覆盖用户代码
+- Monaco 使用与 `EditorPanel` 相同的本地补全配置，不接入 AI 补全
+
+
 ---
 
 ## 4. 状态管理设计（useAppStore）
@@ -326,8 +393,10 @@ interface AppState {
 | 组件 | 约束 |
 |------|------|
 | ChatPanel | 输入框替换为锁定条，`send()` 开头判断 `isFocus` 直接 return |
+| AppShell 对话栏 | 停靠或浮动都 `hidden`；窄屏标签页、宽屏布局工具条均不出现「AI 教练」入口；内容保持挂载以便恢复 |
 | Header | LeetCode 运行/提交可用；两道内置题支持本地 Python 运行；其他平台暂不支持站内判题 |
 | EditorPanel | `readOnly=false`，`quickSuggestions=true`（Monaco 本地建议；无 AI 补全） |
+| GuidedCodeEditor | 代码可编辑；「提交代码」禁用并显示「专注模式 · 教练静默」；结束专注后才能请求评估 |
 | ProblemPanel | 题目描述仍可滚动查看 |
 | AnimationCard | 不主动推送新动画（agent 在 FOCUS 不发消息） |
 | Sidebar | mode 圆点变红脉冲 |
@@ -394,6 +463,12 @@ interface AppState {
 **职责**：渲染三栏工作区，题目由 ProblemPanel 选择并放入 Zustand store。
 
 更换题目时会重置代码、测试结果、提交结果和 FOCUS 计时；FOCUS 期间禁止切题。
+
+**当前实现**：
+- 布局状态（题目/对话宽度、每个面板的停靠/浮动态、浮窗位置、`maximized`、自定义预设）保存在 `workspaceStorageKey('algocoach.workspaceLayout')`，刷新与跨标签页后恢复；`unpackLayout` 兼容旧版直接对象与版本信封
+- 恢复时会校验数值范围并按当前工作区宽度收敛，损坏或越界的数据回退默认布局
+- 浮窗采用 `fixed` 定位（z-index 91/92），不经过 Portal；面板内容始终挂载，拖拽只更新布局状态
+- 断点与 CSS 对齐：`ColumnResizer` 的 `.workspace-resizer` 与 `matchMedia('(min-width: 1280px)')` 必须同时修改
 
 ### 6.3 KnowledgeGraphPage（知识图谱）
 

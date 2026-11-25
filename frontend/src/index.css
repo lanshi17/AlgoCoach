@@ -184,6 +184,103 @@
            flex-shrink-0 bg-transparent;
   }
 
+  /* Guided learning uses a CSS-variable grid so the outline and code panels
+     can be dragged wider without fighting Tailwind's generated classes. */
+  .guided-workspace {
+    @apply grid gap-3;
+  }
+
+  @media (min-width: 1024px) {
+    .guided-workspace {
+      grid-template-columns: var(--guided-cols);
+    }
+  }
+
+  .column-resizer {
+    display: none;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 30;
+    width: 12px;
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  @media (min-width: 1024px) {
+    .guided-resizer { display: block; }
+  }
+
+  @media (min-width: 1280px) {
+    .workspace-resizer { display: block; }
+  }
+
+  .column-resizer::after {
+    content: '';
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 5px;
+    width: 2px;
+    border-radius: 999px;
+    background: rgb(var(--accent-rgb) / 0.14);
+    transition: background-color 120ms ease;
+  }
+
+  .column-resizer:hover::after,
+  .column-resizer:focus-visible::after {
+    background: rgb(var(--accent-rgb) / 0.55);
+  }
+
+  .column-resizer-right { right: -6px; }
+  .column-resizer-left { left: -6px; }
+
+  body.is-resizing-columns,
+  body.is-resizing-columns * {
+    cursor: col-resize !important;
+    user-select: none !important;
+  }
+
+  body.is-moving-panel,
+  body.is-moving-panel * {
+    cursor: grabbing !important;
+    user-select: none !important;
+  }
+
+  .floating-resize-handle {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    width: 18px;
+    height: 18px;
+    cursor: nwse-resize;
+    touch-action: none;
+  }
+
+  .floating-resize-handle::before {
+    content: '';
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 7px;
+    height: 7px;
+    border-right: 2px solid rgb(var(--accent-rgb) / 0.32);
+    border-bottom: 2px solid rgb(var(--accent-rgb) / 0.32);
+    transition: border-color 120ms ease;
+  }
+
+  .floating-resize-handle:hover::before,
+  .floating-resize-handle:focus-visible::before {
+    border-color: rgb(var(--accent-rgb) / 0.7);
+  }
+
+  body.is-resizing-floating-panel,
+  body.is-resizing-floating-panel * {
+    cursor: nwse-resize !important;
+    user-select: none !important;
+  }
+
   /*
    * The coding surface is a white Qwen-style panel with a quiet indigo signal.
    * Syntax remains dense, while surrounding chrome stays neutral and light.
