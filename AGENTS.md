@@ -1,121 +1,62 @@
-# AGENTS.md — AlgoCoach repository authority
+# AlgoCoach Agent Charter
 
-AlgoCoach is a local-first algorithm training workbench: React/Vite frontend, Java Gateway, Python Agent, Electron desktop shell, and Remotion compositions. This file is the entry contract for coding agents. Read it before editing.
+Scope: AlgoCoach is a local-first algorithm training workbench — React/Vite frontend, Java gateway, Python agent, Electron desktop shell, and optional Remotion compositions. This file is the agent entrypoint. Behavior specs live in `docs/*.md`; the protocol lives in [SPEC-BTAE](docs/intent/requirements/SPEC-BTAE.md) and the [engineering protocol](docs/architecture/engineering-protocol.md). It does not grant approval, write isolation, or host trust.
 
-## 1. Repository layout
+Tooling: `repo-native` — the BTAE MCP server and EPE CLI are not installed here. Use `docs/intent/tasks/` as the planning record and the repository commands below as validation.
 
-| Path | Responsibility | Stack |
-|------|----------------|-------|
-| `frontend/` | All UI, workspace shell, guided learning, Monaco, local storage | React 18, Vite, TypeScript, Tailwind, Zustand, Vitest |
-| `backend/gateway/` | Platform proxies (LeetCode/AcWing/HDU), Cookie storage, agent proxy | Java 21, Maven |
-| `backend/agent/` | AI coach, memory, RAG, capability/tool turns | Python 3.12, pytest, ruff, mypy |
-| `desktop/` | Electron packaging of the frontend | Electron |
-| `remotion-compositions/` | Animated explanations (optional) | Remotion, Bun |
-| `data/` | Runtime state (SQLite, Chroma, knowledge, cache) | Not source code |
-| `docs/` | Design intent, architecture, module specifications | Markdown |
+## Repository map
 
-Module-level behavior specs live in `docs/frontend.md`, `docs/backend-agent.md`, `docs/backend-gateway.md`, `docs/architecture.md`, `docs/memory-system.md`, `docs/remotion.md`. `frontend/src/components/Layout/README.md` is the authoritative spec for the layout/panel subsystem.
+| Area | Path | Notes |
+|------|------|-------|
+| Frontend | `frontend/` | React 18, Vite, TypeScript, Tailwind, Zustand, Monaco, Vitest |
+| Gateway | `backend/gateway/` | Java 21, Maven; platform proxies, Cookie storage, agent proxy |
+| Agent | `backend/agent/` | Python 3.12; coach, memory, RAG, capability/tool turns |
+| Desktop | `desktop/` | Electron packaging of the frontend |
+| Animations | `remotion-compositions/` | Optional Remotion videos |
+| Runtime data | `data/` | SQLite, Chroma, knowledge, caches — not source |
+| Design docs | `docs/` | Architecture and module specifications |
+| Layout spec | [frontend/src/components/Layout/README.md](frontend/src/components/Layout/README.md) | Authoritative for the layout subsystem |
 
-## 2. Authority order
+## Authoritative commands
 
-1. `AGENTS.md` (this file) — scope, boundaries, workflow.
-2. `docs/intent/requirements/SPEC-BTAE.md` — design/evidence layering and state transitions.
-3. `docs/architecture/engineering-protocol.md` — how to run each change type.
-4. Module docs under `docs/` — current behavior and contracts.
-5. Code and tests — implementation and behavior evidence.
+Run in the directory named; commands here override ecosystem defaults. If a command is absent, say so instead of inventing one.
 
-If two sources disagree, do not guess. Verify with a read of the implementation or a runnable check and record the resolution in the task record.
+| Purpose | Directory | Command |
+|---------|-----------|---------|
+| Frontend types | `frontend/` | `npx tsc --noEmit` |
+| Frontend lint | `frontend/` | `npm run lint` |
+| Frontend tests | `frontend/` | `npm test` (narrow: `npx vitest run <file>`) |
+| Agent lint | `backend/agent/` | `ruff check --isolated app tests` |
+| Agent types | `backend/agent/` | `mypy app --ignore-missing-imports --follow-imports=silent` |
+| Agent tests | `backend/agent/` | `python -m pytest -q` |
+| Gateway tests | `backend/gateway/` | `mvn -B test` |
 
-## 3. Architecture boundaries (non-negotiable)
+Install/run details are in `README.md` and `docker-compose.yml`; do not run installs or services unless the task requires them.
 
-- The frontend talks only to the Java Gateway (`/api/*`, `/api/agent/*`). It never calls LeetCode GraphQL or a model provider directly.
-- Platform Cookies live only in the Gateway SQLite. Never write Cookie plaintext to `localStorage`, `sessionStorage`, logs, or docs.
+## Boundaries
+
+- The frontend talks only to the Java gateway (`/api/*`, `/api/agent/*`). It never calls LeetCode GraphQL or a model provider directly.
+- Platform Cookies live only in gateway SQLite. Never write Cookie plaintext to `localStorage`, `sessionStorage`, logs, or docs.
 - User code and chat text never enter long-term memory; only judge facts, attempts, and metadata do.
-- `FOCUS` mode silences every AI surface: chat panel (docked or detached), chat tab, detach control, streaming, and guided-assessment submission. Local Monaco editing stays enabled; AI autocomplete is never added.
+- `FOCUS` silences every AI surface: chat panel (docked or detached), chat tab, detach control, streaming, and guided assessment submission. Local Monaco editing stays enabled; no AI autocomplete.
 - Local drafts, layout state, and practice records stay browser-local and are keyed per workspace with `workspaceStorageKey()`.
 
-## 4. Change workflow
+Protected paths requiring explicit user authorization: `.env`, `.env.local`, `.env.example`, `.secrets-scan-ignore`, `command.log`, `.work_logs.sh`, `data/**`, `frontend/dist/**`, `frontend/node_modules/**`, release artifacts, `.github/workflows/**`.
 
-Classify the request, then follow `docs/architecture/engineering-protocol.md`:
+Forbidden without authorization: secrets in the tree, destructive git operations, production data access, network side effects outside the task.
 
-| Type | Required before implementation | Required evidence |
-|------|-------------------------------|-------------------|
-| Feature | Task record with requirements, affected entities, write scope, acceptance conditions | Tests that fail without the feature, plus the commands run |
-| Bugfix | Reproduction (failing test or user report quoted) | The failing case passing after the fix |
-| Refactor | Baseline (tests green, behavior pinned) | Identical behavior evidence, no contract change |
-| Exploration | Hypothesis and discard criteria; label prototypes | Findings, not claims of correctness |
+## Workflow and evidence
 
-Rules:
+- Classify work as feature / bugfix / refactor / exploration / adoption, and assign tier T1 / T2 / T3 (`docs/architecture/engineering-protocol.md`).
+- Design first for T2/T3: update the task record and the applicable spec before editing. T1 needs a reproduction and one check.
+- Record the exact command, cwd, UTC start/end, exit code, environment, result, and input fingerprint. `passed` is a recorded fact, not an opinion.
+- Never write `approved`, sign an approval, or mark evidence `valid` on the user's behalf. Keep design (`draft/reviewed/approved`), implementation (`not_started/in_progress/implemented`), verification (`pending/passed/failed`), and evidence (`valid/stale/invalid/unknown`) separate.
+- A green test count does not prove design conformity. Report "planned", "ran locally", and "CI-enforced" distinctly.
+- If fingerprinted inputs change after a run, keep the historical result and mark the evidence `stale`; re-run to produce new evidence.
 
-- Design first. Update the applicable intent/spec/module doc before or with the implementation.
-- Keep the smallest logical entity set. One design record may cover many files; do not create a document per code file.
-- Change only what the task requires. Do not widen scope silently; separate unrelated fixes.
-- Reproduce bugs before fixing. Never "fix" a symptom by suppressing an error.
-- Delete code your change makes obsolete; do not leave shims, aliases, or dead branches.
-- For exported symbols, check references (`lsp` or `rg`) before changing the contract.
+## Conventions
 
-## 5. Task records
-
-Write feature/bugfix/refactor records to `docs/intent/tasks/YYYY-MM-DD-<slug>.md`. Minimum fields:
-
-```text
-Task ID, type, status (draft/reviewed/approved)
-Requirements (IDs), affected entities, write scope, protected paths
-Design decisions and tradeoffs, dependencies
-Acceptance conditions
-Implementation state, verification result, evidence (commands, timestamps, fingerprints)
-Risks and unknowns
-```
-
-Keep these states separate and never infer one from another:
-
-- `draft` / `reviewed` / `approved` — design authority.
-- implementation state — what exists in code.
-- verification result — what a check observed.
-- evidence validity — whether that evidence still matches the current code.
-
-A green test run does not prove design conformity, and an agent's confidence does not make a record `approved`.
-
-## 6. Commands
-
-```bash
-# frontend (from frontend/)
-npx tsc --noEmit
-npm run lint
-npm test                 # vitest run
-npm test -- src/components/Layout
-
-# python agent (from backend/agent/)
-ruff check --isolated app tests
-mypy app --ignore-missing-imports --follow-imports=silent
-python -m pytest -q
-
-# java gateway (from backend/gateway/)
-mvn -B test
-```
-
-Run the narrowest check that exercises the change first; run the full suite once before reporting completion. Record the exact command, result, timestamp, and environment in the task record.
-
-## 7. Protected paths
-
-Do not modify or read secrets from these without explicit user authorization:
-
-- `.env`, `.env.local`, `.env.example` (template changes count as contract changes)
-- `.secrets-scan-ignore`, `command.log`, `.work_logs.sh`
-- `data/**` runtime databases, Chroma indexes, knowledge files, caches
-- built artifacts: `frontend/dist/**`, `frontend/node_modules/**`, release bundles
-- `.github/workflows/**` and release configuration
-
-Never commit generated data, secrets, or build output.
-
-## 8. Reporting completion
-
-Report:
-
-1. Changed entities and files.
-2. The checks run, with real command output and timestamps — never fabricated.
-3. Evidence location (task record path).
-4. Unresolved risks, unknowns, or missing approvals/capabilities.
-5. Any behavior that could not be verified in this environment (for example, real pointer drag or browser overflow).
-
-Do not claim a check passed unless it was run. Do not mark a record `approved`, `passed`, or `valid` on belief alone.
+- Entity IDs: `REQ-<area>-<n>`, `SPEC-<n>`, `MOD-<module>`, `CONTRACT-<name>`, `TASK-YYYY-MM-DD-<slug>`, `EVIDENCE-<n>`, `ADR-<n>`. Stable English strings; titles may be Chinese.
+- Plans and task records live in `docs/intent/tasks/`; reuse an existing record before creating one. No scaffolds and no per-file documents.
+- Commits contain only declared-scope files. A whole-worktree commit needs explicit user confirmation; never `git add -A`.
+- New `*.md` files are ignored by default (`*.md`, with `!README.md`, `!AGENTS.md`, `!docs/**/*.md`). Verify a new authority document is tracked with `git check-ignore -v <path>` before relying on it.

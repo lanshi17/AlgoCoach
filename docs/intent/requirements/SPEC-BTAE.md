@@ -1,13 +1,15 @@
 # SPEC-BTAE — design, evidence, and traceability layers
 
-Status: draft (bootstrapped 2026-11-25; not yet reviewed by a human owner)
-Scope: this repository only. `AGENTS.md` remains the top-level authority.
+Status: draft (bootstrapped 2026-11-25; approval requires a human owner)
+Related: [AGENTS.md](../../../AGENTS.md), [engineering protocol](../../architecture/engineering-protocol.md), `TASK-2026-11-25-guided-workspace-layout`, `TASK-2026-11-25-btae-protocol-alignment`
 
-## 1. Why this exists
+## Intent
 
-AlgoCoach spans a React frontend, a Java gateway, a Python agent, and an Electron shell. A single feature can change intent, contracts, code, and tests. Without a layering rule, prose and code drift, "done" becomes opinion, and an unverified assumption is indistinguishable from a checked fact.
+AlgoCoach spans a React frontend, a Java gateway, a Python agent, and an Electron shell, so one feature can change intent, contracts, code, and tests. Without a layering rule, prose and code drift, "done" becomes opinion, and an unverified assumption is indistinguishable from a checked fact. This spec defines the layers, identities, states, and evidence rules that keep design, implementation, and proof separate.
 
-BTAE separates five representations and never lets one stand in for another.
+## Behavior
+
+### Layers
 
 | Layer | Representation | Lives in | Answers |
 |-------|----------------|----------|---------|
@@ -16,92 +18,78 @@ BTAE separates five representations and never lets one stand in for another.
 | L2 Design | entities, states, decisions, tradeoffs | `docs/intent/tasks/*.md`, module READMEs | How it works and why this shape |
 | L3 Implementation | code | `frontend/`, `backend/` | What exists |
 | L4 Behavior evidence | tests and runnable checks | `**/*.test.*`, test scripts | What was observed to work |
-| L5 Execution record | commands, results, fingerprints | task record `Evidence` section | What was actually run, when, against which code |
+| L5 Execution record | commands, results, fingerprints | task record `Verification` / evidence blocks | What was run, when, against which inputs |
 
-Markdown carries intent. Code carries behavior. Tests carry observed behavior. Execution records carry proof. Schemas and machine checks, when added, carry constraints.
+Markdown carries intent; code carries behavior; tests carry observed behavior; execution records carry proof. Machine schemas, when added, carry constraints.
 
-## 2. Entities and identity
-
-An entity is a logical thing with a stable ID, not a file:
+### Entities and identity
 
 ```text
-REQ-<area>-<n>      requirement
+REQ-<area>-<n>        requirement
+SPEC-<n>              capability specification
+MOD-<module>          architecture module (Layout, GuidedLearning, Gateway, Agent, ...)
+CONTRACT-<name>       cross-layer wire/file contract
+ADR-<n>               architecture decision
 TASK-YYYY-MM-DD-<slug> task/design record
-MOD-<module>        architecture module (Layout, GuidedLearning, Gateway, Agent, ...)
-ADR-<n>             architecture decision
+EVIDENCE-<n>          one verification run
+RUN-<id>              execution grouping when several checks share a run
 ```
 
-Rules:
+Rules: IDs are stable English strings (titles may be Chinese); moving or splitting a file does not change identity; one task record may cover many entities; deleting an implementation retires its entity instead of leaving phantom traceability.
 
-- IDs are stable English strings. Titles may be Chinese, matching repository prose.
-- When a file moves or splits, the entity ID does not change; update the entity's path table row.
-- One task record may cover several entities and many files. Do not create one document per code file.
-- An entity whose implementation is deleted must be removed from the record or marked retired; do not leave phantom traceability.
+### Traceability
 
-## 3. Traceability
+Both directions must hold: every requirement maps to an implementation and at least one named check (or an explicit `unverified` row); every non-trivial module maps back to an entity and a task record.
 
-Both directions must hold:
+Trace rows: `| Requirement | Implementation | Behavior evidence | Status |` with status `unverified` (static discovery or inference only), `verified` (a named check observed it), `failed`, or `retired`.
 
-- Design → implementation → tests: every requirement has an implementation location and at least one behavior check, or is explicitly marked unverified.
-- Implementation → design: every non-trivial module maps back to an entity and a task record; no orphan behavior.
+### Four independent state axes
 
-Traceability rows in task records use this shape:
+1. Design — `draft`, `reviewed`, `approved`. Only a recorded human or CI approval grants `approved`.
+2. Implementation — `not_started`, `in_progress`, `implemented`, `removed`.
+3. Verification — `pending`, `passed`, `failed`. Describes one execution, not design quality.
+4. Evidence — `valid`, `stale`, `invalid`, `unknown`. Independent of the verification result.
 
-```text
-| Requirement | Implementation | Behavior evidence | Status |
-```
+Forbidden: agent-granted `approved`; `passed` without a recorded command and output; `valid` after the fingerprinted inputs changed; `verified` from source reading alone.
 
-`Status` values: `unverified` (static discovery or model inference only), `verified` (a named check observed it), `failed`, `retired`.
+### Evidence fields and freshness
 
-## 4. Four independent state axes
+Each block carries: `id` / `run_id`, `task_id`, `target_entities`, `checker` (+ version), `command` (argv as executed), `cwd`, `started_at` / `finished_at` (UTC ISO-8601), `exit_code`, `result` (`passed` / `failed` / `error` / `not_run`), `validity`, `input_manifest` (`{path, sha256}` entries plus an aggregate digest over sorted path+digest lines), `artifacts` (`{path, sha256}`), `environment` (OS, runtime/tool versions, no secrets), `provenance` (commit SHA or worktree fingerprint, host, client).
 
-Do not collapse these into one status word:
+Freshness: recompute the digests of the recorded input paths. Any change makes the evidence `stale`; the historical result stands but no longer satisfies a gate. Re-run to produce new evidence. Never rewrite an old block's `validity` to `valid` by assumption.
 
-1. **Design state** — `draft`, `reviewed`, `approved`. Only a human owner grants `approved`. An agent may produce `draft` and request review.
-2. **Implementation state** — `not_started`, `in_progress`, `implemented`, `removed`. Describes code, not quality.
-3. **Verification result** — `not_run`, `passed`, `failed`, `partial`. Describes one execution of one check.
-4. **Evidence validity** — `current`, `stale`, `unknown`. `stale` when code, dependencies, or contracts changed after the recorded run; recompute the fingerprint or re-run.
+### Gates
 
-Forbidden transitions:
+A change may be reported complete only when the applicable L0–L2 documents reflect the behavior, scope matches the record, the narrowest covering check passed and the touched-stack suite ran once, evidence is `valid` for the final code state, and known unknowns or missing approvals are stated. A gate records a check; it does not grant permission.
 
-- `draft` → `approved` by agent action.
-- `passed` without a recorded command and output.
-- `current` after editing the code the evidence covers.
-- `verified` for behavior observed only by reading source.
+## Contracts
 
-## 5. Evidence record
+| Surface | Contract | Notes |
+|---------|----------|-------|
+| `AGENTS.md` | Authority order, authoritative commands, boundaries, workflow, entity scheme | Top-level entrypoint; may not be bypassed by module docs |
+| Task record | Header fields: type, tier, tooling, risk, design/implementation/verification/evidence states | One record per logical work item, not per file |
+| Evidence block | Field set in "Evidence fields and freshness" | Markdown here; EPE schema if the CLI is installed |
+| Entity IDs | Ten known prefixes above | Stable, English, never reused |
+| Planning location | `docs/intent/tasks/` | Reuse before creating; no empty scaffolds |
 
-Each verification entry in a task record contains:
+## Acceptance conditions
 
-```text
-Command: exact command line
-Directory: working directory
-Time: ISO-8601 timestamp
-Environment: OS, runtime versions, relevant fixtures
-Result: exit code and the observed summary (counts, failures)
-Fingerprint: hash of the changed/untracked inputs or git diff at run time
-Artifact: path to full output when the summary is not enough
-```
+- AC-1: `AGENTS.md` exists, is tracked despite `*.md` ignores, and lists the authoritative commands — verified by `git check-ignore -v AGENTS.md` (negated rule) and `git ls-files AGENTS.md`.
+- AC-2: every task record header carries type, tier, tooling, risk, and all four states — verified by review against the task-record template.
+- AC-3: every implemented requirement has a trace row with a named check or an explicit `unverified` status — verified by the record's trace table.
+- AC-4: every recorded check has command, cwd, UTC times, exit code, environment, result, manifest digest, and validity — verified by review against the evidence field list.
+- AC-5: relative links in authority docs resolve — verified by the docs link check recorded in `TASK-2026-11-25-btae-protocol-alignment`.
+- AC-6: evidence whose fingerprinted inputs changed is marked `stale` and re-run before handoff — verified by comparing the manifest digest to the current tree.
 
-Fingerprints:
+## Out of scope
 
-- Committed work: record the commit SHA.
-- Uncommitted work: `git diff | sha256sum` plus a `sha256sum` list of untracked files. If either changes, evidence becomes `stale`.
+- Implementing the BTAE MCP server or EPE CLI in this repository.
+- A machine-readable entity registry; task records are the registry for now.
+- Retro-documenting modules the current change did not touch.
+- Automating design approval or treating CI green as approval.
 
-## 6. Gates
+## Open questions
 
-A change may be reported complete only when:
-
-1. The applicable L0–L2 documents reflect the implemented behavior.
-2. Scope matches the task record; unrelated edits are absent or listed.
-3. The narrowest covering check passed, and the full suite ran once before handoff.
-4. Evidence is `current` for the final code state.
-5. Known unknowns and missing external approvals are stated.
-
-A gate does not grant permission. It records that a check was performed. Host authorization, secrets access, release, and human approval are separate decisions.
-
-## 7. Known limits in this repository
-
-- No BTAE MCP server is installed, so `btae_project_context`, `btae_design_plan`, and `btae_validate_project` are unavailable. The protocol is enforced by documents and commands, not tooling.
-- No machine-readable entity registry exists yet. Task records are the registry.
-- UI behavior that needs a real browser (pointer drag geometry, overflow at every viewport, localStorage quota) is `unverified` until manually checked; unit tests do not cover it.
+- Who owns design approval for this repository? Until assigned, records stay `draft`.
+- Install the MCP server/EPE later, or keep `repo-native` permanently?
+- Should browser-only layout behavior (pointer drag, overflow) gain an automated harness, or stay `unverified`?
