@@ -14,7 +14,7 @@ AlgoCoach 参考 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 的公开
 | Mastery Path | `GET /memory/mastery-path` + 知识图谱“下一步学习路径”；`mastery_path` 轮次在模型调用前读取一次路径快照 | 独立 path runner 读取当前 workspace 的 mastery、共同训练关系和到期复习队列；到期项优先，同一优先级按掌握度升序，返回每一步的原因和建议动作。快照每轮重新读取、不跨轮缓存，读取失败时由 `get_mastery_path` 工具兜底 |
 | Knowledge Center | `KnowledgeBasePage` 与本地知识库索引 | 资料文件和索引按 workspace 隔离，embedding Provider 配置在本机共享 |
 | Learning Notebook | `/notebook` 学习笔记页 + 复盘队列 | 用户笔记与 AI 笔记分开；支持生成预览、保存、删除，并按 workspace key 存储 |
-| Task Board / Calendar | `/learning/dashboard` 的本周计划和本地任务板 | 任务按「待办 → 进行中 → 完成」推进，完成后可归档并恢复，以 workspace key 持久化；拖拽排序、卡片备注和更完整的跨设备 calendar 留作后续 |
+| Task Board / Calendar | `/learning/dashboard` 的本周计划和本地任务板 | 任务按「待办 → 进行中 → 完成」推进，完成后可归档并恢复，以 workspace key 持久化；支持拖拽排序、方向键移动和最多 500 字的卡片备注，更完整的跨设备 calendar 留作后续 |
 
 ## 引导式学习
 

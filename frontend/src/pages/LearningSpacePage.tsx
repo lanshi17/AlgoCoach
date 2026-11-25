@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, BookOpen, CalendarDays, Check, Clock3, Code2, LayoutDashboard, Map as MapIcon, Plus, RotateCcw, Sparkles, X } from 'lucide-react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowRight, BookOpen, CalendarDays, Check, Clock3, Code2, GripVertical, LayoutDashboard, Map as MapIcon, MessageSquare, Plus, RotateCcw, Sparkles, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '@/stores/useAppStore'
 import { LOCAL_PRACTICE_PROBLEMS } from '@/services/localPractice'
@@ -14,7 +14,7 @@ import { dueReviewEntries, rateReviewEntry, readReviewEntries, saveReviewEntry, 
 import { REVIEW_RATING_OPTIONS, type ReviewRating } from '@/services/deepTutorScheduler'
 import { recommendLearningMode } from '@/services/modeRecommendation'
 import { prepareReviewDiscussion, reviewUnavailableReason } from '@/services/reviewDiscussion'
-import { createLearningTask, moveLearningTask, NEXT_TASK_STATUS, readLearningTasks, setLearningTaskArchived, TASK_STATUS_LABEL, type LearningTask, type LearningTaskKind, type LearningTaskStatus } from '@/services/learningTasks'
+import { createLearningTask, MAX_LEARNING_TASK_NOTE_LENGTH, moveLearningTask, NEXT_TASK_STATUS, readLearningTasks, reorderLearningTask, setLearningTaskArchived, setLearningTaskNote, TASK_STATUS_LABEL, type LearningTask, type LearningTaskKind, type LearningTaskStatus } from '@/services/learningTasks'
 
 export default function LearningSpacePage() {
   const navigate = useNavigate()
@@ -56,6 +56,23 @@ export default function LearningSpacePage() {
   const removeBlock = (id: LearningBlockId) => saveLayout({ ...layout, blocks: layout.blocks.map(block => block.id === id ? { ...block, visible: false } : block) })
   const restoreBlocks = () => saveLayout({ ...layout, blocks: layout.blocks.map(block => ({ ...block, visible: true })) })
   const addTask = (task: { title: string; kind: LearningTaskKind; dueDate: string; problemId?: string }) => setTasks(createLearningTask(task))
+  // The ref carries the dragged id across the native drag events; state only drives the highlight.
+  const draggedTaskId = useRef<string | null>(null)
+  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null)
+  const startTaskDrag = (taskId: string) => { draggedTaskId.current = taskId }
+  const highlightTaskDrop = (taskId: string) => { if (draggedTaskId.current) setDragOverTaskId(taskId) }
+  const dropTask = (targetId: string) => {
+    const sourceId = draggedTaskId.current
+    draggedTaskId.current = null
+    setDragOverTaskId(null)
+    if (sourceId && sourceId !== targetId) setTasks(reorderLearningTask(sourceId, targetId))
+  }
+  const endTaskDrag = () => { draggedTaskId.current = null; setDragOverTaskId(null) }
+  const moveTaskByKeyboard = (taskId: string, direction: -1 | 1) => {
+    const active = tasks.filter(task => !task.archived)
+    const target = active[active.findIndex(task => task.id === taskId) + direction]
+    if (target) setTasks(reorderLearningTask(taskId, target.id))
+  }
   const visibleBlocks = layout.blocks.filter(block => block.visible)
   const taskDate = new Date().toISOString().slice(0, 10)
 
@@ -110,7 +127,7 @@ export default function LearningSpacePage() {
       {suggestion && <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-card border border-accent/30 bg-surface px-4 py-3 text-sm dark:bg-surface-dark"><span className="text-text-secondary dark:text-text-dark-secondary"><span className="font-medium text-text-primary dark:text-text-dark-primary">模式建议（基于练习记录）：</span>{suggestion.reason}</span><button type="button" onClick={() => saveLayout(buildModeLayout(suggestion.suggestedMode))} className="inline-flex h-8 items-center rounded-full bg-[#111317] px-3 text-xs font-medium tracking-cn text-white transition-opacity hover:opacity-90">切换模式</button></div>}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {visibleBlocks.map(block => <React.Fragment key={block.id}>{renderBlock(block.id, { navigate, records, pendingRecords, dueReviews, weekActivity, nextProblem, activeProblem, topicCounts, mode, editing, removeBlock, profile, onReviewSaved: setReviewEntries, tasks, onTaskCreate: addTask, onTaskMove: (taskId, status) => setTasks(moveLearningTask(taskId, status)), onTaskArchive: (taskId, archived) => setTasks(setLearningTaskArchived(taskId, archived)), taskDate })}</React.Fragment>)}
+        {visibleBlocks.map(block => <React.Fragment key={block.id}>{renderBlock(block.id, { navigate, records, pendingRecords, dueReviews, weekActivity, nextProblem, activeProblem, topicCounts, mode, editing, removeBlock, profile, onReviewSaved: setReviewEntries, tasks, onTaskCreate: addTask, onTaskMove: (taskId, status) => setTasks(moveLearningTask(taskId, status)), onTaskArchive: (taskId, archived) => setTasks(setLearningTaskArchived(taskId, archived)), onTaskNote: (taskId, note) => setTasks(setLearningTaskNote(taskId, note)), dragOverTaskId, onTaskDragStart: startTaskDrag, onTaskDragOver: highlightTaskDrop, onTaskDrop: dropTask, onTaskDragEnd: endTaskDrag, onTaskKeyboardMove: moveTaskByKeyboard, taskDate })}</React.Fragment>)}
       </div>
       {!visibleBlocks.length && <section className="rounded-panel bg-surface p-10 text-center dark:bg-surface-dark"><p className="text-sm text-text-secondary dark:text-text-dark-secondary">学习空间是空的。</p><button type="button" onClick={restoreBlocks} className="mt-3 font-medium text-accent hover:underline">恢复默认模块</button></section>}
     </div>
@@ -135,11 +152,18 @@ type RenderContext = {
   onTaskCreate: (task: { title: string; kind: LearningTaskKind; dueDate: string; problemId?: string }) => void
   onTaskMove: (taskId: string, status: LearningTaskStatus) => void
   onTaskArchive: (taskId: string, archived: boolean) => void
+  onTaskNote: (taskId: string, note: string) => void
+  dragOverTaskId: string | null
+  onTaskDragStart: (taskId: string) => void
+  onTaskDragOver: (taskId: string) => void
+  onTaskDrop: (taskId: string) => void
+  onTaskDragEnd: () => void
+  onTaskKeyboardMove: (taskId: string, direction: -1 | 1) => void
   taskDate: string
 }
 
 function renderBlock(id: LearningBlockId, context: RenderContext) {
-  const { navigate, records, pendingRecords, dueReviews, weekActivity, nextProblem, activeProblem, topicCounts, mode, editing, removeBlock, profile, onReviewSaved, tasks, onTaskCreate, onTaskMove, onTaskArchive, taskDate } = context
+  const { navigate, records, pendingRecords, dueReviews, weekActivity, nextProblem, activeProblem, topicCounts, mode, editing, removeBlock, profile, onReviewSaved, tasks, onTaskCreate, onTaskMove, onTaskArchive, onTaskNote, dragOverTaskId, onTaskDragStart, onTaskDragOver, onTaskDrop, onTaskDragEnd, onTaskKeyboardMove, taskDate } = context
   const remove = editing ? () => removeBlock(id) : undefined
 
   if (id === 'digest') return (
@@ -242,14 +266,21 @@ function renderBlock(id: LearningBlockId, context: RenderContext) {
           <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">任务板 · {tasks.filter(task => !task.archived && task.status !== 'done').length} 未完成</p>
           <span className="text-[11px] text-text-muted dark:text-text-dark-muted">本地保存</span>
         </div>
-        <div className="mt-3 space-y-2">
-          {tasks.filter(task => !task.archived).sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 4).map(task => (
-            <div key={task.id} className="flex items-center gap-2 px-2 py-1.5 text-xs">
-              <button type="button" aria-label={`${task.title}：${TASK_STATUS_LABEL[task.status]}，切换为${TASK_STATUS_LABEL[NEXT_TASK_STATUS[task.status]]}`} onClick={() => onTaskMove(task.id, NEXT_TASK_STATUS[task.status])} className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] text-text-secondary hover:bg-surface-muted dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">{TASK_STATUS_LABEL[task.status]}</button>
-              <span className={`min-w-0 flex-1 truncate ${task.status === 'done' ? 'text-text-muted line-through dark:text-text-dark-muted' : 'text-text-secondary dark:text-text-dark-secondary'}`}>{task.title}</span>
-              <span className="shrink-0 text-[10px] text-text-muted dark:text-text-dark-muted">{task.dueDate}</span>
-              {task.status === 'done' && <button type="button" onClick={() => onTaskArchive(task.id, true)} className="shrink-0 text-[11px] font-medium text-accent hover:underline">归档</button>}
-            </div>
+        <div className="mt-3 max-h-80 space-y-1 overflow-y-auto pr-1" aria-label="任务列表">
+          {tasks.filter(task => !task.archived).map(task => (
+            <TaskRow
+              key={task.id}
+              task={task}
+              dragOver={dragOverTaskId === task.id}
+              onStatus={() => onTaskMove(task.id, NEXT_TASK_STATUS[task.status])}
+              onArchive={() => onTaskArchive(task.id, true)}
+              onNote={note => onTaskNote(task.id, note)}
+              onReorder={direction => onTaskKeyboardMove(task.id, direction)}
+              onDragStart={() => onTaskDragStart(task.id)}
+              onDragOver={() => onTaskDragOver(task.id)}
+              onDrop={() => onTaskDrop(task.id)}
+              onDragEnd={onTaskDragEnd}
+            />
           ))}
           {!tasks.some(task => !task.archived) && <p className="text-xs text-text-muted dark:text-text-dark-muted">还没有任务。把下一页练习或到期复盘加入计划。</p>}
         </div>
@@ -280,6 +311,73 @@ function renderBlock(id: LearningBlockId, context: RenderContext) {
       </div>
     </BlockCard>
   )
+}
+
+function TaskRow({ task, dragOver, onStatus, onArchive, onNote, onReorder, onDragStart, onDragOver, onDrop, onDragEnd }: {
+  task: LearningTask
+  dragOver: boolean
+  onStatus: () => void
+  onArchive: () => void
+  onNote: (note: string) => void
+  onReorder: (direction: -1 | 1) => void
+  onDragStart: () => void
+  onDragOver: () => void
+  onDrop: () => void
+  onDragEnd: () => void
+}) {
+  const [editingNote, setEditingNote] = useState(false)
+  const [noteDraft, setNoteDraft] = useState(task.note ?? '')
+  return <div
+    data-task-id={task.id}
+    onDragOver={event => { event.preventDefault(); onDragOver() }}
+    onDrop={event => { event.preventDefault(); onDrop() }}
+    className={`flex items-start gap-1.5 rounded-card border px-2 py-1.5 text-xs transition-colors ${dragOver ? 'border-accent/60 bg-accent/5' : 'border-transparent'}`}
+  >
+    <span
+      data-drag-handle
+      draggable
+      role="button"
+      tabIndex={0}
+      aria-label={`拖动排序：${task.title}；聚焦后可用上下方向键移动`}
+      title="拖动排序；聚焦后可用 ↑/↓ 移动"
+      onDragStart={event => { onDragStart(); event.dataTransfer?.setData('text/plain', task.id); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move' }}
+      onDragEnd={onDragEnd}
+      onKeyDown={event => {
+        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+        event.preventDefault()
+        onReorder(event.key === 'ArrowUp' ? -1 : 1)
+      }}
+      className="mt-0.5 shrink-0 cursor-grab rounded p-0.5 text-text-muted outline-none hover:bg-surface-muted focus-visible:ring-2 focus-visible:ring-accent active:cursor-grabbing dark:text-text-dark-muted dark:hover:bg-surface-dark-muted"
+    >
+      <GripVertical size={13} />
+    </span>
+    <button type="button" onClick={onStatus} aria-label={`${task.title}：${TASK_STATUS_LABEL[task.status]}，切换为${TASK_STATUS_LABEL[NEXT_TASK_STATUS[task.status]]}`} className="mt-0.5 shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] text-text-secondary hover:bg-surface-muted dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">{TASK_STATUS_LABEL[task.status]}</button>
+    <div className="min-w-0 flex-1">
+      <p className={`truncate ${task.status === 'done' ? 'text-text-muted line-through dark:text-text-dark-muted' : 'text-text-secondary dark:text-text-dark-secondary'}`}>{task.title}</p>
+      {editingNote ? <div className="mt-1">
+        <textarea
+          autoFocus
+          rows={2}
+          maxLength={MAX_LEARNING_TASK_NOTE_LENGTH}
+          value={noteDraft}
+          onChange={event => setNoteDraft(event.target.value)}
+          aria-label={`${task.title} 的备注`}
+          placeholder="写下提醒、卡点或下一步"
+          className="w-full resize-none rounded-card border border-border bg-surface px-2 py-1 text-xs tracking-cn text-text-primary outline-none transition-colors focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft dark:text-text-dark-primary"
+        />
+        <div className="mt-1 flex items-center gap-2">
+          <button type="button" onClick={() => { onNote(noteDraft); setEditingNote(false) }} className="rounded-full bg-[#111317] px-2.5 py-0.5 text-[11px] font-medium text-white transition-opacity hover:opacity-90">保存备注</button>
+          <button type="button" onClick={() => { setNoteDraft(task.note ?? ''); setEditingNote(false) }} className="rounded-full border border-border px-2.5 py-0.5 text-[11px] text-text-secondary hover:bg-surface-muted dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">取消</button>
+          <span className="ml-auto text-[10px] tabular-nums text-text-muted dark:text-text-dark-muted">{noteDraft.length}/{MAX_LEARNING_TASK_NOTE_LENGTH}</span>
+        </div>
+      </div> : task.note ? <p className="mt-0.5 line-clamp-2 whitespace-pre-wrap break-words text-[11px] leading-4 text-text-muted dark:text-text-dark-muted" title={task.note}>{task.note}</p> : null}
+    </div>
+    <div className="mt-0.5 flex shrink-0 items-center gap-1.5">
+      <span className="text-[10px] text-text-muted dark:text-text-dark-muted">{task.dueDate}</span>
+      <button type="button" aria-expanded={editingNote} aria-label={task.note ? `编辑备注：${task.title}` : `添加备注：${task.title}`} onClick={() => { if (!editingNote) { setNoteDraft(task.note ?? ''); setEditingNote(true) } }} className={`rounded p-0.5 hover:bg-surface-muted dark:hover:bg-surface-dark-muted ${task.note ? 'text-accent' : 'text-text-muted dark:text-text-dark-muted'}`}><MessageSquare size={12} /></button>
+      {task.status === 'done' && <button type="button" onClick={onArchive} className="text-[11px] font-medium text-accent hover:underline">归档</button>}
+    </div>
+  </div>
 }
 
 function DigestItem({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {

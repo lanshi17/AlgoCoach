@@ -42,7 +42,7 @@ AlgoCoach 是一个本地优先的算法训练工作台。它把题目、编辑�
 选择学习模式 → 今日摘要 → Agent 推荐练习 → 写代码 → 判题 / 自测 → 复盘 → 知识图谱与下一轮计划
 ```
 
-`/learning/dashboard`（从学习页的“学习记录”进入）是 Workspace 的当前 UI 表现层，目前包含今日摘要、继续练习、复盘队列、知识地图、本周计划/任务板和 Agent 洞察；`/home` 是分阶段引导式学习页，`/notebook` 提供独立的本地学习笔记。计划可以安排下一页练习或到期复盘并在本机标记完成。算法 Agent 继续复用现有题库、Monaco 编辑器、判题、REVIEW 和知识图谱；这些 Block 是可替换的视图组件，业务边界由 Workspace、Capability、Tool、练习记录和对话 turn 定义。
+`/learning/dashboard`（从学习页的“学习记录”进入）是 Workspace 的当前 UI 表现层，目前包含今日摘要、继续练习、复盘队列、知识地图、本周计划/任务板和 Agent 洞察；`/home` 是分阶段引导式学习页，`/notebook` 提供独立的本地学习笔记。计划可以安排下一页练习或到期复盘，在本机调整任务顺序、添加备注并标记完成。算法 Agent 继续复用现有题库、Monaco 编辑器、判题、REVIEW 和知识图谱；这些 Block 是可替换的视图组件，业务边界由 Workspace、Capability、Tool、练习记录和对话 turn 定义。
 
 `desktop/` 提供 macOS / Linux Electron 壳，发布顺序为 macOS Apple Silicon arm64、macOS Intel x64、Linux x86_64。开发时它启动 Vite 并把 `/api`、`/animations` 转发到本地 Gateway；设置 `ALGOCOACH_AUTOSTART_SERVICES=1` 后会尝试管理本地 Gateway / Agent 子进程，生产打包入口已经准备好。
 
