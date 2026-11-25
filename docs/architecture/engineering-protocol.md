@@ -95,7 +95,9 @@ Run the narrowest check first, then the touched-stack suite once. Run only stack
 | Frontend lint | `npm run lint` | same |
 | Agent | `python -m pytest -q <path>` | `python -m pytest -q` plus ruff/mypy |
 | Gateway | `mvn -B test -Dtest=<Class>` | `mvn -B test` |
-| Docs-only | relative-link/cross-reference check | `markdownlint` if configured, else link check |
+| Docs-only | `python3 scripts/check-docs-links.py <file...>` | `python3 scripts/check-docs-links.py` |
+
+The docs check runs locally; wiring it into CI is a separate change because `.github/workflows/**` is protected.
 
 Record command, cwd, UTC start/end, environment, exit code, observed summary, manifest digest, and artifact paths as one `EVIDENCE-<n>` block (see the spec). Pipe long output to an artifact and cite the path. Report pre-existing failures separately from failures introduced by the change.
 

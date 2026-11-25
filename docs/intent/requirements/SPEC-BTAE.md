@@ -70,6 +70,7 @@ A change may be reported complete only when the applicable L0–L2 documents ref
 | Task record | Header fields: type, tier, tooling, risk, design/implementation/verification/evidence states | One record per logical work item, not per file |
 | Evidence block | Field set in "Evidence fields and freshness" | Markdown here; EPE schema if the CLI is installed |
 | Entity IDs | Ten known prefixes above | Stable, English, never reused |
+| Docs check | `python3 scripts/check-docs-links.py` from the repository root | Checks relative link targets plus `TASK-` and `EVIDENCE-` references; local only, not CI-wired |
 | Planning location | `docs/intent/tasks/` | Reuse before creating; no empty scaffolds |
 
 ## Acceptance conditions

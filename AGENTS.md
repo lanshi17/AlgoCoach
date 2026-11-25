@@ -30,6 +30,9 @@ Run in the directory named; commands here override ecosystem defaults. If a comm
 | Agent types | `backend/agent/` | `mypy app --ignore-missing-imports --follow-imports=silent` |
 | Agent tests | `backend/agent/` | `python -m pytest -q` |
 | Gateway tests | `backend/gateway/` | `mvn -B test` |
+| Docs links | repository root | `python3 scripts/check-docs-links.py` |
+
+The docs check covers `AGENTS.md` and `docs/**/*.md` by default; pass explicit files or directories for a narrow run. It checks relative link targets and `TASK-`/`EVIDENCE-` references.
 
 Install/run details are in `README.md` and `docker-compose.yml`; do not run installs or services unless the task requires them.
 
