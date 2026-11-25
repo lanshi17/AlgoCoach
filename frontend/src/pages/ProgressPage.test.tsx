@@ -87,6 +87,30 @@ it('shows due reviews without exposing their notes, then schedules after self-ra
   expect(Date.parse(entry.schedule.due)).toBeGreaterThan(Date.now())
   expect(readReviewEvents()).toHaveLength(1)
   expect(readReviewEvents()[0]).toMatchObject({ problemId: record.id, rating: 3 })
+  expect(element.textContent).toContain('复习评分记录 · 1')
+  const history = element.querySelector('table')!
+  expect(history.textContent).toContain(problem.title)
+  expect(history.textContent).toContain('想起来了')
+  expect(history.textContent).toContain('3 天')
+})
+
+it('shows only the newest 20 rating events while keeping the recorded total', async () => {
+  const events = Array.from({ length: 22 }, (_, index) => ({
+    problemId: 'record',
+    rating: 3 as const,
+    reviewedAt: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(),
+    dueBefore: '2026-01-01T00:00:00.000Z',
+    dueAfter: new Date(Date.UTC(2026, 0, 4, 0, index)).toISOString(),
+  }))
+  localStorage.setItem('algocoach.localReviewEvents', JSON.stringify(events))
+  useAppStore.setState({ activeProblem: null, mode: 'PREP', localPracticeRecords: [] })
+  await renderPage()
+  expect(element.textContent).toContain('复习评分记录 · 22 次')
+  const rows = element.querySelectorAll('tbody tr')
+  expect(rows).toHaveLength(20)
+  expect(rows[0].textContent).toContain('想起来了')
+  expect(rows[0].textContent).toContain('3 天')
+  expect(rows[0].querySelector('time')?.getAttribute('datetime')).toBe(events[21].reviewedAt)
 })
 
 it('shows one review round at a time and keeps the rest due until earlier ones are rated', async () => {

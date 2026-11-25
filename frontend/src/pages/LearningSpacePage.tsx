@@ -11,7 +11,7 @@ import Button from '@/components/Common/Button'
 import { agentService } from '@/services/agentService'
 import type { AgentProfile } from '@/types'
 import { dueReviewEntries, rateReviewEntry, readReviewEntries, saveReviewEntry, type LocalReviewEntry } from '@/services/reviewQueue'
-import type { ReviewRating } from '@/services/deepTutorScheduler'
+import { REVIEW_RATING_OPTIONS, type ReviewRating } from '@/services/deepTutorScheduler'
 import { recommendLearningMode } from '@/services/modeRecommendation'
 import { prepareReviewDiscussion, reviewUnavailableReason } from '@/services/reviewDiscussion'
 import { createLearningTask, moveLearningTask, NEXT_TASK_STATUS, readLearningTasks, setLearningTaskArchived, TASK_STATUS_LABEL, type LearningTask, type LearningTaskKind, type LearningTaskStatus } from '@/services/learningTasks'
@@ -337,7 +337,7 @@ function ReviewBlock({ records, dueReviews, allRecords, activeProblem, mode, onS
         {revealedId === due.problemId ? <>
           <p className="mt-3 whitespace-pre-wrap break-words text-sm text-text-primary dark:text-text-dark-primary">{due.note}</p>
           <p className="mt-3 text-xs text-text-secondary dark:text-text-dark-secondary">刚才回忆得怎么样？根据你的自评安排下次复习。</p>
-          <div className="mt-2 flex flex-wrap gap-2">{([{ value: 1, label: '没想起' }, { value: 2, label: '很费力' }, { value: 3, label: '想起来了' }, { value: 4, label: '很轻松' }] as const).map(({ value, label }) => <button key={value} type="button" onClick={() => { try { onRate(due, value); setRevealedId(null); setSaveError('') } catch { setSaveError('复习记录保存失败，请检查本地存储空间。') } }} className="rounded-full border border-border px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-muted dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">{label}</button>)}</div>
+          <div className="mt-2 flex flex-wrap gap-2">{REVIEW_RATING_OPTIONS.map(({ value, label }) => <button key={value} type="button" onClick={() => { try { onRate(due, value); setRevealedId(null); setSaveError('') } catch { setSaveError('复习记录保存失败，请检查本地存储空间。') } }} className="rounded-full border border-border px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-muted dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">{label}</button>)}</div>
           <button type="button" disabled={!!dueReason} onClick={() => onDiscussReview(dueProblemKey, dueTitle, due.note)} className="mt-3 text-sm font-medium text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-40">带笔记问 Agent</button>
           {dueReason && <p className="mt-1 text-xs text-text-secondary dark:text-text-dark-secondary">{dueReason}</p>}
         </> : <button type="button" onClick={() => setRevealedId(due.problemId)} className="mt-3 text-sm font-medium text-accent hover:underline">显示笔记</button>}

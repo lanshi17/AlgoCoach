@@ -4,8 +4,8 @@ import Button from '@/components/Common/Button'
 import PageHeader from '@/components/Common/PageHeader'
 import { agentService } from '@/services/agentService'
 import { useNavigate } from 'react-router-dom'
-import { dueReviewEntries, rateReviewEntry, readReviewEntries, REVIEW_ROUND_LIMIT, setReviewMastered } from '@/services/reviewQueue'
-import type { ReviewRating } from '@/services/deepTutorScheduler'
+import { dueReviewEntries, rateReviewEntry, readReviewEntries, readReviewEvents, REVIEW_ROUND_LIMIT, setReviewMastered, type LocalReviewEvent, type LocalReviewEntry } from '@/services/reviewQueue'
+import { REVIEW_RATING_OPTIONS, type ReviewRating } from '@/services/deepTutorScheduler'
 import { prepareReviewDiscussion, reviewUnavailableReason } from '@/services/reviewDiscussion'
 import { useAppStore } from '@/stores/useAppStore'
 import { localPracticeOutcomeLabel, readLocalPracticeSyncQueue } from '@/services/localProgress'
@@ -18,6 +18,7 @@ export default function ProgressPage() {
   const mode = useAppStore(state => state.mode)
   const navigate = useNavigate()
   const [reviews, setReviews] = useState(() => readReviewEntries())
+  const [reviewEvents, setReviewEvents] = useState(() => readReviewEvents())
   const [reviewNow, setReviewNow] = useState(() => Date.now())
   const [revealedReview, setRevealedReview] = useState<string | null>(null)
   const [profile, setProfile] = useState<AgentProfile | null>(null)
@@ -26,6 +27,13 @@ export default function ProgressPage() {
   const requestSeq = useRef(0)
 
   const prepareReviewDiscussionAndNavigate = (problemKey: string | undefined, title: string, note: string) => { if (prepareReviewDiscussion(problemKey, title, note)) navigate('/workspace', { state: { openPanel: 'chat' } }) }
+
+  const rateReview = (problemId: string, rating: ReviewRating) => {
+    setReviews(rateReviewEntry(problemId, rating))
+    // The scheduler writes the event before the schedule; re-read so an ignored
+    // or rolled-back rating never shows a history row that was not persisted.
+    setReviewEvents(readReviewEvents())
+  }
 
   const load = async () => {
     const seq = ++requestSeq.current
@@ -126,11 +134,12 @@ export default function ProgressPage() {
             const due = dueReviewEntries(reviews, new Date(reviewNow))
             const pending = reviews.filter(review => !due.some(entry => entry.problemId === review.problemId))
             return <>
-              {due.length > 0 && <><h3 className="mt-5 font-medium text-text-primary dark:text-text-dark-primary">今日回想 · {due.length}</h3><div className="mt-3 divide-y divide-border dark:divide-border-dark">{due.slice(0, REVIEW_ROUND_LIMIT).map(review => <ProgressReview key={review.problemId} review={review} records={localPracticeRecords} activeProblem={activeProblem} mode={mode} onDiscuss={prepareReviewDiscussionAndNavigate} onRate={(entry, rating) => setReviews(rateReviewEntry(entry.problemId, rating))} onReveal={setRevealedReview} revealed={revealedReview === review.problemId} />)}</div>{due.length > REVIEW_ROUND_LIMIT && <p className="mt-3 text-xs text-text-secondary dark:text-text-dark-secondary">本轮先显示 {REVIEW_ROUND_LIMIT} 条，完成后会继续显示其余 {due.length - REVIEW_ROUND_LIMIT} 条。</p>}</>}
+              {due.length > 0 && <><h3 className="mt-5 font-medium text-text-primary dark:text-text-dark-primary">今日回想 · {due.length}</h3><div className="mt-3 divide-y divide-border dark:divide-border-dark">{due.slice(0, REVIEW_ROUND_LIMIT).map(review => <ProgressReview key={review.problemId} review={review} records={localPracticeRecords} activeProblem={activeProblem} mode={mode} onDiscuss={prepareReviewDiscussionAndNavigate} onRate={(entry, rating) => rateReview(entry.problemId, rating)} onReveal={setRevealedReview} revealed={revealedReview === review.problemId} />)}</div>{due.length > REVIEW_ROUND_LIMIT && <p className="mt-3 text-xs text-text-secondary dark:text-text-dark-secondary">本轮先显示 {REVIEW_ROUND_LIMIT} 条，完成后会继续显示其余 {due.length - REVIEW_ROUND_LIMIT} 条。</p>}</>}
               {pending.length > 0 && <><h3 className="mt-5 font-medium text-text-primary dark:text-text-dark-primary">之后再复习 · {pending.length}</h3><div className="mt-3 divide-y divide-border dark:divide-border-dark">{[...pending].reverse().map(review => <details key={review.problemId} className="py-3 text-sm"><summary className="cursor-pointer text-text-primary dark:text-text-dark-primary">{review.mastered ? '已掌握 · ' : ''}{review.title ?? localPracticeRecords.find(item => item.id === review.problemId)?.title ?? '原练习记录已过期'}</summary><p className="mt-2 text-xs text-text-secondary dark:text-text-dark-secondary">{review.mastered ? '已暂停每日安排' : `下次复习：${formatReviewDate(review.schedule?.due ?? new Date(Date.parse(review.reviewedAt) + 86400000).toISOString())}`}</p><p className="mt-2 whitespace-pre-wrap text-text-secondary dark:text-text-dark-secondary">{review.note}</p><button type="button" onClick={() => setReviews(setReviewMastered(review.problemId, !review.mastered))} className="mt-3 rounded-full border border-border px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-muted dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">{review.mastered ? '取消已掌握' : '标记已掌握'}</button></details>)}</div></>}
               {!reviews.length && <p className="mt-4 text-sm text-text-secondary dark:text-text-dark-secondary">保存复盘后，笔记会出现在这里。</p>}
             </>
           })()}
+          <ReviewEventHistory events={reviewEvents} reviews={reviews} records={localPracticeRecords} />
         </section>
       </div>
     </main>
@@ -150,7 +159,57 @@ function ProgressReview({ review, records, activeProblem, mode, onDiscuss, onRat
   const problemKey = review.problemKey ?? records.find(item => item.id === review.problemId)?.problemId
   const title = review.title ?? records.find(item => item.id === review.problemId)?.title ?? '原练习记录已过期'
   const reason = reviewUnavailableReason(problemKey, activeProblem, mode)
-  return <div className="py-3 text-sm"><p className="text-text-primary dark:text-text-dark-primary">{title} · 先试着回忆解法</p>{revealed ? <><p className="mt-3 whitespace-pre-wrap break-words text-text-secondary dark:text-text-dark-secondary">{review.note}</p><div className="mt-3 flex flex-wrap gap-2">{([{value:1,label:'没想起'},{value:2,label:'很费力'},{value:3,label:'想起来了'},{value:4,label:'很轻松'}] as const).map(({value,label})=><button key={value} type="button" onClick={()=>{try{onRate(review,value);onReveal(null)}catch{/* keep note visible if persistence fails */}}} className="rounded-full border border-border px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-muted dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">{label}</button>)}</div><button type="button" disabled={!!reason} onClick={()=>onDiscuss(problemKey,title,review.note)} className="mt-3 text-sm font-medium text-accent hover:underline disabled:opacity-40">带笔记问 Agent</button>{reason&&<p className="mt-2 text-xs text-text-muted dark:text-text-dark-muted">{reason}</p>}</>:<button type="button" onClick={()=>onReveal(review.problemId)} className="mt-2 text-sm font-medium text-accent hover:underline">显示笔记</button>}</div>
+  return <div className="py-3 text-sm"><p className="text-text-primary dark:text-text-dark-primary">{title} · 先试着回忆解法</p>{revealed ? <><p className="mt-3 whitespace-pre-wrap break-words text-text-secondary dark:text-text-dark-secondary">{review.note}</p><div className="mt-3 flex flex-wrap gap-2">{REVIEW_RATING_OPTIONS.map(({value,label})=><button key={value} type="button" onClick={()=>{try{onRate(review,value);onReveal(null)}catch{/* keep note visible if persistence fails */}}} className="rounded-full border border-border px-3 py-1.5 text-xs text-text-secondary hover:bg-surface-muted dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">{label}</button>)}</div><button type="button" disabled={!!reason} onClick={()=>onDiscuss(problemKey,title,review.note)} className="mt-3 text-sm font-medium text-accent hover:underline disabled:opacity-40">带笔记问 Agent</button>{reason&&<p className="mt-2 text-xs text-text-muted dark:text-text-dark-muted">{reason}</p>}</>:<button type="button" onClick={()=>onReveal(review.problemId)} className="mt-2 text-sm font-medium text-accent hover:underline">显示笔记</button>}</div>
+}
+const REVIEW_EVENT_HISTORY_LIMIT = 20
+
+function ReviewEventHistory({ events, reviews, records }: {
+  events: LocalReviewEvent[]
+  reviews: LocalReviewEntry[]
+  records: LocalPracticeRecord[]
+}) {
+  if (!events.length) return null
+  const recent = events.slice(-REVIEW_EVENT_HISTORY_LIMIT).reverse()
+  return <details className="mt-6 border-t border-border pt-4 dark:border-border-dark">
+    <summary className="cursor-pointer text-sm font-medium text-text-primary dark:text-text-dark-primary">复习评分记录 · {events.length} 次</summary>
+    <p className="mt-2 text-xs text-text-secondary dark:text-text-dark-secondary">每次自评都会留下本地记录，用于复核复习间隔；这里按时间倒序显示最近 {Math.min(events.length, REVIEW_EVENT_HISTORY_LIMIT)} 次。</p>
+    <div className="mt-3 overflow-x-auto">
+      <table className="w-full min-w-[28rem] text-left text-xs">
+        <caption className="sr-only">复习评分记录</caption>
+        <thead className="text-text-muted dark:text-text-dark-muted">
+          <tr>
+            <th scope="col" className="py-1.5 pr-3 font-medium">时间</th>
+            <th scope="col" className="py-1.5 pr-3 font-medium">题目</th>
+            <th scope="col" className="py-1.5 pr-3 font-medium">自评</th>
+            <th scope="col" className="py-1.5 font-medium">距下次复习</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border dark:divide-border-dark">
+          {recent.map((event, index) => {
+            const title = reviews.find(review => review.problemId === event.problemId)?.title
+              ?? records.find(record => record.id === event.problemId)?.title ?? '原练习记录已过期'
+            const ratingLabel = REVIEW_RATING_OPTIONS.find(option => option.value === event.rating)?.label ?? `评分 ${event.rating}`
+            return <tr key={`${event.problemId}-${event.reviewedAt}-${index}`}>
+              <td className="whitespace-nowrap py-2 pr-3 text-text-muted dark:text-text-dark-muted"><time dateTime={event.reviewedAt}>{formatReviewDate(event.reviewedAt)}</time></td>
+              <td className="max-w-[16rem] truncate py-2 pr-3 text-text-primary dark:text-text-dark-primary" title={title}>{title}</td>
+              <td className="whitespace-nowrap py-2 pr-3 text-text-secondary dark:text-text-dark-secondary">{ratingLabel}</td>
+              <td className="whitespace-nowrap py-2 text-text-secondary dark:text-text-dark-secondary" title={`下次复习：${formatReviewDate(event.dueAfter)}`}>{formatReviewGap(event.reviewedAt, event.dueAfter)}</td>
+            </tr>
+          })}
+        </tbody>
+      </table>
+    </div>
+  </details>
+}
+
+function formatReviewGap(reviewedAt: string, dueAfter: string): string {
+  const gap = Date.parse(dueAfter) - Date.parse(reviewedAt)
+  if (!Number.isFinite(gap) || gap <= 0) return '已到期'
+  const minutes = Math.round(gap / 60000)
+  if (minutes < 60) return `${Math.max(1, minutes)} 分钟`
+  const hours = gap / 3600000
+  if (hours < 36) return `${Math.round(hours)} 小时`
+  return `${Math.round(hours / 24)} 天`
 }
 function formatReviewDate(value: string) { const date=new Date(value); return Number.isFinite(date.getTime()) ? date.toLocaleString() : '未知' }
 

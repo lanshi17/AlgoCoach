@@ -8,6 +8,14 @@
  */
 export type ReviewRating = 1 | 2 | 3 | 4
 
+/** Self-assessment choices shared by every review surface, ordered from weakest to strongest recall. */
+export const REVIEW_RATING_OPTIONS: ReadonlyArray<{ value: ReviewRating; label: string }> = [
+  { value: 1, label: '没想起' },
+  { value: 2, label: '很费力' },
+  { value: 3, label: '想起来了' },
+  { value: 4, label: '很轻松' },
+]
+
 export interface ReviewCard {
   intervalDays: number
   ease: number

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import LearningSpacePage from './LearningSpacePage'
 import { agentService } from '@/services/agentService'
 import { createLearningTask, readLearningTasks } from '@/services/learningTasks'
+import { readReviewEntries, saveReviewEntry } from '@/services/reviewQueue'
 import { useAppStore } from '@/stores/useAppStore'
 
 let root: Root
@@ -52,4 +53,19 @@ it('moves a task across the board, archives it once done and restores it from th
   await act(async () => button('恢复').click())
   expect(readLearningTasks()[0]).toMatchObject({ archived: false, status: 'done' })
   expect(element.textContent).toContain('复盘二分边界')
+})
+
+it('rates a due review through the shared self-assessment labels', async () => {
+  saveReviewEntry('record', '先写清左右边界', { id: 'record', problemId: 'LOCAL:binary-search', title: '二分边界', topics: ['二分'], durationSec: 12, codeLength: 24, endedAt: '2026-01-01' })
+  const saved = JSON.parse(localStorage.getItem('algocoach.localReviewEntries')!)
+  saved[0].schedule.due = '2020-01-02T00:00:00.000Z'
+  localStorage.setItem('algocoach.localReviewEntries', JSON.stringify(saved))
+  useAppStore.setState({ activeProblem: null, mode: 'PREP', localPracticeRecords: [] })
+  await act(async () => root.render(<MemoryRouter initialEntries={['/']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><Routes><Route path="/" element={<LearningSpacePage />} /></Routes></MemoryRouter>))
+  expect(element.textContent).toContain('到期复习 · 1')
+  await act(async () => button('显示笔记').click())
+  for (const label of ['没想起', '很费力', '想起来了', '很轻松']) expect(button(label)).toBeTruthy()
+  await act(async () => button('想起来了').click())
+  expect(readReviewEntries()[0].schedule?.reviewCount).toBe(1)
+  expect(element.textContent).toContain('到期复习 · 0')
 })
