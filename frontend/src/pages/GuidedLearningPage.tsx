@@ -15,16 +15,17 @@ import { useLayoutStorageSync } from '@/components/Layout/useLayoutStorageSync'
 import type { ChatMessage as Message, CodeLanguage } from '@/types'
 import { workspaceStorageKey } from '@/services/deepTutorCapabilities'
 import {
-  DEFAULT_GUIDED_STAGES, buildGuidedPlanPrompt, parseGuidedPlan, sanitizeGuidedStages,
-  stageNeedsAnswer, type GuidedStage,
+  DEFAULT_GUIDED_STAGES, buildGuidedPlanPrompt, GUIDED_STAGE_TYPE_LABEL, MAX_GUIDED_STAGES,
+  newGuidedStage, parseGuidedPlan, sanitizeGuidedStages, stageNeedsAnswer, validateGuidedOutline,
+  type GuidedStage,
 } from '@/services/guidedPlan'
 import { LANGUAGE_OPTIONS } from '@/services/languages'
 import { guidedCodeTemplate, isGuidedCodeTemplate } from '@/services/guidedCodeTemplates'
 import { optionLine, parseChoiceAnswer, parseChoices, visibleReply } from '@/services/guidedChoice'
 import { clearGuidedSession, readGuidedSession, saveGuidedSession, type GuidedChoiceQuestion } from '@/services/guidedSession'
-import { ArrowRight, BookOpen, Check, Circle, Code2, ExternalLink, MessageCircle, PanelLeft, PanelTop, Plus, RotateCcw, Send, Sparkles } from 'lucide-react'
+import { ArrowDown, ArrowRight, ArrowUp, BookOpen, Check, Circle, Code2, ExternalLink, MessageCircle, PanelLeft, PanelTop, Pencil, Plus, RotateCcw, Send, Sparkles, Trash2 } from 'lucide-react'
 
-type PlanSource = 'ai' | 'default'
+type PlanSource = 'ai' | 'edited' | 'default'
 
 type GuidedLayout = {
   leftWidth: number
@@ -79,6 +80,9 @@ export default function GuidedLearningPage() {
   const [activeTopic, setActiveTopic] = useState('')
   const [stages, setStages] = useState<GuidedStage[]>(DEFAULT_GUIDED_STAGES)
   const [planSource, setPlanSource] = useState<PlanSource>('default')
+  const [editingOutline, setEditingOutline] = useState(false)
+  const [outlineDraft, setOutlineDraft] = useState<GuidedStage[]>([])
+  const [outlineError, setOutlineError] = useState('')
   const [planning, setPlanning] = useState(false)
   const [stage, setStage] = useState(0)
   const [messages, setMessages] = useState<Message[]>([])
@@ -205,7 +209,7 @@ export default function GuidedLearningPage() {
       : undefined
     setChoiceQuestions(restored.choiceQuestions ?? {})
     setStages(restoredStages)
-    setPlanSource(restored.planSource === 'ai' ? 'ai' : 'default')
+    setPlanSource(restored.planSource === 'ai' || restored.planSource === 'edited' ? restored.planSource : 'default')
     setTopic(restored.topic)
     setActiveTopic(restored.topic)
     setStage(restoredStage)
@@ -412,6 +416,69 @@ export default function GuidedLearningPage() {
     setActiveTopic(''); setTopic(''); setMessages([]); setStages(DEFAULT_GUIDED_STAGES); setPlanSource('default')
     setStage(0); setAnswered(false); setQuestionId(null); setChoiceQuestions({}); setPicked(''); setFeedback('')
     setConversationId(nanoid()); setError(''); setErrorAction(null); setCode(guidedCodeTemplate('python3')); setCodeLang('python3'); setNoteStatus(''); setDraft('')
+    setEditingOutline(false); setOutlineDraft([]); setOutlineError('')
+  }
+
+  const beginOutlineEdit = () => {
+    setOutlineDraft(stages.map(stage => ({ ...stage })))
+    setOutlineError('')
+    setEditingOutline(true)
+  }
+
+  const cancelOutlineEdit = () => {
+    setEditingOutline(false)
+    setOutlineDraft([])
+    setOutlineError('')
+  }
+
+  const renameOutlineStage = (index: number, name: string) => {
+    setOutlineDraft(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, name } : item))
+    setOutlineError('')
+  }
+
+  const moveOutlineStage = (index: number, direction: -1 | 1) => {
+    setOutlineDraft(current => {
+      const target = index + direction
+      if (target < 0 || target >= current.length) return current
+      const next = [...current]
+      ;[next[index], next[target]] = [next[target], next[index]]
+      return next
+    })
+    setOutlineError('')
+  }
+
+  const removeOutlineStage = (index: number) => {
+    setOutlineDraft(current => current.filter((_, itemIndex) => itemIndex !== index))
+    setOutlineError('')
+  }
+
+  const addOutlineStage = () => {
+    setOutlineDraft(current => {
+      if (current.length >= MAX_GUIDED_STAGES) return current
+      const reviewIndex = current.findIndex(item => item.type === 'review')
+      const next = [...current]
+      next.splice(reviewIndex < 0 ? next.length : reviewIndex, 0, newGuidedStage('concept', '新阶段', nanoid()))
+      return next
+    })
+    setOutlineError('')
+  }
+
+  const saveOutlineEdit = () => {
+    const cleaned = outlineDraft.map(item => ({ ...item, name: item.name.trim() }))
+    const invalid = validateGuidedOutline(cleaned)
+    if (invalid) { setOutlineError(invalid); return }
+    const currentId = stages[stage]?.id
+    setStages(cleaned)
+    setPlanSource('edited')
+    const nextStageIndex = cleaned.findIndex(item => item.id === currentId)
+    if (nextStageIndex >= 0) {
+      setStage(nextStageIndex)
+    } else {
+      // Deleting the current stage is blocked in the editor; this is a safety net.
+      setStage(Math.min(stage, cleaned.length - 1))
+      setAnswered(false); setQuestionId(null); setPicked(''); setFeedback('')
+    }
+    setEditingOutline(false); setOutlineDraft([]); setOutlineError('')
   }
 
   const resetLayout = () => {
@@ -439,14 +506,46 @@ export default function GuidedLearningPage() {
       </header>
       <div ref={workspaceRef} className="guided-workspace min-h-0 flex-1" style={{ '--guided-cols': guidedColumns } as CSSProperties}>
         {leftOpen && <aside className="relative min-w-0 rounded-panel border border-border bg-surface p-4 dark:border-border-dark dark:bg-surface-dark" aria-label="学习大纲">
-          <div className="flex items-center gap-2 text-sm font-semibold text-text-primary dark:text-text-dark-primary"><Sparkles size={16} className="text-accent" />学习路径<span className="ml-auto rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">{planning ? '规划中' : activeTopic ? (planSource === 'ai' ? 'AI 规划' : '默认路径') : '待规划'}</span></div>
-          <p className="mt-1 text-xs leading-5 text-text-muted dark:text-text-dark-muted">{planning ? 'AI 正在根据主题规划学习阶段…' : '由 AI 教练根据主题自动规划，理解概念、逐步练习，再回顾思路。'}</p>
-          <ol aria-label="学习阶段" className="mt-4 grid grid-cols-2 gap-1 sm:grid-cols-5 lg:grid-cols-1">
+          <div className="flex items-center gap-2 text-sm font-semibold text-text-primary dark:text-text-dark-primary"><Sparkles size={16} className="text-accent" />学习路径<span className="ml-auto whitespace-nowrap rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">{editingOutline ? '编辑中' : planning ? '规划中' : activeTopic ? (planSource === 'ai' ? 'AI 规划' : planSource === 'edited' ? '已编辑' : '默认路径') : '待规划'}</span>{activeTopic && !editingOutline && <button type="button" disabled={busy || planning} aria-label="编辑学习大纲" title="编辑学习大纲" onClick={beginOutlineEdit} className="shrink-0 rounded p-1 text-text-muted transition-colors hover:bg-surface-muted hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 dark:text-text-dark-muted dark:hover:bg-surface-dark-muted"><Pencil size={13} /></button>}</div>
+          <p className="mt-1 text-xs leading-5 text-text-muted dark:text-text-dark-muted">{editingOutline ? '调整阶段名称、顺序或数量；最后必须是复盘，并至少保留一个编程阶段。' : planning ? 'AI 正在根据主题规划学习阶段…' : '由 AI 教练根据主题自动规划，理解概念、逐步练习，再回顾思路。'}</p>
+          {editingOutline ? <div className="mt-3">
+            <ol aria-label="编辑学习阶段" className="space-y-1">
+              {outlineDraft.map((item, index) => {
+                const reviewCount = outlineDraft.filter(stage => stage.type === 'review').length
+                const codeCount = outlineDraft.filter(stage => stage.type === 'code').length
+                const label = item.name.trim() || `阶段 ${index + 1}`
+                const isCurrent = item.id === stages[stage]?.id
+                const deleteDisabled = isCurrent || (item.type === 'review' && reviewCount === 1) || (item.type === 'code' && codeCount === 1)
+                const deleteTitle = isCurrent ? '当前阶段不能删除' : item.type === 'review' && reviewCount === 1 ? '至少保留一个复盘阶段' : item.type === 'code' && codeCount === 1 ? '至少保留一个编程阶段' : `删除阶段：${label}`
+                return <li key={item.id} className="rounded-card border border-border bg-surface-soft p-1.5 dark:border-border-dark dark:bg-surface-dark-soft">
+                  <input
+                    value={item.name}
+                    maxLength={40}
+                    aria-label={`阶段 ${index + 1} 名称`}
+                    onChange={event => renameOutlineStage(index, event.target.value)}
+                    className="w-full rounded border border-border bg-surface px-2 py-1 text-xs tracking-cn text-text-primary outline-none transition-colors focus:border-accent dark:border-border-dark dark:bg-surface-dark dark:text-text-dark-primary"
+                  />
+                  <div className="mt-1 flex items-center gap-1 text-text-muted dark:text-text-dark-muted">
+                    <span className="rounded-full bg-surface-muted px-1.5 py-0.5 text-[10px] dark:bg-surface-dark-muted">{GUIDED_STAGE_TYPE_LABEL[item.type]}</span>
+                    <button type="button" aria-label={`上移阶段：${label}`} disabled={index === 0} onClick={() => moveOutlineStage(index, -1)} className="ml-auto rounded p-1 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-surface-dark-muted"><ArrowUp size={12} /></button>
+                    <button type="button" aria-label={`下移阶段：${label}`} disabled={index === outlineDraft.length - 1} onClick={() => moveOutlineStage(index, 1)} className="rounded p-1 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-surface-dark-muted"><ArrowDown size={12} /></button>
+                    <button type="button" aria-label={`删除阶段：${label}`} title={deleteTitle} disabled={deleteDisabled} onClick={() => removeOutlineStage(index)} className="rounded p-1 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-surface-dark-muted"><Trash2 size={12} /></button>
+                  </div>
+                </li>
+              })}
+            </ol>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button type="button" disabled={outlineDraft.length >= MAX_GUIDED_STAGES} onClick={addOutlineStage} className="inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-40"><Plus size={12} />添加阶段</button>
+              <button type="button" onClick={saveOutlineEdit} className="rounded-full bg-[#111317] px-2.5 py-1 text-[11px] font-medium text-white transition-opacity hover:opacity-90">保存大纲</button>
+              <button type="button" onClick={cancelOutlineEdit} className="rounded-full border border-border px-2.5 py-1 text-[11px] text-text-secondary hover:bg-surface-muted dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">取消</button>
+            </div>
+            {outlineError && <p role="alert" className="mt-2 text-[11px] leading-4 text-danger">{outlineError}</p>}
+          </div> : <ol aria-label="学习阶段" className="mt-4 grid grid-cols-2 gap-1 sm:grid-cols-5 lg:grid-cols-1">
             {stages.map((item, index) => <li key={item.id} aria-current={activeTopic && index === stage ? 'step' : undefined} className={`flex items-center gap-2 rounded-card px-2.5 py-2.5 text-xs ${activeTopic && index === stage ? 'bg-accent/10 font-medium text-accent' : 'text-text-secondary dark:text-text-dark-secondary'}`}>
               {activeTopic && index < stage ? <Check size={15} className="shrink-0 text-accent" /> : index === stage && activeTopic ? <span className="flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full bg-accent text-[9px] text-white">{index + 1}</span> : <Circle size={15} className="shrink-0 opacity-40" />}
               <span>{item.name}</span>
             </li>)}
-          </ol>
+          </ol>}
           <div className="mt-4 hidden border-t border-border pt-4 text-xs leading-5 text-text-muted dark:border-border-dark dark:text-text-dark-muted lg:block">{activeTopic ? '可以随时向教练追问。准备好后，再进入下一阶段。' : '选择一个想掌握的知识点，开始这次学习。'}</div>
           <ColumnResizer side="right" width={leftWidth} min={LEFT_MIN} max={leftLimit} defaultWidth={DEFAULT_GUIDED_LAYOUT.leftWidth} label="调整大纲宽度" onResize={width => setLayout(current => ({ ...current, leftWidth: width }))} />
         </aside>}

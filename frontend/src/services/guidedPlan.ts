@@ -62,6 +62,37 @@ const TYPE_ALIASES: Record<string, GuidedStageType> = {
 
 const MAX_STAGES = 8
 
+export const MAX_GUIDED_STAGES = MAX_STAGES
+
+export const GUIDED_STAGE_TYPE_LABEL: Record<GuidedStageType, string> = {
+  concept: '概念',
+  choice: '选择',
+  short: '问答',
+  code: '编程',
+  review: '复盘',
+}
+
+/** Creates a stage with the default coach instruction for its type. */
+export function newGuidedStage(type: GuidedStageType, name: string, id: string): GuidedStage {
+  return { id, name, type, instruction: STAGE_INSTRUCTIONS[type] }
+}
+
+/**
+ * Checks a learner-edited outline. The page requires a final review and a code
+ * stage; names double as restore markers, so they must be unique and non-empty.
+ */
+export function validateGuidedOutline(stages: GuidedStage[]): string | null {
+  if (stages.length > MAX_STAGES) return `最多保留 ${MAX_STAGES} 个阶段。`
+  if (stages.length < 2) return '至少保留两个阶段。'
+  const names = stages.map(stage => stage.name.trim())
+  if (names.some(name => !name)) return '阶段名称不能为空。'
+  if (new Set(names).size !== names.length) return '阶段名称不能重复。'
+  if (stages.filter(stage => stage.type === 'review').length !== 1) return '只能保留一个复盘阶段。'
+  if (stages[stages.length - 1].type !== 'review') return '最后一个阶段必须是复盘。'
+  if (!stages.some(stage => stage.type === 'code')) return '至少保留一个编程阶段。'
+  return null
+}
+
 export const DEFAULT_GUIDED_STAGES: GuidedStage[] = [
   { id: 'default-concept', name: '学习知识点', type: 'concept', instruction: STAGE_INSTRUCTIONS.concept },
   { id: 'default-choice', name: '选择题', type: 'choice', instruction: STAGE_INSTRUCTIONS.choice },

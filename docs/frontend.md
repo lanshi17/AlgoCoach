@@ -271,12 +271,13 @@ frontend/
 
 **内部状态**：
 - `topic` / `activeTopic`：待开始与进行中的学习主题
-- `stages` / `planSource`：当前大纲；`ai` 表示由 `buildGuidedPlanPrompt` 返回并解析，`default` 表示使用 `DEFAULT_GUIDED_STAGES`
+- `stages` / `planSource`：当前大纲；`ai` 表示由 `buildGuidedPlanPrompt` 返回并解析，`default` 表示使用 `DEFAULT_GUIDED_STAGES`，`edited` 表示学习者保存过页内编辑
 - `stage` / `answered` / `questionId` / `choiceQuestions`：阶段推进与选择题判分
 - `messages`、`draft`、`busy`、`planning`、`error`、`errorAction`：对话流与错误修复入口
 - `code` / `codeLang`：编程阶段的作答与语言
 - `layout`：大纲/代码栏宽度、折叠状态、代码浮窗位置，写入 `workspaceStorageKey('algocoach.guidedLayout')`（版本信封 + 120ms 防抖 + 跨标签页同步）
 - 学习会话快照：主题、大纲、当前阶段、消息、选择题作答、代码与语言写入 `workspaceStorageKey('algocoach.guidedLearning')` 的 localStorage（版本信封）；旧版 sessionStorage 数据在首次读取时自动迁移，重置主题时清除。快照只在本机浏览器，不写入 Agent 记忆或工作区导出。
+- 大纲编辑：点击学习路径旁的铅笔进入编辑态，可改名、上下移动、删除和添加阶段；保存前校验名称非空且唯一、最多 8 个、最后一个必须是复盘、至少保留一个编程阶段。保存后标记为 `edited` 并随快照持久化；当前阶段按 id 保留，当前阶段不允许删除。
 
 **关键逻辑**：
 - 「开始学习」先调用 `planOutline()` 让 Agent 输出 JSON 大纲，`parseGuidedPlan()` 归一化类型、补齐编程阶段、保证唯一复盘阶段并限制为 8 个阶段；解析失败回退默认路径

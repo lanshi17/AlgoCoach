@@ -18,7 +18,7 @@ export interface GuidedSessionSnapshot {
   choiceQuestions?: Record<string, GuidedChoiceQuestion>
   /** Outline candidates; the page re-validates them with `sanitizeGuidedStages`. */
   stages?: unknown
-  planSource?: 'ai' | 'default'
+  planSource?: 'ai' | 'edited' | 'default'
   code?: string
   codeLang?: CodeLanguage
 }

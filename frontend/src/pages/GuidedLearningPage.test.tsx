@@ -421,3 +421,62 @@ it('restores the planned outline and messages after the tab session is gone', as
   expect(chat).toHaveBeenCalledTimes(2)
   act(() => secondRoot.unmount()); second.remove()
 })
+
+it('edits the outline while keeping the current stage and blocks invalid names', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.setState({ mode: 'PREP' })
+  vi.spyOn(agentService, 'chatStream').mockImplementation(async message => ({
+    content: message.includes('学习规划师') ? defaultPlan : '讲解。',
+  }))
+  const element = document.createElement('div'); document.body.appendChild(element)
+  const root = createRoot(element)
+  await act(async () => root.render(<MemoryRouter><GuidedLearningPage /></MemoryRouter>))
+  const input = element.querySelector<HTMLInputElement>('input[aria-label="学习知识点"]')!
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+  const button = (label: string) => Array.from(element.querySelectorAll('button')).find(item => item.textContent?.trim() === label)!
+  await act(async () => { setValue.call(input, '二分'); input.dispatchEvent(new Event('input', { bubbles: true })) })
+  await act(async () => { button('开始学习').click() })
+  expect(element.textContent).toContain('AI 规划')
+
+  await act(async () => { (element.querySelector('[aria-label="编辑学习大纲"]') as HTMLButtonElement).click() })
+  const firstInput = element.querySelector<HTMLInputElement>('input[aria-label="阶段 1 名称"]')!
+  await act(async () => {
+    setValue.call(firstInput, '自定义概念')
+    firstInput.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => { (element.querySelector('[aria-label="下移阶段：自定义概念"]') as HTMLButtonElement).click() })
+  expect((element.querySelector('[aria-label="删除阶段：自定义概念"]') as HTMLButtonElement).disabled).toBe(true)
+  await act(async () => { (element.querySelector('[aria-label="删除阶段：选择题"]') as HTMLButtonElement).click() })
+  await act(async () => { button('添加阶段').click() })
+  await act(async () => { button('保存大纲').click() })
+
+  expect(element.textContent).toContain('已编辑')
+  const outline = element.querySelector('[aria-label="学习阶段"]')!
+  expect(Array.from(outline.querySelectorAll('li')).map(item => item.lastElementChild?.textContent)).toEqual(['自定义概念', '问答题', '编程题', '新阶段', '复盘'])
+  expect(outline.querySelector('[aria-current="step"]')?.textContent).toContain('自定义概念')
+  const saved = JSON.parse(localStorage.getItem('algocoach.guidedLearning')!).session
+  expect(saved.planSource).toBe('edited')
+  expect(saved.stages).toHaveLength(5)
+
+  await act(async () => { (element.querySelector('[aria-label="编辑学习大纲"]') as HTMLButtonElement).click() })
+  const emptied = element.querySelector<HTMLInputElement>('input[aria-label="阶段 1 名称"]')!
+  await act(async () => {
+    setValue.call(emptied, '   ')
+    emptied.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => { button('保存大纲').click() })
+  expect(element.querySelector('[role="alert"]')?.textContent).toContain('阶段名称不能为空')
+  await act(async () => { button('取消').click() })
+  expect(element.textContent).not.toContain('保存大纲')
+  act(() => root.unmount()); element.remove()
+
+  sessionStorage.clear()
+  const restored = document.createElement('div'); document.body.appendChild(restored)
+  const restoredRoot = createRoot(restored)
+  await act(async () => restoredRoot.render(<MemoryRouter><GuidedLearningPage /></MemoryRouter>))
+  expect(restored.textContent).toContain('已编辑')
+  const restoredOutline = restored.querySelector('[aria-label="学习阶段"]')!
+  expect(Array.from(restoredOutline.querySelectorAll('li')).map(item => item.lastElementChild?.textContent)).toEqual(['自定义概念', '问答题', '编程题', '新阶段', '复盘'])
+  act(() => restoredRoot.unmount()); restored.remove()
+})
