@@ -232,6 +232,12 @@ def test_replay_mastery_uses_elo_deltas_and_clamps():
     assert self_improve._replay_mastery(
         0.01, [(NOW, 1, 0, "WRONG_ANSWER")]
     ) == pytest.approx(0.0)
+    assert self_improve._replay_mastery(
+        0.50, [(NOW, 1, 0, "LOCAL_ACCEPTED")]
+    ) == pytest.approx(0.55)
+    assert self_improve._replay_mastery(
+        0.50, [(NOW, 1, 0, "GUIDED_ACCEPTED")]
+    ) == pytest.approx(0.53)
 
 
 def test_score_values_applies_the_documented_thresholds():

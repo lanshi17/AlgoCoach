@@ -49,7 +49,19 @@ MAX_MASTERY_PATH_STEPS = 12
 MIN_REVIEW_PUSH_INTERVAL_DAYS = 2
 # Episodes older than this are copied to episodic_archive and removed.
 ARCHIVE_AFTER_DAYS = 90
+# Statuses that count as a successful attempt. Guided stages are model-reviewed
+# evidence, so they move mastery less than a judge/local-run acceptance.
+ACCEPTED_STATUSES = frozenset({"ACCEPTED", "LOCAL_ACCEPTED", "GUIDED_ACCEPTED"})
+GUIDED_ACCEPTED_DELTA = 0.03
 _WORKSPACE_KEY_SEPARATOR = "\x1f"
+
+
+def mastery_delta(status: str | None) -> float:
+    """The same ELO step used live and by the self-improvement replay."""
+    key = str(status or "").upper()
+    if key == "GUIDED_ACCEPTED":
+        return GUIDED_ACCEPTED_DELTA
+    return 0.05 if key in ACCEPTED_STATUSES else -0.08
 
 
 def normalize_workspace_id(value: str | None) -> str:
@@ -150,7 +162,7 @@ def _episode_is_due_material(episode: EpisodicRecord) -> bool:
     """
     status = (episode.status or "").upper()
     sticking = _json_list(episode.sticking_points)
-    if status in {"ACCEPTED", "LOCAL_ACCEPTED", "REVIEWED", "LOCAL_PRACTICE"}:
+    if status in {"ACCEPTED", "LOCAL_ACCEPTED", "GUIDED_ACCEPTED", "REVIEWED", "LOCAL_PRACTICE"}:
         return bool(sticking)
     return True
 
@@ -322,9 +334,9 @@ class MemoryService:
             for topic in topics:
                 await self._ensure_topic(topic, workspace)
         else:
+            delta = mastery_delta(status)
             for topic in topics:
-                accepted = status in {"ACCEPTED", "LOCAL_ACCEPTED"}
-                await self._update_mastery(topic, accepted, workspace)
+                await self._update_mastery(topic, delta > 0, workspace, delta=delta)
 
         # Keep the durable review queue in sync with fresh evidence.
         if _episode_is_due_material(rec):
@@ -373,22 +385,27 @@ class MemoryService:
     async def _update_mastery(
         self, topic: str, accepted: bool,
         workspace_id: str = DEFAULT_WORKSPACE_ID,
+        delta: float | None = None,
     ) -> None:
-        """ELO-inspired mastery update: +0.05 on accept, -0.08 on fail, clamped 0–1."""
-        delta = 0.05 if accepted else -0.08
+        """ELO-inspired mastery update: +0.05 on accept, -0.08 on fail, clamped 0–1.
+
+        ``delta`` overrides the default step for evidence classes such as guided
+        stage passes, which move mastery less than a judge acceptance.
+        """
+        step = (0.05 if accepted else -0.08) if delta is None else delta
         workspace = normalize_workspace_id(workspace_id)
         key = _storage_key(topic, workspace)
         async with SessionLocal() as s:
             existing = await s.get(SemanticNode, key)
             if existing:
-                existing.mastery = max(0.0, min(1.0, existing.mastery + delta))
+                existing.mastery = max(0.0, min(1.0, existing.mastery + step))
                 existing.attempts += 1
                 existing.last_seen = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             else:
                 s.add(SemanticNode(
                     topic=key,
                     workspace_id=workspace,
-                    mastery=max(0.0, 0.5 + delta),
+                    mastery=max(0.0, 0.5 + step),
                     attempts=1,
                     last_seen=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 ))

@@ -1,7 +1,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentService } from '@/services/agentService'
 import { useAppStore } from '@/stores/useAppStore'
 import GuidedLearningPage from './GuidedLearningPage'
@@ -15,6 +15,8 @@ const plan = JSON.stringify({ stages: [
   { name: '编程题', type: 'code', instruction: '给出一道编程练习。' },
   { name: '复盘', type: 'review', instruction: '复盘本次学习。' },
 ] })
+
+beforeEach(() => { vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 })) })
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); sessionStorage.clear(); localStorage.clear() })
 

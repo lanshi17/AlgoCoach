@@ -65,6 +65,7 @@ from app.memory.memory_service import (
     _iso,
     _json_list,
     _parse_iso,
+    mastery_delta,
     memory,
     normalize_workspace_id,
     utcnow,
@@ -330,14 +331,14 @@ def _replay_mastery(before: float, events: list[tuple]) -> float:
     """Replay the project's ELO rule from the recommendation baseline.
 
     ``events`` are ``(created_at, id, source, status)`` tuples already filtered
-    to the topic and sorted by episode time/id. Each accepted attempt adds 0.05
-    and every other status subtracts 0.08, clamped to ``[0, 1]`` after each step
-    — the same rule ``MemoryService._update_mastery`` applies live.
+    to the topic and sorted by episode time/id. Each accepted attempt adds 0.05,
+    guided passes add 0.03, every other status subtracts 0.08, clamped to
+    ``[0, 1]`` after each step — the same rule ``MemoryService._update_mastery``
+    applies live.
     """
     mastery = max(0.0, min(1.0, float(before)))
     for _when, _episode_id, _source, status in events:
-        delta = 0.05 if str(status or "").upper() == "ACCEPTED" else -0.08
-        mastery = max(0.0, min(1.0, mastery + delta))
+        mastery = max(0.0, min(1.0, mastery + mastery_delta(status)))
     return mastery
 
 

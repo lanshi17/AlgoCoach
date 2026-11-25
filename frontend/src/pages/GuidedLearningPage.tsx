@@ -23,6 +23,7 @@ import { LANGUAGE_OPTIONS } from '@/services/languages'
 import { guidedCodeTemplate, isGuidedCodeTemplate } from '@/services/guidedCodeTemplates'
 import { optionLine, parseChoiceAnswer, parseChoices, visibleReply } from '@/services/guidedChoice'
 import { clearGuidedSession, readGuidedSession, saveGuidedSession, type GuidedChoiceQuestion } from '@/services/guidedSession'
+import { flushGuidedMasteryQueue, queueGuidedMastery, readGuidedMasteryQueue, type GuidedMasterySyncResult } from '@/services/guidedMastery'
 import { ArrowDown, ArrowRight, ArrowUp, BookOpen, Check, Circle, Code2, ExternalLink, MessageCircle, PanelLeft, PanelTop, Pencil, Plus, RotateCcw, Send, Sparkles, Trash2 } from 'lucide-react'
 
 type PlanSource = 'ai' | 'edited' | 'default'
@@ -98,6 +99,8 @@ export default function GuidedLearningPage() {
   const [picked, setPicked] = useState('')
   const [feedback, setFeedback] = useState('')
   const [streamedReply, setStreamedReply] = useState('')
+  const [stageStartedAt, setStageStartedAt] = useState(() => Date.now())
+  const [masterySync, setMasterySync] = useState<'idle' | 'syncing' | GuidedMasterySyncResult>('idle')
   const [code, setCode] = useState('')
   const [codeLang, setCodeLang] = useState<CodeLanguage>('python3')
   const [conversationId, setConversationId] = useState(() => nanoid())
@@ -223,7 +226,16 @@ export default function GuidedLearningPage() {
     const restoredLang = LANGUAGE_OPTIONS.some(option => option.value === restored.codeLang) ? restored.codeLang! : 'python3'
     setCodeLang(restoredLang)
     setCode(typeof restored.code === 'string' && restored.code.trim() ? restored.code : guidedCodeTemplate(restoredLang))
+    setStageStartedAt(Date.now())
   }, [restored])
+
+  useEffect(() => {
+    if (!readGuidedMasteryQueue().length) return
+    let mounted = true
+    setMasterySync('syncing')
+    void flushGuidedMasteryQueue().then(result => { if (mounted) setMasterySync(result) })
+    return () => { mounted = false }
+  }, [])
 
   const hydrated = useRef(false)
   useEffect(() => {
@@ -322,6 +334,7 @@ export default function GuidedLearningPage() {
     const plan = await planOutline(value)
     if (!plan) return
     const first = plan.stages[0]
+    setStageStartedAt(Date.now())
     const question = await ask(`当前学习主题：${value}。${first.instruction}`, `进入${first.name}`, first.type === 'choice' ? 'choice' : undefined)
     if (!question) return
     setActiveTopic(value)
@@ -345,10 +358,24 @@ export default function GuidedLearningPage() {
     if (question.correct) setChoiceQuestions(current => ({ ...current, [question.id]: { correct: question.correct!, attempts: [] } }))
     if (next.type === 'code' && nextStage !== stage) setCode(guidedCodeTemplate(codeLang))
     setStage(nextStage)
+    setStageStartedAt(Date.now())
     setAnswered(false)
     setQuestionId(question.id)
     setPicked('')
     setFeedback('')
+  }
+
+  const syncStageMastery = async (stage: GuidedStage) => {
+    if (!activeTopic) return
+    queueGuidedMastery({
+      topic: activeTopic,
+      stageId: stage.id,
+      conversationId,
+      lang: stage.type === 'code' ? codeLang : 'unknown',
+      durationSec: Math.max(0, Math.round((Date.now() - stageStartedAt) / 1000)),
+    })
+    setMasterySync('syncing')
+    setMasterySync(await flushGuidedMasteryQueue())
   }
 
   const send = async () => {
@@ -364,6 +391,7 @@ export default function GuidedLearningPage() {
     if (verdict === '通过') setFeedback('教练认为本题已掌握，可以进入下一阶段。')
     else if (verdict === '再练') setFeedback('还需要再练习，可以根据反馈修改答案后重新提交。')
     else setFeedback('教练未能给出明确评价，请补充答案后重试。')
+    if (verdict === '通过' && currentStage && (currentStage.type === 'short' || currentStage.type === 'code')) void syncStageMastery(currentStage)
   }
 
   const submitAnswer = async (value: string) => {
@@ -409,6 +437,7 @@ export default function GuidedLearningPage() {
       ? '教练认为本题已掌握，可以进入下一阶段。'
       : '还需要再练习，可以重新选择后再提交。')
     setPicked('')
+    if (passed && currentStage) void syncStageMastery(currentStage)
     await ask(
       `题目：\n${question.content}\n学生选了 ${picked}，正确选项为 ${choice.correct}。判分已完成。\n${passed ? '解释这个选项为什么正确。' : '针对所选选项给一个提示，鼓励再试一次，不要公布正确选项。'}`,
       `我的选择：${picked}`,
@@ -420,6 +449,7 @@ export default function GuidedLearningPage() {
     setStage(0); setAnswered(false); setQuestionId(null); setChoiceQuestions({}); setPicked(''); setFeedback('')
     setConversationId(nanoid()); setError(''); setErrorAction(null); setCode(guidedCodeTemplate('python3')); setCodeLang('python3'); setNoteStatus(''); setDraft('')
     setEditingOutline(false); setOutlineDraft([]); setOutlineError(''); setEditedInstructionIds([])
+    setStageStartedAt(Date.now()); setMasterySync('idle')
   }
 
   const beginOutlineEdit = () => {
@@ -597,6 +627,7 @@ export default function GuidedLearningPage() {
             </li>)}
           </ol>}
           <div className="mt-4 hidden border-t border-border pt-4 text-xs leading-5 text-text-muted dark:border-border-dark dark:text-text-dark-muted lg:block">{activeTopic ? '可以随时向教练追问。准备好后，再进入下一阶段。' : '选择一个想掌握的知识点，开始这次学习。'}</div>
+          {masterySync !== 'idle' && <p role="status" className="mt-2 text-[10px] leading-4 text-text-muted dark:text-text-dark-muted">{masterySync === 'syncing' ? '正在同步掌握度…' : masterySync === 'synced' ? '掌握度已同步到训练记忆' : '掌握度等待同步'}</p>}
           </div>
           {editingOutline && <div className="mt-2 shrink-0 border-t border-border pt-2 dark:border-border-dark">
             <div className="flex flex-wrap items-center gap-2">

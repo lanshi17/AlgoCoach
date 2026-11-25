@@ -48,3 +48,12 @@ it('creates a stage with the default instruction for its type', () => {
   expect(defaultGuidedInstruction('review')).toContain('复盘')
   expect(defaultGuidedInstruction('choice')).toContain('单选题')
 })
+
+it('preserves supplied stage ids so mastery client ids survive a restore', () => {
+  const restored = sanitizeGuidedStages([
+    { id: 'custom-concept', name: '概念', type: 'concept', instruction: '讲。' },
+    { id: 'custom-concept', name: '编码', type: 'code', instruction: '写。' },
+    { id: 'custom-review', name: '复盘', type: 'review', instruction: '复盘。' },
+  ])
+  expect(restored?.map(stage => stage.id)).toEqual(['custom-concept', 'plan-stage-2-1', 'custom-review'])
+})

@@ -1,9 +1,10 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentService } from '@/services/agentService'
 import { GUIDED_CODE_TEMPLATES } from '@/services/guidedCodeTemplates'
+import { readGuidedMasteryQueue } from '@/services/guidedMastery'
 import { useAppStore } from '@/stores/useAppStore'
 import GuidedLearningPage from './GuidedLearningPage'
 
@@ -19,6 +20,8 @@ const defaultPlan = JSON.stringify({ stages: [
   { name: '编程题', type: 'code', instruction: '给出一道编程练习。' },
   { name: '复盘', type: 'review', instruction: '复盘本次学习。' },
 ] })
+
+beforeEach(() => { vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 })) })
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); sessionStorage.clear(); localStorage.clear() })
 
@@ -540,5 +543,44 @@ it('edits a stage type and instruction, resets the current question, and offers 
   expect(button('重新出题')).toBeTruthy()
   await act(async () => { button('重新出题').click() })
   expect((element.querySelector('textarea[aria-label="编程题代码编辑器"]') as HTMLTextAreaElement).value).toContain('def search(nums, target)')
+  act(() => root.unmount()); element.remove()
+})
+
+it('syncs a passed choice stage to the agent mastery record', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.setState({ mode: 'PREP' })
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+  vi.stubGlobal('fetch', fetchMock)
+  vi.spyOn(agentService, 'chatStream').mockImplementation(async message => ({
+    content: message.includes('学习规划师') ? defaultPlan
+      : message.includes('单选题') ? '请选择正确的选项：\nA. 第一项\nB. 第二项\nC. 第三项\nD. 第四项\n[[答案:A]]'
+        : '解释。',
+  }))
+  const element = document.createElement('div'); document.body.appendChild(element)
+  const root = createRoot(element)
+  await act(async () => root.render(<MemoryRouter><GuidedLearningPage /></MemoryRouter>))
+  const input = element.querySelector<HTMLInputElement>('input[aria-label="学习知识点"]')!
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+  const button = (label: string) => Array.from(element.querySelectorAll('button')).find(item => item.textContent?.trim() === label)!
+  await act(async () => { setValue.call(input, '二分'); input.dispatchEvent(new Event('input', { bubbles: true })) })
+  await act(async () => { button('开始学习').click() })
+  await act(async () => { button('下一步：选择题').click() })
+  await act(async () => { (element.querySelectorAll('[aria-label="选择题选项"] button')[0] as HTMLButtonElement).click() })
+  await act(async () => { button('提交选择').click() })
+  await act(async () => { await Promise.resolve() })
+
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+  const payload = JSON.parse(fetchMock.mock.calls[0][1].body)
+  expect(payload).toMatchObject({
+    platform: 'GUIDED',
+    status: 'GUIDED_ACCEPTED',
+    problem_id: 'guided:二分',
+    topics: ['二分'],
+  })
+  expect(payload.duration_sec).toBeGreaterThanOrEqual(0)
+  expect(payload.client_id).toMatch(/^guided:[a-z0-9]+$/)
+  expect(readGuidedMasteryQueue()).toHaveLength(0)
+  expect(element.textContent).toContain('掌握度已同步到训练记忆')
   act(() => root.unmount()); element.remove()
 })

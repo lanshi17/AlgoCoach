@@ -163,7 +163,8 @@ function normalizePlan(value: unknown): GuidedStage[] | null {
       record.instruction ?? record.prompt ?? record.description ?? record.goal,
       MAX_GUIDED_INSTRUCTION_LENGTH,
     ) || STAGE_INSTRUCTIONS[type]
-    stages.push({ id: `plan-stage-${stages.length + 1}`, name, type, instruction })
+    const sourceId = typeof record.id === 'string' ? record.id.trim().slice(0, 80) : ''
+    stages.push({ id: sourceId, name, type, instruction })
   }
   if (!stages.length) return null
 
@@ -185,10 +186,14 @@ function normalizePlan(value: unknown): GuidedStage[] | null {
     type: 'review' as const,
     instruction: STAGE_INSTRUCTIONS.review,
   }
-  return [...core.slice(0, MAX_STAGES - 1), review].map((stage, index) => ({
-    ...stage,
-    id: `plan-stage-${index + 1}`,
-  }))
+  const used = new Set<string>()
+  return [...core.slice(0, MAX_STAGES - 1), review].map((stage, index) => {
+    let id = stage.id || `plan-stage-${index + 1}`
+    let suffix = 1
+    while (used.has(id)) id = `plan-stage-${index + 1}-${suffix++}`
+    used.add(id)
+    return { ...stage, id }
+  })
 }
 
 function extractJson(text: string): unknown {

@@ -8,7 +8,7 @@ import json
 import pytest
 from sqlalchemy import select
 
-from app.memory.db import EpisodicRecord, SemanticNode, SessionLocal
+from app.memory.db import EpisodicRecord, ReviewSchedule, SemanticNode, SessionLocal
 
 pytestmark = pytest.mark.asyncio
 
@@ -150,3 +150,23 @@ async def test_local_run_outcome_updates_mastery_only_when_a_result_exists(clien
     })
     assert resp.status_code == 200
     assert (await _mastery())['Array'].mastery == pytest.approx(expected_mastery)
+
+async def test_guided_stage_pass_moves_mastery_less_than_a_judge_acceptance(client):
+    resp = await client.post('/memory/record', json={
+        **VALID_PAYLOAD, 'problem_id': 'guided:array', 'platform': 'GUIDED',
+        'status': 'GUIDED_ACCEPTED', 'lang': 'unknown', 'topics': ['Array'],
+    })
+    assert resp.status_code == 200
+    node = (await _mastery())['Array']
+    assert node.mastery == pytest.approx(0.53)
+    assert node.attempts == 1
+
+async def test_guided_stage_pass_does_not_create_a_review_schedule(client):
+    resp = await client.post('/memory/record', json={
+        **VALID_PAYLOAD, 'problem_id': 'guided:array', 'platform': 'GUIDED',
+        'status': 'GUIDED_ACCEPTED', 'lang': 'unknown', 'topics': ['Array'],
+    })
+    assert resp.status_code == 200
+    async with SessionLocal() as session:
+        rows = (await session.execute(select(ReviewSchedule))).scalars().all()
+    assert rows == []

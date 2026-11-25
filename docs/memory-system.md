@@ -472,7 +472,7 @@ CREATE TABLE recommendation_log (
 
 1. 基线 = `recommendation_log.mastery_before`。
 2. 只收集 `created_at <= episodic.created_at <= evaluation_due_at` 且 `topics` 包含该 topic 的 `EpisodicRecord` 与 `EpisodicArchive`。
-3. 按 `(created_at, id)` 顺序重放现有 ELO 规则：`ACCEPTED` +0.05，其余状态 -0.08，每步 clamp 到 `[0,1]`。
+3. 按 `(created_at, id)` 顺序重放现有 ELO 规则：`ACCEPTED` / `LOCAL_ACCEPTED` +0.05，`GUIDED_ACCEPTED` +0.03，其余状态 -0.08，每步 clamp 到 `[0,1]`；实时更新与回测共用 `mastery_delta`。
 4. 窗口内无任何事件 → `-1` abandoned（`mastery_after = mastery_before`）。
 5. 有事件时按重建 delta 判定：≥ +0.10 → `+1` improved；≤ -0.05 → `-1` declined；其他 → `0` neutral。
 
