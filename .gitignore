@@ -6,6 +6,7 @@
 .lcpr_data
 *.md
 !README.md
+!AGENTS.md
 !docs/
 !docs/**/*.md
 *.json
