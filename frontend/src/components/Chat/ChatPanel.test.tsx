@@ -128,11 +128,43 @@ describe('chat when changing training context', () => {
     })
     act(() => element.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')!.click())
     expect(element.textContent).toContain('正在思考')
-    expect(element.querySelector<HTMLButtonElement>('button[aria-label="正在等待教练回复"]')?.getAttribute('aria-busy')).toBe('true')
+    expect(element.querySelector<HTMLButtonElement>('button[aria-label="停止生成"]')?.getAttribute('aria-busy')).toBe('true')
     act(() => useAppStore.getState().setActiveProblem({ ...problem, id: '2', platformId: 'two' }))
     expect(signal?.aborted).toBe(true)
     expect(element.textContent).not.toContain('正在思考')
     expect(element.querySelector('button[aria-label="发送消息"]')).not.toBeNull()
+  })
+
+  it('stops a streaming reply without presenting an error', async () => {
+    let signal: AbortSignal | undefined
+    vi.spyOn(agentService, 'chatStream').mockImplementation((_message, _ctx, _handlers, requestSignal) => {
+      signal = requestSignal
+      return new Promise((_resolve, reject) => {
+        requestSignal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+      })
+    })
+    act(() => {
+      useAppStore.getState().setActiveProblem(problem)
+      renderChatPanel(root)
+    })
+    const textarea = element.querySelector('textarea')!
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, '写一个二分')
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => element.querySelector<HTMLButtonElement>('button[aria-label="发送消息"]')!.click())
+    expect(element.querySelector('button[aria-label="停止生成"]')).not.toBeNull()
+
+    await act(async () => {
+      element.querySelector<HTMLButtonElement>('button[aria-label="停止生成"]')!.click()
+      await Promise.resolve()
+    })
+
+    expect(signal?.aborted).toBe(true)
+    expect(element.textContent).toContain('已停止生成。')
+    expect(element.querySelector('button[aria-label="停止生成"]')).toBeNull()
+    expect(element.querySelector('button[aria-label="发送消息"]')).not.toBeNull()
+    expect(element.textContent).not.toContain('重试')
   })
 
   it('shows one-line thinking and expands streamed thinking details', async () => {

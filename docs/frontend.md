@@ -210,7 +210,8 @@ frontend/
 - 发送：调用 `agentService.chatStream(content, { mode, problemId })`，返回 `{ content, animationId }`
 - Submit 结束后自动以 `trainingPhase: 'review'` 发送判题状态、通过数、用时和题目标签；提交代码不随复盘请求发送。
 - 消息追加：用户消息立即追加，agent 消息等 API 返回后追加
-- `loading` 时显示三点跳动动画 + "思考中…"
+- 等待期间显示三点跳动动画 + “思考中…”。
+- `loading` 时发送按钮变为停止按钮（`aria-label="停止生成"`），点击会 abort 当前请求、清空 thinking 与流式文本、追加“已停止生成。”系统消息并立即恢复输入状态；abort 不计为错误，不出现重试入口，Agent 侧 turn 仍可按 turn id replay。停止只结束本客户端的流，不发送服务端取消协议。
 - `activeAnimation` 存在时在消息流末尾渲染 `<AnimationCard>`
 
 **当前行为**：对话按题目保存在进程内 Zustand 状态，切换题目后可返回原对话；刷新页面会清空，避免把用户代码写入浏览器存储。Submit 结束后发送判题摘要和当前代码的临时上下文启动赛后复盘；代码不写入 ReMe 长期记忆。动画生成期间加入 system 状态消息。聊天文本和可用的 thinking block 通过 SSE 流式到达。

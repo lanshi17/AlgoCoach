@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
-import { ChevronDown, Lock, Send, Sparkles } from 'lucide-react'
+import { ChevronDown, Lock, Send, Sparkles, Square } from 'lucide-react'
 import { useAppStore } from '@/stores/useAppStore'
 import ChatMessage from './ChatMessage'
 import AnimationCard from '../Animation/AnimationCard'
@@ -221,6 +221,23 @@ export default function ChatPanel() {
     await requestReply(retryMessage, true)
   }
 
+  const stop = () => {
+    const controller = chatRequestRef.current
+    if (!controller) return
+    controller.abort()
+    chatRequestRef.current = null
+    setLoading(false)
+    setThinkingText('')
+    setStreamedReply('')
+    addMessage({
+      id: nanoid(),
+      role: 'system',
+      content: '已停止生成。',
+      timestamp: new Date().toISOString(),
+      mode,
+    })
+  }
+
   return (
     <div className="relative flex h-full flex-col bg-surface dark:bg-surface-dark">
       {/* Panel header */}
@@ -432,15 +449,15 @@ export default function ChatPanel() {
                            placeholder:text-text-muted dark:placeholder:text-text-dark-muted"
               />
               <button
-                onClick={send}
-                disabled={!input.trim() || loading}
+                onClick={loading ? stop : () => void send()}
+                disabled={!loading && !input.trim()}
                 aria-busy={loading}
-                title={loading ? '正在等待教练回复' : '发送消息（Enter）'}
-                aria-label={loading ? '正在等待教练回复' : '发送消息'}
+                title={loading ? '停止生成' : '发送消息（Enter）'}
+                aria-label={loading ? '停止生成' : '发送消息'}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#111317] text-white transition-opacity duration-150 hover:opacity-90
                            disabled:opacity-40"
               >
-                <Send size={16} />
+                {loading ? <Square size={14} fill="currentColor" /> : <Send size={16} />}
               </button>
             </div>
           </div>
