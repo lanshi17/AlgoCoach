@@ -17,6 +17,7 @@ import EditorPanel from '@/components/Editor/EditorPanel'
 import ChatPanel from '@/components/Chat/ChatPanel'
 import axios from 'axios'
 import { flushLocalPracticeRecords } from '@/services/localProgress'
+import { runAutoSync } from '@/services/autoSync'
 import { workspaceStorageKey } from '@/services/deepTutorCapabilities'
 
 let authStatusRequest: Promise<unknown> | null = null
@@ -96,6 +97,22 @@ export default function AppShell() {
 
   useEffect(() => {
     void flushLocalPracticeRecords(useAppStore.getState().localPracticeRecords)
+  }, [])
+
+  useEffect(() => {
+    const run = () => {
+      if (document.visibilityState === 'visible') void runAutoSync().catch(() => { /* Settings shows the last error on demand */ })
+    }
+    run()
+    const timer = window.setInterval(run, 60_000)
+    const onVisible = () => { if (document.visibilityState === 'visible') run() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('online', run)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('online', run)
+    }
   }, [])
 
   useEffect(() => {

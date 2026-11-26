@@ -201,4 +201,16 @@ describe('provider setup return path', () => {
     expect(messages.some(text => text.includes('复习计划新增 1 条、更新 2 条'))).toBe(true)
     expect(messages.some(text => text.includes('来源 workspace：remote-device'))).toBe(true)
   })
+
+  it('requires a hub URL and token before automatic sync', async () => {
+    await act(async () => {
+      root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><SettingsPage /></MemoryRouter>)
+    })
+    act(() => element.querySelector<HTMLButtonElement>('button[aria-label="自动跨设备同步"]')!.click())
+    await act(async () => {
+      Array.from(element.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent?.includes('保存并同步'))!.click()
+    })
+    const messages = Array.from(element.querySelectorAll('[role="status"]')).map(node => node.textContent ?? '')
+    expect(messages.some(text => text.includes('启用自动同步需要填写同步服务地址和令牌'))).toBe(true)
+  })
 })

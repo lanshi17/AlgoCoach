@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,6 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @WebMvcTest(controllers = CorsConfigTest.TestController.class)
 @Import({CorsConfig.class, CorsConfigTest.TestController.class})
+@TestPropertySource(properties = "ALGOCOACH_ALLOWED_ORIGINS=http://192.168.1.10:5173")
 class CorsConfigTest {
 
     private static final String CUSTOM_HEADER = "x-algocoach-test";
@@ -87,6 +89,19 @@ class CorsConfigTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
                         CorsConfig.VITE_PREVIEW_LOOPBACK_ORIGIN));
+    }
+
+    @Test
+    void preflightAllowsConfiguredLanOrigin() throws Exception {
+        String origin = "http://192.168.1.10:5173";
+        mockMvc.perform(options("/api/ping")
+                        .header(HttpHeaders.ORIGIN, origin)
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "x-algocoach-sync-token"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, origin))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS,
+                        containsString("x-algocoach-sync-token")));
     }
 
     @Test

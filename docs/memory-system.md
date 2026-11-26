@@ -141,6 +141,8 @@ new_mastery = clamp(old_mastery + delta, *CLAMP)
 5. 只写 `semantic` 和 `review_schedule`，不导入 `episodic`、对话、代码或训练统计。导入的主题没有本机 episode，因此知识图谱里没有共现边，进度页统计也不包含另一台设备的提交。
 6. 导入包由前端先校验格式、字段范围与 5000 条上限，Agent 再用 Pydantic 校验一次。掌握度与复习计划是本地信任数据，导入恶意文件可以抬高掌握度或改变到期日；该边界与手动导入工作区数据的信任模型一致。
 
+**自动 hub 模式：** 两台设备可指向同一个 Gateway/Agent，并配置同一个 `ALGOCOACH_SYNC_TOKEN`。前端每 60 秒、页面重新可见或网络恢复时，把本地 v2 包 `POST` 到 `/memory/sync`；hub 先合并入自己的 workspace，再返回合并后的完整包，前端用 `mastery-import` 的规则导入本地。端点未配置令牌时 503，令牌错误时 403；跨 Origin 的网页还需 hub 的 `ALGOCOACH_ALLOWED_ORIGINS` 放行。合并规则与手动包完全相同，自动模式只是把文件传输换成带令牌的 HTTP 交换；没有托管云、账号、设备身份或后台推送。
+
 #### 2.3.2 知识图谱关系表
 
 ```sql

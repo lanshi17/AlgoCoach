@@ -78,6 +78,7 @@ public class AgentProxyController {
     static final String MEMORY_MASTERY_PATH = "/memory/mastery-path";
     static final String MEMORY_MASTERY_EXPORT_PATH = "/memory/mastery-export";
     static final String MEMORY_MASTERY_IMPORT_PATH = "/memory/mastery-import";
+    static final String MEMORY_SYNC_PATH = "/memory/sync";
     static final String MEMORY_EXPORT_PATH = "/memory/export";
     static final String KNOWLEDGE_CONFIG_PATH = "/knowledge/config";
     static final String KNOWLEDGE_SOURCES_PATH = "/knowledge/sources";
@@ -204,6 +205,13 @@ public class AgentProxyController {
             HttpServletRequest request,
             @RequestBody(required = false) byte[] body) {
         return forward(HttpMethod.POST, MEMORY_MASTERY_IMPORT_PATH, request, body);
+    }
+
+    @PostMapping("/memory/sync")
+    public Mono<ResponseEntity<byte[]>> memorySync(
+            HttpServletRequest request,
+            @RequestBody(required = false) byte[] body) {
+        return forward(HttpMethod.POST, MEMORY_SYNC_PATH, request, body);
     }
 
     @GetMapping("/knowledge/config")
@@ -369,6 +377,10 @@ public class AgentProxyController {
         String authorization = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (authorization != null && !authorization.isBlank()) {
             headers.set(HttpHeaders.AUTHORIZATION, authorization);
+        }
+        String syncToken = request.getHeader("X-AlgoCoach-Sync-Token");
+        if (syncToken != null && !syncToken.isBlank()) {
+            headers.set("X-AlgoCoach-Sync-Token", syncToken);
         }
     }
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { Download, SlidersHorizontal, Upload } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -8,6 +8,7 @@ import { agentService } from '@/services/agentService'
 import { leetcodeService } from '@/services/leetcodeService'
 import { createWorkspaceExport } from '@/services/workspaceExport'
 import { parseMasteryBundle } from '@/services/masterySync'
+import { normalizeHubUrl, readAutoSyncSettings, readLastAutoSync, runAutoSync, saveAutoSyncSettings, type AutoSyncResult, type AutoSyncSettings } from '@/services/autoSync'
 import type { CoachStyle, ModelProviderConfig, TrainingGoal } from '@/types'
 import { CUSTOM_PROVIDER_PRESET, PROTOCOL_OPTIONS, PROVIDER_PRESETS, providerFromPreset } from '@/services/providerPresets'
 import { DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_OUTPUT_TOKENS } from '@/services/providerPresets'
@@ -39,6 +40,11 @@ export default function SettingsPage() {
   const [masteryMessage, setMasteryMessage] = useState('')
   const [masteryError, setMasteryError] = useState(false)
   const masteryFileRef = useRef<HTMLInputElement>(null)
+  const [autoSync, setAutoSync] = useState<AutoSyncSettings>(() => readAutoSyncSettings())
+  const [autoSyncMessage, setAutoSyncMessage] = useState('')
+  const [autoSyncError, setAutoSyncError] = useState(false)
+  const [autoSyncing, setAutoSyncing] = useState(false)
+  const [lastAutoSync, setLastAutoSync] = useState<string | null>(() => readLastAutoSync())
   const [providerMessage, setProviderMessage] = useState('')
   const [exportMessage, setExportMessage] = useState('')
   const [workspaces, setWorkspaces] = useState<WorkspaceManifest[]>(() => readWorkspaceManifests())
@@ -168,6 +174,60 @@ export default function SettingsPage() {
       if (masteryFileRef.current) masteryFileRef.current.value = ''
     }
   }
+
+  const updateAutoSync = (patch: Partial<AutoSyncSettings>) => {
+    const next = { ...autoSync, ...patch }
+    setAutoSync(next)
+    saveAutoSyncSettings(next)
+    setAutoSyncMessage('')
+    setAutoSyncError(false)
+    if (next.enabled && (!normalizeHubUrl(next.hubUrl) || !next.token.trim())) {
+      setAutoSyncError(true)
+      setAutoSyncMessage('启用自动同步需要填写同步服务地址和令牌。')
+    }
+  }
+
+  const runSyncNow = async () => {
+    const hubUrl = normalizeHubUrl(autoSync.hubUrl)
+    if (!hubUrl || !autoSync.token.trim()) {
+      setAutoSyncError(true)
+      setAutoSyncMessage('启用自动同步需要填写同步服务地址和令牌。')
+      return
+    }
+    const saved = saveAutoSyncSettings({ ...autoSync, hubUrl })
+    setAutoSync(saved)
+    setAutoSyncing(true)
+    setAutoSyncError(false)
+    setAutoSyncMessage('')
+    try {
+      const result = await runAutoSync()
+      if (result.status === 'disabled') {
+        setAutoSyncMessage('自动同步未启用或配置不完整。')
+        return
+      }
+      setLastAutoSync(result.at ?? null)
+      setAutoSyncMessage(result.counts
+        ? `同步完成：知识点新增 ${result.counts.imported}、更新 ${result.counts.updated}；复习计划新增 ${result.counts.schedulesImported}、更新 ${result.counts.schedulesUpdated}。`
+        : '同步完成。')
+    } catch (cause) {
+      setAutoSyncError(true)
+      setAutoSyncMessage(cause instanceof Error ? cause.message : '自动同步失败，请检查同步服务地址和令牌。')
+    } finally {
+      setAutoSyncing(false)
+    }
+  }
+
+  useEffect(() => {
+    const onAutoSync = (event: Event) => {
+      const detail = (event as CustomEvent<AutoSyncResult>).detail
+      if (detail?.status !== 'synced') return
+      setLastAutoSync(detail.at ?? null)
+      setAutoSyncError(false)
+      setAutoSyncMessage('后台同步完成。')
+    }
+    window.addEventListener('algocoach:auto-sync', onAutoSync)
+    return () => window.removeEventListener('algocoach:auto-sync', onAutoSync)
+  }, [])
 
   const changeWorkspace = (workspaceId: string) => {
     switchWorkspace(workspaceId)
@@ -343,6 +403,24 @@ export default function SettingsPage() {
                 <Button variant="primary" onClick={() => void exportMastery()} disabled={masteryExporting || masteryImporting} aria-busy={masteryExporting}>
                   <Download size={15} />{masteryExporting ? '正在导出…' : '导出掌握度'}
                 </Button>
+              </div>
+            </div>
+            <div className="mt-4 border-t border-border pt-3 dark:border-border-dark">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-medium text-text-primary dark:text-text-dark-primary">自动同步（共享同步服务）</p>
+                <Switch label="自动跨设备同步" checked={autoSync.enabled} onChange={enabled => updateAutoSync({ enabled })} />
+              </div>
+              <p className="mt-1 text-xs leading-5 text-text-secondary dark:text-text-dark-secondary">两台设备连接同一个同步服务，每 60 秒、页面重新可见或网络恢复时自动交换。服务端需设置 `ALGOCOACH_SYNC_TOKEN`，并允许当前网页 Origin；令牌只保存在本机浏览器。</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <input aria-label="同步服务地址" value={autoSync.hubUrl} onChange={event => updateAutoSync({ hubUrl: event.target.value })} placeholder="http://192.168.1.10:8080" className={control} />
+                <input aria-label="同步令牌" type="password" autoComplete="off" value={autoSync.token} onChange={event => updateAutoSync({ token: event.target.value })} placeholder="ALGOCOACH_SYNC_TOKEN" className={control} />
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Button onClick={() => void runSyncNow()} disabled={autoSyncing || !autoSync.enabled} aria-busy={autoSyncing}>
+                  <Upload size={15} />{autoSyncing ? '正在同步…' : '保存并同步'}
+                </Button>
+                {lastAutoSync && <span className="text-xs text-text-muted dark:text-text-dark-muted">最近同步：{new Date(lastAutoSync).toLocaleString()}</span>}
+                {autoSyncMessage && <span role="status" aria-live="polite" className={`max-w-xs text-xs ${autoSyncError ? 'text-danger' : 'text-success'}`}>{autoSyncMessage}</span>}
               </div>
             </div>
           </div>

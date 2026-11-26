@@ -830,6 +830,10 @@ Gateway 需要调 agent 写记忆：
 
 知识点按主题去重后单调取大：`mastery = max`、`attempts = max`、`lastSeen` 取较晚值。复习计划按 `problemId` 去重后以 `updatedAt` 做 last-writer-wins：更新 `dueAt / intervalDays / mastery / attempts / topics`，保留本机通知字段，清空远程 `source_episode_id`。两类合并都幂等且与顺序无关。只写 `semantic` 与 `review_schedule`，不写 episodic、对话、代码或工作区文件；`workspaceId` 查询参数是导入目标，包内 `workspaceId` 只是来源提示。Gateway 固定代理两个端点，前端在设置页下载/上传 JSON。
 
+**自动同步 hub：**
+
+`POST /memory/sync?workspaceId=...` 接收同一 v2 包，先按上述规则合并到目标 workspace，再返回 `{ok, workspaceId, imported, updated, ..., bundle}`，其中 `bundle` 是合并后的完整 v2 快照。该端点默认关闭：只有设置 `ALGOCOACH_SYNC_TOKEN` 后才启用，请求必须带 `X-AlgoCoach-Sync-Token`；未配置返回 503，令牌错误返回 403，令牌不会出现在响应或日志中。Gateway 代理该路由并只额外转发这个请求头；跨 Origin 的网页调用还要求 hub 的 `ALGOCOACH_ALLOWED_ORIGINS` 包含该 Origin。桌面/局域网设备可以共同指向同一个 Gateway，后续每 60 秒、页面可见或网络恢复时自动交换。
+
 ---
 
 ## 11. 安全考虑

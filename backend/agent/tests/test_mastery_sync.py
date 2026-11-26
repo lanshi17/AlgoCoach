@@ -201,6 +201,40 @@ async def test_v1_bundle_imports_topics_without_touching_review_schedules(client
         assert (await session.execute(select(ReviewSchedule))).scalars().all() == []
 
 
+async def test_sync_endpoint_is_disabled_without_a_token(client, monkeypatch):
+    monkeypatch.delenv("ALGOCOACH_SYNC_TOKEN", raising=False)
+    response = await client.post("/memory/sync", json=VALID_BUNDLE, headers={"x-algocoach-sync-token": "secret"})
+    assert response.status_code == 503
+
+
+async def test_sync_endpoint_rejects_a_wrong_token(client, monkeypatch):
+    monkeypatch.setenv("ALGOCOACH_SYNC_TOKEN", "secret")
+    response = await client.post("/memory/sync", json=VALID_BUNDLE, headers={"x-algocoach-sync-token": "wrong"})
+    assert response.status_code == 403
+    assert await _nodes() == {}
+
+
+async def test_sync_endpoint_merges_and_returns_the_hub_bundle(client, monkeypatch):
+    monkeypatch.setenv("ALGOCOACH_SYNC_TOKEN", "secret")
+    await _seed("Array", 0.55, 3, "2026-01-01T00:00:00")
+
+    response = await client.post(
+        "/memory/sync",
+        json=VALID_BUNDLE,
+        headers={"x-algocoach-sync-token": "secret"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["schedulesImported"] == 1
+    assert body["bundle"]["format"] == "algocoach-mastery-v2"
+    assert [topic["topic"] for topic in body["bundle"]["topics"]] == ["Array", "Graph"]
+    assert body["bundle"]["reviewSchedules"][0]["problemId"] == "two-sum"
+    assert (await _nodes())["Array"].mastery == pytest.approx(0.6)
+    assert (await _schedules())["two-sum"].updated_at == "2026-02-05T00:00:00"
+
+
 @pytest.mark.parametrize("payload", [
     {**VALID_BUNDLE, "format": "other-format"},
     {**VALID_BUNDLE, "topics": [{"topic": "Array", "mastery": 1.2, "attempts": 1, "lastSeen": ""}]},

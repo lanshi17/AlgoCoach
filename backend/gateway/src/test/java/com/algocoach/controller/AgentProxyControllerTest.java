@@ -182,6 +182,25 @@ class AgentProxyControllerTest {
     }
 
     @Test
+    void postMemorySyncForwardsTokenBodyAndWorkspace() throws Exception {
+        upstreamResponse.set(jsonResponse(HttpStatus.OK, "{\"ok\":true}"));
+        String bundle = "{\"format\":\"algocoach-mastery-v2\",\"topics\":[],\"reviewSchedules\":[]}";
+
+        performAsync(post(PREFIX + "/memory/sync")
+                .queryParam("workspaceId", "alpha")
+                .header("x-algocoach-sync-token", "secret")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(bundle))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ok").value(true));
+
+        assertThat(captured.get().getURI().getPath()).isEqualTo("/memory/sync");
+        assertThat(captured.get().getURI().getRawQuery()).isEqualTo("workspaceId=alpha");
+        assertThat(captured.get().getHeaders().getFirst("x-algocoach-sync-token")).isEqualTo("secret");
+        assertThat(captured.get().getBodyAsString().block()).isEqualTo(bundle);
+    }
+
+    @Test
     void getMemoryMasteryPathForwardsToTheFixedAgentRoute() throws Exception {
         upstreamResponse.set(jsonResponse(HttpStatus.OK, "{\"steps\":[]}"));
 

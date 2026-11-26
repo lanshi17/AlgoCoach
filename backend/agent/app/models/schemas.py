@@ -287,6 +287,12 @@ class MasteryImportResponse(BaseModel):
     schedulesUnchanged: int
 
 
+class MemorySyncResponse(MasteryImportResponse):
+    """Merged hub state returned by ``POST /memory/sync``."""
+
+    bundle: MasteryExportResponse
+
+
 class GeneratedAnimationRequest(BaseModel):
     """Body of ``POST /animate/generated`` (P2, feature-flagged).
 

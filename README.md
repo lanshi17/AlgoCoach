@@ -169,6 +169,8 @@ docker-compose 设置 `ANIMATIONS_LOCATION=file:/data/animations/`，与 agent �
 | `REME_WORKSPACE_DIR` | `./data/reme` | ReMe 本地 workspace |
 | `KNOWLEDGE_DIR` | `./data/knowledge` | 用户知识库源文件和配置 |
 | `REMOTION_ENABLED` | `false` | 是否启用预置动画工具 |
+| `ALGOCOACH_SYNC_TOKEN` | 无 | 自动跨设备同步 hub 的共享令牌；留空时 `POST /memory/sync` 返回 503 |
+| `ALGOCOACH_ALLOWED_ORIGINS` | 无 | 额外允许访问 Gateway `/api/**` 的 Origin，逗号分隔；跨设备自动同步时需要 |
 
 完整变量和注释见 [.env.example](.env.example)。API key、Cookie 和用户知识库文件都属于本地运行时数据，不应提交到 Git。
 

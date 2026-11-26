@@ -1,8 +1,12 @@
 package com.algocoach.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+
+import java.util.Arrays;
+import java.util.stream.Stream;
 
 /**
  * CORS policy for the React frontend.
@@ -32,11 +36,25 @@ public class CorsConfig implements WebMvcConfigurer {
     /** Preflight cache lifetime in seconds. */
     public static final long MAX_AGE_SECONDS = 3600L;
 
+    private final String[] extraOrigins;
+
+    public CorsConfig(@Value("${ALGOCOACH_ALLOWED_ORIGINS:}") String extraOrigins) {
+        this.extraOrigins = Arrays.stream(extraOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toArray(String[]::new);
+    }
+
     @Override
     public void addCorsMappings(CorsRegistry registry) {
+        String[] origins = Stream.concat(
+                        Stream.of(VITE_DEV_ORIGIN, VITE_PREVIEW_ORIGIN,
+                                VITE_DEV_LOOPBACK_ORIGIN, VITE_PREVIEW_LOOPBACK_ORIGIN),
+                        Arrays.stream(extraOrigins))
+                .distinct()
+                .toArray(String[]::new);
         registry.addMapping(API_MAPPING)
-                .allowedOrigins(VITE_DEV_ORIGIN, VITE_PREVIEW_ORIGIN,
-                        VITE_DEV_LOOPBACK_ORIGIN, VITE_PREVIEW_LOOPBACK_ORIGIN)
+                .allowedOrigins(origins)
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
                 .allowCredentials(false)

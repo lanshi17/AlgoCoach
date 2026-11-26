@@ -1,5 +1,6 @@
 """HTTP routes for the agent service."""
 import hashlib
+import hmac
 import json
 import logging
 from uuid import uuid4
@@ -18,6 +19,7 @@ from app.config import (
     chat_session_id,
     remotion_codegen_enabled,
     remotion_codegen_token,
+    sync_token,
 )
 from app.memory.memory_service import memory, normalize_workspace_id
 from app.memory import knowledge_base
@@ -30,6 +32,7 @@ from app.models.schemas import (
     MasteryImportResponse,
     MemoryRecordRequest,
     MemoryRecordResponse,
+    MemorySyncResponse,
     TurnReplayRequest,
 )
 from app.remotion.animation_service import (
@@ -385,6 +388,32 @@ async def import_mastery(req: MasteryImportRequest, request: Request):
         [schedule.model_dump() for schedule in req.reviewSchedules],
         workspace_id=workspace_id,
     )
+
+
+@router.post("/memory/sync", response_model=MemorySyncResponse)
+async def sync_memory(req: MasteryImportRequest, request: Request):
+    """Merge a device bundle into the hub and return the merged hub state.
+
+    Disabled unless ``ALGOCOACH_SYNC_TOKEN`` is set; the shared token is the
+    only authorization for this local-network endpoint.
+    """
+    expected = sync_token()
+    if not expected:
+        raise HTTPException(503, detail="同步服务未启用")
+    provided = request.headers.get("x-algocoach-sync-token") or ""
+    if not hmac.compare_digest(provided, expected):
+        raise HTTPException(403, detail="同步令牌无效")
+    workspace_id = normalize_workspace_id(
+        request.query_params.get("workspaceId")
+        or request.query_params.get("workspace_id")
+    )
+    counts = await memory.import_mastery(
+        [topic.model_dump() for topic in req.topics],
+        [schedule.model_dump() for schedule in req.reviewSchedules],
+        workspace_id=workspace_id,
+    )
+    bundle = await memory.export_mastery(workspace_id=workspace_id)
+    return {**counts, "bundle": bundle}
 
 
 @router.post("/animate")

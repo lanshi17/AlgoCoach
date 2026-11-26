@@ -142,6 +142,14 @@ def remotion_codegen_tmp_root() -> str | None:
     return os.getenv("REMOTION_CODEGEN_TMP_ROOT", "").strip() or None
 
 
+def sync_token() -> str | None:
+    """Shared secret for the optional auto-sync hub endpoint.
+
+    Missing/blank disables the endpoint; the value is never logged or returned.
+    """
+    return os.getenv("ALGOCOACH_SYNC_TOKEN", "").strip() or None
+
+
 def remotion_codegen_token() -> str | None:
     """Bearer token required by ``POST /animate/generated``.
 
