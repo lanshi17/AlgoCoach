@@ -6,13 +6,14 @@ import { saveNotebookEntry } from '@/services/learningNotebook'
 import { useAppStore } from '@/stores/useAppStore'
 import ChatMessage from '@/components/Chat/ChatMessage'
 import GuidedCodeEditor from '@/components/Editor/GuidedCodeEditor'
+import GuidedLeetCodePanel from '@/components/Editor/GuidedLeetCodePanel'
 import ColumnResizer from '@/components/Layout/ColumnResizer'
 import FloatingPanelChrome from '@/components/Layout/FloatingPanelChrome'
 import FloatingPanelResizeHandle from '@/components/Layout/FloatingPanelResizeHandle'
 import { clampFloatRect, readFloatRect, type FloatRect } from '@/components/Layout/floatingPanel'
 import { packLayout, unpackLayout } from '@/components/Layout/layoutStorage'
 import { useLayoutStorageSync } from '@/components/Layout/useLayoutStorageSync'
-import type { ChatMessage as Message, CodeLanguage } from '@/types'
+import type { ChatMessage as Message, CodeLanguage, Problem } from '@/types'
 import { workspaceStorageKey } from '@/services/deepTutorCapabilities'
 import {
   DEFAULT_GUIDED_STAGES, buildGuidedPlanPrompt, defaultGuidedInstruction, GUIDED_STAGE_TYPE_LABEL,
@@ -378,6 +379,14 @@ export default function GuidedLearningPage() {
     setMasterySync(await flushGuidedMasteryQueue())
   }
 
+  const acceptLeetCode = (problem: Problem) => {
+    if (!currentStage || currentStage.type !== 'code') return
+    setAnswered(true)
+    setError('')
+    setFeedback(`LeetCode 已通过「${problem.titleCn ?? problem.title}」，可以进入下一阶段。`)
+    void syncStageMastery(currentStage)
+  }
+
   const send = async () => {
     const value = draft.trim()
     if (!value || busy) return
@@ -703,6 +712,16 @@ export default function GuidedLearningPage() {
             ? 'flex min-h-0 flex-1 flex-col overflow-hidden'
             : 'flex min-h-0 flex-1 flex-col overflow-hidden rounded-panel border border-border bg-surface dark:border-border-dark dark:bg-surface-dark'}
             aria-label="编程题代码区">
+            <GuidedLeetCodePanel
+              stageId={currentStage?.id ?? ''}
+              topic={activeTopic}
+              language={codeLang}
+              code={code}
+              startedAt={stageStartedAt}
+              disabled={busy || answered || mode === 'FOCUS'}
+              onReplaceCode={setCode}
+              onAccepted={acceptLeetCode}
+            />
             <GuidedCodeEditor
               code={code}
               language={codeLang}
