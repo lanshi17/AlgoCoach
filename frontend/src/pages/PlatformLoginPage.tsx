@@ -3,7 +3,7 @@ import { KeyRound } from 'lucide-react'
 import { platformCookieService } from '@/services/platformCookieService'
 import { parseCookieHeader, parseLeetCodeCurl } from '@/services/cookieParser'
 import Button from '@/components/Common/Button'
-import PageHeader from '@/components/Common/PageHeader'
+import PageShell from '@/components/Common/PageShell'
 
 type StatusMap = { LEETCODE: boolean; ACWING: boolean; HDU: boolean }
 
@@ -109,30 +109,28 @@ export default function PlatformLoginPage() {
   }
 
   return (
-    <main className="flex-1 min-h-0 overflow-y-auto bg-canvas px-6 py-7 dark:bg-[#0B0C0F]">
+    <PageShell
+      title="题库登录"
+      icon={<KeyRound size={18} />}
+      width="narrow"
+      actions={<Button onClick={() => void refresh()} disabled={refreshing || saving} aria-busy={refreshing}
+        aria-label="刷新题库登录状态">{refreshing ? '刷新中…' : '刷新状态'}</Button>}
+    >
       {confirm && (
-        <div className="fixed right-6 top-6 z-[1100] rounded-tip bg-text-primary px-3 py-1.5 text-xs text-surface"
+        <div className="fixed right-6 top-6 z-[1100] rounded-tip bg-ink-950 px-3 py-1.5 text-meta text-canvas shadow-modal"
           role="status">
           {confirm}
         </div>
       )}
 
-      <div className="mx-auto w-full max-w-3xl">
-        <PageHeader
-          title="题库登录"
-          icon={<KeyRound size={18} />}
-          actions={<Button onClick={() => void refresh()} disabled={refreshing || saving} aria-busy={refreshing}
-            aria-label="刷新题库登录状态">{refreshing ? '刷新中…' : '刷新状态'}</Button>}
-        />
-
         {error && (
-          <div role="alert" className="mb-3 rounded-tip border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
+          <div role="alert" className="mb-3 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-meta text-danger">
             {error}
           </div>
         )}
 
         <div className="flex flex-col gap-3">
-          <section className="rounded-card border border-border bg-surface p-6 dark:border-border-dark dark:bg-surface-dark">
+          <section className="rounded-card border border-border bg-surface p-6">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-sm font-medium text-text-primary dark:text-text-dark-primary">LeetCode</h2>
               <StatusChip ok={status.LEETCODE} okLabel="已登录" idleLabel="未登录" />
@@ -192,7 +190,6 @@ export default function PlatformLoginPage() {
             </div>
           </section>
         </div>
-      </div>
-    </main>
+    </PageShell>
   )
 }

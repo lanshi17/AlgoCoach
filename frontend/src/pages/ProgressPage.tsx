@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { AlertCircle, BookOpen, Clock3, Flame, Loader2, PenLine, RefreshCw, Trophy } from 'lucide-react'
 import Button from '@/components/Common/Button'
-import PageHeader from '@/components/Common/PageHeader'
+import PageShell from '@/components/Common/PageShell'
 import { agentService } from '@/services/agentService'
 import { useNavigate } from 'react-router-dom'
 import { dueReviewEntries, rateReviewEntry, readReviewEntries, readReviewEvents, REVIEW_ROUND_LIMIT, setReviewMastered, type LocalReviewEvent, type LocalReviewEntry } from '@/services/reviewQueue'
@@ -62,27 +62,24 @@ export default function ProgressPage() {
   }, [])
 
   return (
-    <main className="flex-1 min-h-0 overflow-y-auto bg-canvas px-6 py-7 dark:bg-[#0B0C0F]">
-      <div className="mx-auto max-w-5xl">
-        <PageHeader
-          title="刷题进度"
-          icon={<Trophy size={18} />}
-          actions={<Button size="sm" onClick={() => void load()} disabled={loading} aria-busy={loading} aria-label="刷新进度">
-            <RefreshCw size={14} />刷新
-          </Button>}
-        />
-
+    <PageShell
+      title="刷题进度"
+      icon={<Trophy size={18} />}
+      actions={<Button size="sm" onClick={() => void load()} disabled={loading} aria-busy={loading} aria-label="刷新进度">
+        <RefreshCw size={14} />刷新
+      </Button>}
+    >
         {loading ? <Loading /> : error ? <LocalProgress records={localPracticeRecords} message={error} onRetry={() => void load()} /> : profile && (
-          <div className="space-y-6">
-            <section className="grid grid-cols-2 gap-6 rounded-panel bg-surface p-7 dark:bg-surface-dark lg:grid-cols-4">
+          <div className="space-y-4">
+            <section className="grid grid-cols-2 gap-x-6 gap-y-5 rounded-panel border border-border bg-surface p-6 lg:grid-cols-4">
               <Metric label="提交次数" value={profile.stats.totalAttempts} />
               <Metric label="通过次数" value={profile.stats.accepted} />
               <Metric label="平均专注用时" value={formatDuration(profile.stats.averageDurationSec)} />
               <Metric label="连续训练" value={`${profile.stats.streakDays} 天`} />
             </section>
 
-            <section className="rounded-panel bg-surface p-7 dark:bg-surface-dark">
-              <h2 className="mb-5 text-xl font-semibold tracking-title text-text-primary dark:text-text-dark-primary">最近 35 天</h2>
+            <section className="rounded-panel border border-border bg-surface p-6">
+              <h2 className="mb-4 text-[15px] font-semibold tracking-title text-text-primary">最近 35 天</h2>
               <div className="grid grid-cols-7 gap-1.5 sm:grid-cols-10 md:grid-cols-7 lg:grid-cols-[repeat(35,minmax(0,1fr))]">
                 {profile.dailyAttempts.map(day => <div key={day.date} role="img"
                   aria-label={`${day.date}，提交 ${day.count} 次`} title={`${day.date} · ${day.count} 次`}
@@ -93,8 +90,8 @@ export default function ProgressPage() {
             </section>
 
             <section className="grid gap-6 lg:grid-cols-2">
-              <div className="rounded-panel bg-surface p-7 dark:bg-surface-dark">
-                <h2 className="mb-5 text-xl font-semibold tracking-title text-text-primary dark:text-text-dark-primary">知识点掌握度</h2>
+              <div className="rounded-panel border border-border bg-surface p-6">
+                <h2 className="mb-4 text-[15px] font-semibold tracking-title text-text-primary">知识点掌握度</h2>
                 {profile.topics.length ? <div className="space-y-3">
                   {profile.topics.slice(0, 8).map(topic => <div key={topic.topic}>
                     <div className="mb-1 flex min-w-0 items-start justify-between gap-2 text-xs">
@@ -108,8 +105,8 @@ export default function ProgressPage() {
                 </div> : <p className="text-xs text-text-muted dark:text-text-dark-muted">提交后会逐步形成知识点记录。</p>}
               </div>
 
-              <div className="rounded-panel bg-surface p-7 dark:bg-surface-dark">
-                <h2 className="mb-5 text-xl font-semibold tracking-title text-text-primary dark:text-text-dark-primary">最近训练</h2>
+              <div className="rounded-panel border border-border bg-surface p-6">
+                <h2 className="mb-4 text-[15px] font-semibold tracking-title text-text-primary">最近训练</h2>
                 {profile.recentProblems.length ? <div className="divide-y divide-border dark:divide-border-dark">
                   {profile.recentProblems.slice(0, 8).map((item, index) => <div key={`${item.problemId}-${item.createdAt}-${index}`}
                     className="flex flex-col gap-1.5 py-2.5 text-xs sm:flex-row sm:items-center sm:justify-between sm:gap-3">
@@ -128,8 +125,8 @@ export default function ProgressPage() {
             <LocalLedger records={localPracticeRecords} />
           </div>
         )}
-        <section className="mt-6 rounded-panel bg-surface p-7 dark:bg-surface-dark" aria-labelledby="review-history-title">
-          <h2 id="review-history-title" className="text-xl font-semibold tracking-title text-text-primary dark:text-text-dark-primary">已保存的复盘</h2>
+        <section className="mt-6 rounded-panel border border-border bg-surface p-6" aria-labelledby="review-history-title">
+          <h2 id="review-history-title" className="text-[15px] font-semibold tracking-title text-text-primary">已保存的复盘</h2>
           {(() => {
             const due = dueReviewEntries(reviews, new Date(reviewNow))
             const pending = reviews.filter(review => !due.some(entry => entry.problemId === review.problemId))
@@ -141,8 +138,7 @@ export default function ProgressPage() {
           })()}
           <ReviewEventHistory events={reviewEvents} reviews={reviews} records={localPracticeRecords} />
         </section>
-      </div>
-    </main>
+    </PageShell>
   )
 }
 
@@ -214,9 +210,9 @@ function formatReviewGap(reviewedAt: string, dueAfter: string): string {
 function formatReviewDate(value: string) { const date=new Date(value); return Number.isFinite(date.getTime()) ? date.toLocaleString() : '未知' }
 
 function Metric({ label, value }: { label: string; value: string | number }) {
-  return <div className="border-y border-border/80 px-1 py-4 dark:border-border-dark/80">
-    <div className="whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.14em] leading-4 text-text-secondary dark:text-text-dark-secondary">{label}</div>
-    <div className="mt-2 whitespace-nowrap font-editorial text-xl tracking-num tabular-nums text-text-primary sm:text-2xl dark:text-text-dark-primary">{value}</div>
+  return <div className="border-t border-border pt-3 first:border-t-0 first:pt-0 lg:border-l lg:border-t-0 lg:pl-5 lg:first:border-l-0 lg:first:pl-0">
+    <div className="whitespace-nowrap font-mono text-label uppercase text-text-muted">{label}</div>
+    <div className="mt-1.5 whitespace-nowrap text-[24px] font-semibold leading-8 tracking-num tabular-nums text-text-primary">{value}</div>
   </div>
 }
 
@@ -240,10 +236,10 @@ function LocalLedger({ records }: { records: LocalPracticeRecord[] }) {
   const syncQueue = new Set(readLocalPracticeSyncQueue())
   const totalMinutes = Math.round(records.reduce((sum, item) => sum + item.durationSec, 0) / 60)
   const activeDays = new Set(records.map(item => item.endedAt.slice(0, 10))).size
-  return <section className="rounded-panel bg-surface p-7 dark:bg-surface-dark" aria-labelledby="local-ledger-title">
+  return <section className="rounded-panel border border-border bg-surface p-6" aria-labelledby="local-ledger-title">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h2 id="local-ledger-title" className="text-xl font-semibold tracking-title text-text-primary dark:text-text-dark-primary">这台电脑上的练习本</h2>
+        <h2 id="local-ledger-title" className="text-[15px] font-semibold tracking-title text-text-primary">这台电脑上的练习本</h2>
       </div>
       <span className="text-xs text-text-muted dark:text-text-dark-muted">退出专注时自动记一页</span>
     </div>

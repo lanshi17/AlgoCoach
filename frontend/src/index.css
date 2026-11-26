@@ -16,33 +16,70 @@
 
 @layer base {
   :root {
-    --sidebar-w: 72px;
-    --sidebar-expanded-w: 272px;
+    --sidebar-w: 68px;
+    --sidebar-expanded-w: 248px;
     --problem-w: 420px;
-    --header-h: 84px;
-    --accent-rgb: 91 88 255;
-    --accent-hover-rgb: 75 72 224;
-    --accent-soft-rgb: 242 243 255;
-    --accent-dark-soft-rgb: 91 88 255;
+    --header-h: 60px;
+
+    /* One desk palette. Every surface token resolves here, so light and dark
+       are one variable switch instead of paired utility classes. */
+    --canvas-rgb: 243 244 246;
+    --surface-rgb: 255 255 255;
+    --surface-soft-rgb: 250 250 251;
+    --surface-muted-rgb: 239 241 243;
+    --border-rgb: 226 228 232;
+    --line-200-rgb: 214 218 224;
+    --line-300-rgb: 201 205 212;
+    --ink-950-rgb: 21 23 27;
+    --ink-900-rgb: 30 33 38;
+    --ink-700-rgb: 74 80 89;
+    --ink-550-rgb: 102 109 119;
+    --ink-450-rgb: 138 144 152;
+    --text-primary-rgb: 21 23 27;
+    --text-secondary-rgb: 86 93 104;
+    --text-muted-rgb: 134 141 151;
+    --accent-rgb: 74 69 232;
+    --accent-hover-rgb: 59 54 217;
+    --accent-soft-rgb: 238 237 253;
+    --success-rgb: 20 128 74;
+    --warning-rgb: 154 100 0;
+    --danger-rgb: 192 57 43;
   }
 
   :root.dark {
-    --accent-rgb: 135 132 255;
-    --accent-hover-rgb: 160 158 255;
-    --accent-soft-rgb: 35 35 62;
-    --accent-dark-soft-rgb: 135 132 255;
+    --canvas-rgb: 11 12 14;
+    --surface-rgb: 18 20 23;
+    --surface-soft-rgb: 23 26 30;
+    --surface-muted-rgb: 32 36 41;
+    --border-rgb: 41 45 51;
+    --line-200-rgb: 52 57 64;
+    --line-300-rgb: 68 74 82;
+    --ink-950-rgb: 245 246 248;
+    --ink-900-rgb: 233 235 239;
+    --ink-700-rgb: 182 188 197;
+    --ink-550-rgb: 154 161 171;
+    --ink-450-rgb: 124 131 141;
+    --text-primary-rgb: 245 246 248;
+    --text-secondary-rgb: 166 173 184;
+    --text-muted-rgb: 124 131 141;
+    --accent-rgb: 154 150 255;
+    --accent-hover-rgb: 176 173 255;
+    --accent-soft-rgb: 38 37 64;
+    --success-rgb: 74 190 125;
+    --warning-rgb: 224 168 70;
+    --danger-rgb: 240 124 110;
   }
 
   html { height: 100%; }
 
   body {
     @apply h-full bg-canvas text-text-primary font-sans antialiased;
-    letter-spacing: 0.4px;
+    letter-spacing: 0.02em;
     overflow: hidden;
   }
 
   .dark body {
-    @apply bg-[#0B0C0F] text-text-dark-primary;
+    @apply text-text-primary;
   }
 
   #root { height: 100%; }
@@ -83,20 +120,15 @@
 }
 
 @layer components {
-  /* Qwen navigation rows are pills on the canvas, not bordered buttons. */
-  .sidebar-btn {
-    @apply flex items-center justify-center h-9 rounded-full
-           text-text-secondary hover:text-text-primary hover:bg-surface-muted
-           transition-[background-color,font-weight,color] duration-150 cursor-pointer relative;
+  /* Section furniture: one ruled heading per block, one quiet latin label. */
+  .section-title {
+    @apply text-section font-semibold tracking-cn text-text-primary;
   }
-  .dark .sidebar-btn {
-    @apply text-text-dark-secondary hover:text-text-dark-primary hover:bg-surface-dark-muted;
+  .meta-label {
+    @apply font-mono text-label uppercase text-text-muted;
   }
-  .sidebar-btn.active {
-    @apply font-medium text-accent bg-border;
-  }
-  .dark .sidebar-btn.active {
-    @apply text-accent bg-accent-dark-soft;
+  .panel {
+    @apply rounded-panel border border-border bg-surface;
   }
 
   /* Graph nodes are SVG buttons; the ring belongs on the circle, not the group. */
@@ -108,14 +140,13 @@
     stroke-width: 2;
   }
 
-  /* Tag / badge */
+  /* Tag / badge — pills survive only for difficulty and status. */
   .badge {
-    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
   }
-  .badge-easy   { @apply bg-surface-muted text-text-secondary; }
-  .badge-medium { @apply bg-surface-muted text-text-secondary; }
-  .badge-hard   { @apply bg-surface-muted text-text-secondary; }
-  .dark .badge-easy, .dark .badge-medium, .dark .badge-hard { @apply bg-surface-dark-muted text-text-dark-secondary; }
+  .badge-easy   { @apply bg-success/10 text-success; }
+  .badge-medium { @apply bg-warning/10 text-warning; }
+  .badge-hard   { @apply bg-danger/10 text-danger; }
 
   /* Focus mode overlay indicator */
   .focus-mode-bar {
@@ -172,10 +203,7 @@
   }
 
   .editorial-rule {
-    border-color: #E6E9EF;
-  }
-  .dark .editorial-rule {
-    border-color: #2A2E38;
+    border-color: rgb(var(--border-rgb));
   }
 
   /* Panel divider handle */
@@ -190,7 +218,7 @@
     @apply grid gap-3;
   }
 
-  @media (min-width: 1024px) {
+  @media (min-width: 1360px) {
     .guided-workspace {
       grid-template-columns: var(--guided-cols);
       grid-template-rows: minmax(0, 1fr);
@@ -208,7 +236,7 @@
     touch-action: none;
   }
 
-  @media (min-width: 1024px) {
+  @media (min-width: 1360px) {
     .guided-resizer { display: block; }
   }
 
@@ -288,26 +316,26 @@
    */
   .code-workbench {
     --code-bg: #FFFFFF;
-    --code-panel: #F9FAFD;
+    --code-panel: #FAFAFB;
     --code-panel-raised: #FFFFFF;
-    --code-rule: #E6E9EF;
-    --code-ink: #111317;
-    --code-muted: #8E96A7;
-    --code-focus: #5B58FF;
-    --code-focus-soft: #F2F3FF;
+    --code-rule: #E2E4E8;
+    --code-ink: #15171B;
+    --code-muted: #868D97;
+    --code-focus: #4A45E8;
+    --code-focus-soft: #EEEDFD;
     background: var(--code-bg);
     color: var(--code-ink);
   }
 
   .dark .code-workbench {
-    --code-bg: #111317;
-    --code-panel: #171A21;
-    --code-panel-raised: #1D222B;
-    --code-rule: #2A2E38;
-    --code-ink: #F8F9FC;
-    --code-muted: #8E96A7;
-    --code-focus: #8784FF;
-    --code-focus-soft: #23233E;
+    --code-bg: #121417;
+    --code-panel: #171A1E;
+    --code-panel-raised: #1D2126;
+    --code-rule: #292D33;
+    --code-ink: #F5F6F8;
+    --code-muted: #7C838D;
+    --code-focus: #9A96FF;
+    --code-focus-soft: #262540;
   }
 
   .code-toolbar {
@@ -316,8 +344,8 @@
     border-bottom: 1px solid var(--code-rule);
     background: var(--code-panel);
     color: var(--code-muted);
-    font-size: 13px;
-    letter-spacing: 0.4px;
+    font-size: 12px;
+    letter-spacing: 0.01em;
   }
 
   .code-toolbar-title {
@@ -326,23 +354,8 @@
     font-weight: 600;
   }
 
-  .code-toolbar-dots {
-    @apply flex items-center gap-1;
-  }
-
-  .code-toolbar-dots i {
-    width: 6px;
-    height: 6px;
-    border-radius: 999px;
-    background: var(--code-rule);
-  }
-
-  .code-toolbar-dots i:first-child { background: var(--code-focus); }
-  .code-toolbar-dots i:nth-child(2),
-  .code-toolbar-dots i:last-child { background: var(--code-rule); }
-
   .code-file {
-    @apply truncate rounded-full bg-surface-muted px-2 py-1 font-mono text-xs;
+    @apply truncate rounded-[4px] bg-surface-muted px-2 py-1 font-mono text-[11px];
     color: var(--code-muted);
   }
 
@@ -351,7 +364,7 @@
   }
 
   .code-toolbar-status {
-    @apply rounded-full px-2 py-1 text-xs;
+    @apply rounded-[4px] px-2 py-1 text-[11px];
     background: var(--code-focus-soft);
     color: var(--code-focus);
   }

@@ -171,11 +171,15 @@ export default function GuidedLearningPage() {
   // not the browser viewport: the icon sidebar and page padding are not part of
   // the three-column grid.
   const availableWidth = workspaceWidth || viewportWidth
+  const columnsActive = viewportWidth >= 1360
   const visibleColumnCount = 1 + (leftOpen ? 1 : 0) + (codeDocked ? 1 : 0)
   const usableWidth = Math.max(LEFT_MIN + RIGHT_MIN, availableWidth - GUIDED_GAP * (visibleColumnCount - 1))
   const resizeSpace = Math.max(LEFT_MIN + RIGHT_MIN, usableWidth - CHAT_MIN)
 
   useEffect(() => {
+    // Stacked layouts keep the learner's saved column widths; clamping them to
+    // the stacked width would permanently shrink the desktop layout.
+    if (!columnsActive) return
     setLayout(current => {
       const rightMax = Math.max(RIGHT_MIN, Math.min(RIGHT_MAX, resizeSpace - (current.leftOpen ? current.leftWidth : 0)))
       const leftMax = Math.max(LEFT_MIN, Math.min(LEFT_MAX, resizeSpace - (isCodeStage && rightOpen && !codeFloatingActive ? rightWidth : 0)))
@@ -185,7 +189,7 @@ export default function GuidedLearningPage() {
         ? current
         : { ...current, leftWidth: nextLeft, rightWidth: nextRight }
     })
-  }, [isCodeStage, leftOpen, rightOpen, codeFloatingActive, resizeSpace, rightWidth])
+  }, [columnsActive, isCodeStage, leftOpen, rightOpen, codeFloatingActive, resizeSpace, rightWidth])
 
   const leftLimit = Math.max(LEFT_MIN, Math.min(LEFT_MAX, resizeSpace - (codeDocked ? rightWidth : 0)))
   const rightLimit = Math.max(RIGHT_MIN, Math.min(RIGHT_MAX, resizeSpace - (leftOpen ? leftWidth : 0)))
@@ -565,24 +569,24 @@ export default function GuidedLearningPage() {
     setNoteStatus('已保存到 AI 笔记。')
   }
 
-  return <main className="flex min-h-0 flex-1 flex-col bg-canvas px-3 py-4 dark:bg-[#0B0C0F] sm:px-6 sm:py-6">
+  return <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-canvas px-4 pb-4 pt-5 sm:px-7 sm:pt-6 min-[1360px]:overflow-hidden">
     <div className="mx-auto flex min-h-0 w-full max-w-[1440px] flex-1 flex-col">
-      <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div><p className="text-xs font-medium tracking-wide text-accent">学习工作区</p><h1 className="mt-1 text-2xl font-semibold tracking-title text-text-primary dark:text-text-dark-primary">{activeTopic || '和教练一起学习'}</h1></div>
-        <div className="flex flex-wrap items-center gap-2 text-sm text-text-secondary dark:text-text-dark-secondary">
-          <button type="button" aria-pressed={leftOpen} aria-label={leftOpen ? '收起大纲' : '展开大纲'} onClick={() => setLayout(current => ({ ...current, leftOpen: !current.leftOpen }))} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${leftOpen ? 'border-accent/30 bg-accent/10 text-accent' : 'border-border text-text-secondary hover:border-accent/60 hover:text-accent dark:border-border-dark dark:text-text-dark-secondary'}`}><PanelLeft size={15} /><span className="hidden sm:inline">大纲</span></button>
-          {isCodeStage && <button type="button" aria-pressed={rightOpen || codeFloatingActive} aria-label={rightOpen || codeFloatingActive ? '收起代码区' : '展开代码区'} onClick={() => setLayout(current => { const visible = current.rightOpen || current.codeFloating; return { ...current, rightOpen: !visible, codeFloating: false, codeMaximized: false } })} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${rightOpen || codeFloatingActive ? 'border-accent/30 bg-accent/10 text-accent' : 'border-border text-text-secondary hover:border-accent/60 hover:text-accent dark:border-border-dark dark:text-text-dark-secondary'}`}><Code2 size={15} /><span className="hidden sm:inline">代码区</span></button>}
-          {isCodeStage && (rightOpen || codeFloatingActive) && <button type="button" aria-pressed={codeFloatingActive} aria-label={codeFloatingActive ? '嵌入代码区布局' : '独立代码区为浮窗'} onClick={() => setLayout(current => ({ ...current, rightOpen: true, codeFloating: !current.codeFloating, codeMaximized: false, codeFloat: current.codeFloating ? current.codeFloat : clampFloatRect(current.codeFloat) }))} className={`hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors lg:inline-flex ${codeFloatingActive ? 'border-accent/30 bg-accent/10 text-accent' : 'border-border text-text-secondary hover:border-accent/60 hover:text-accent dark:border-border-dark dark:text-text-dark-secondary'}`}>{codeFloatingActive ? <PanelTop size={15} /> : <ExternalLink size={15} />}<span className="hidden sm:inline">{codeFloatingActive ? '嵌入' : '独立'}</span></button>}
-          <button type="button" aria-label="重置学习页布局" title="重置分栏宽度和代码浮窗" onClick={resetLayout} className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-text-secondary transition-colors hover:border-accent/60 hover:text-accent dark:border-border-dark dark:text-text-dark-secondary"><RotateCcw size={15} /><span className="hidden sm:inline">重置</span></button>
-          {activeTopic && <button disabled={busy} onClick={resetTopic} className="inline-flex items-center gap-1.5 hover:text-accent disabled:opacity-50"><Plus size={15} />新主题</button>}
-          <button onClick={() => navigate('/knowledge')} className="inline-flex items-center gap-1.5 hover:text-accent"><BookOpen size={15} />知识库</button>
-          <button onClick={() => navigate('/learning/dashboard')} className="hover:text-accent">学习记录</button>
+      <header className="mb-4 flex flex-wrap items-end justify-between gap-3 border-b border-border pb-4">
+        <h1 className="min-w-0 truncate text-page font-semibold tracking-title text-text-primary">{activeTopic || '和教练一起学习'}</h1>
+        <div className="flex flex-wrap items-center gap-1.5 text-meta text-text-secondary">
+          <button type="button" aria-pressed={leftOpen} aria-label={leftOpen ? '收起大纲' : '展开大纲'} onClick={() => setLayout(current => ({ ...current, leftOpen: !current.leftOpen }))} className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-meta transition-colors ${leftOpen ? 'border-accent/30 bg-accent-soft text-accent' : 'border-border text-text-secondary hover:border-ink-450 hover:text-text-primary'}`}><PanelLeft size={14} /><span className="hidden sm:inline">大纲</span></button>
+          {isCodeStage && <button type="button" aria-pressed={rightOpen || codeFloatingActive} aria-label={rightOpen || codeFloatingActive ? '收起代码区' : '展开代码区'} onClick={() => setLayout(current => { const visible = current.rightOpen || current.codeFloating; return { ...current, rightOpen: !visible, codeFloating: false, codeMaximized: false } })} className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-meta transition-colors ${rightOpen || codeFloatingActive ? 'border-accent/30 bg-accent-soft text-accent' : 'border-border text-text-secondary hover:border-ink-450 hover:text-text-primary'}`}><Code2 size={14} /><span className="hidden sm:inline">代码区</span></button>}
+          {isCodeStage && (rightOpen || codeFloatingActive) && <button type="button" aria-pressed={codeFloatingActive} aria-label={codeFloatingActive ? '嵌入代码区布局' : '独立代码区为浮窗'} onClick={() => setLayout(current => ({ ...current, rightOpen: true, codeFloating: !current.codeFloating, codeMaximized: false, codeFloat: current.codeFloating ? current.codeFloat : clampFloatRect(current.codeFloat) }))} className={`hidden h-8 items-center gap-1.5 rounded-md border px-2.5 text-meta transition-colors lg:inline-flex ${codeFloatingActive ? 'border-accent/30 bg-accent-soft text-accent' : 'border-border text-text-secondary hover:border-ink-450 hover:text-text-primary'}`}>{codeFloatingActive ? <PanelTop size={14} /> : <ExternalLink size={14} />}<span className="hidden sm:inline">{codeFloatingActive ? '嵌入' : '独立'}</span></button>}
+          <button type="button" aria-label="重置学习页布局" title="重置分栏宽度和代码浮窗" onClick={resetLayout} className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-meta text-text-secondary transition-colors hover:border-ink-450 hover:text-text-primary"><RotateCcw size={14} /><span className="hidden sm:inline">重置</span></button>
+          {activeTopic && <button disabled={busy} onClick={resetTopic} className="ml-1 inline-flex h-8 items-center gap-1.5 px-1 text-meta hover:text-accent disabled:opacity-50"><Plus size={14} />新主题</button>}
+          <button onClick={() => navigate('/knowledge')} className="inline-flex h-8 items-center gap-1.5 px-1 text-meta hover:text-accent"><BookOpen size={14} />知识库</button>
+          <button onClick={() => navigate('/learning/dashboard')} className="inline-flex h-8 items-center px-1 text-meta hover:text-accent">学习记录</button>
         </div>
       </header>
       <div ref={workspaceRef} className="guided-workspace min-h-0 flex-1" style={{ '--guided-cols': guidedColumns } as CSSProperties}>
-        {leftOpen && <aside className="relative flex min-h-0 min-w-0 flex-col rounded-panel border border-border bg-surface p-4 dark:border-border-dark dark:bg-surface-dark" aria-label="学习大纲">
+        {leftOpen && <aside className="relative flex min-h-[300px] min-w-0 flex-col rounded-card border border-border bg-surface p-4 min-[1360px]:min-h-0" aria-label="学习大纲">
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-          <div className="flex items-center gap-2 text-sm font-semibold text-text-primary dark:text-text-dark-primary"><Sparkles size={16} className="text-accent" />学习路径<span className="ml-auto whitespace-nowrap rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">{editingOutline ? '编辑中' : planning ? '规划中' : activeTopic ? (planSource === 'ai' ? 'AI 规划' : planSource === 'edited' ? '已编辑' : '默认路径') : '待规划'}</span>{activeTopic && !editingOutline && <button type="button" disabled={busy || planning} aria-label="编辑学习大纲" title="编辑学习大纲" onClick={beginOutlineEdit} className="shrink-0 rounded p-1 text-text-muted transition-colors hover:bg-surface-muted hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 dark:text-text-dark-muted dark:hover:bg-surface-dark-muted"><Pencil size={13} /></button>}</div>
+          <div className="flex flex-wrap items-center gap-2 text-[13px] font-semibold text-text-primary"><Sparkles size={16} className="shrink-0 text-accent" /><span className="whitespace-nowrap">学习路径</span><div className="ml-auto flex items-center gap-1"><span className="whitespace-nowrap rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent">{editingOutline ? '编辑中' : planning ? '规划中' : activeTopic ? (planSource === 'ai' ? 'AI 规划' : planSource === 'edited' ? '已编辑' : '默认路径') : '待规划'}</span>{activeTopic && !editingOutline && <button type="button" disabled={busy || planning} aria-label="编辑学习大纲" title="编辑学习大纲" onClick={beginOutlineEdit} className="shrink-0 rounded p-1 text-text-muted transition-colors hover:bg-surface-muted hover:text-accent disabled:cursor-not-allowed disabled:opacity-40"><Pencil size={13} /></button>}</div></div>
           <p className="mt-1 text-xs leading-5 text-text-muted dark:text-text-dark-muted">{editingOutline ? '调整阶段名称、顺序或数量；最后必须是复盘，并至少保留一个编程阶段。' : planning ? 'AI 正在根据主题规划学习阶段…' : '由 AI 教练根据主题自动规划，理解概念、逐步练习，再回顾思路。'}</p>
           {editingOutline ? <div className="mt-3">
             <ol aria-label="编辑学习阶段" className="space-y-1">
@@ -630,32 +634,32 @@ export default function GuidedLearningPage() {
               })}
             </ol>
           </div> : <ol aria-label="学习阶段" className="mt-4 grid grid-cols-2 gap-1 sm:grid-cols-5 lg:grid-cols-1">
-            {stages.map((item, index) => <li key={item.id} aria-current={activeTopic && index === stage ? 'step' : undefined} className={`flex items-center gap-2 rounded-card px-2.5 py-2.5 text-xs ${activeTopic && index === stage ? 'bg-accent/10 font-medium text-accent' : 'text-text-secondary dark:text-text-dark-secondary'}`}>
+            {stages.map((item, index) => <li key={item.id} aria-current={activeTopic && index === stage ? 'step' : undefined} className={`flex items-center gap-2 rounded-card px-2.5 py-2.5 text-xs ${activeTopic && index === stage ? 'bg-accent-soft font-medium text-accent' : 'text-text-secondary dark:text-text-dark-secondary'}`}>
               {activeTopic && index < stage ? <Check size={15} className="shrink-0 text-accent" /> : index === stage && activeTopic ? <span className="flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full bg-accent text-[9px] text-white">{index + 1}</span> : <Circle size={15} className="shrink-0 opacity-40" />}
               <span>{item.name}</span>
             </li>)}
           </ol>}
-          <div className="mt-4 hidden border-t border-border pt-4 text-xs leading-5 text-text-muted dark:border-border-dark dark:text-text-dark-muted lg:block">{activeTopic ? '可以随时向教练追问。准备好后，再进入下一阶段。' : '选择一个想掌握的知识点，开始这次学习。'}</div>
           {masterySync !== 'idle' && <p role="status" className="mt-2 text-[10px] leading-4 text-text-muted dark:text-text-dark-muted">{masterySync === 'syncing' ? '正在同步掌握度…' : masterySync === 'synced' ? '掌握度已同步到训练记忆' : '掌握度等待同步'}</p>}
           </div>
+          <div className="mt-3 hidden shrink-0 border-t border-border pt-3 text-xs leading-5 text-text-muted lg:block">{activeTopic ? '可以随时向教练追问。准备好后，再进入下一阶段。' : '选择一个想掌握的知识点，开始这次学习。'}</div>
           {editingOutline && <div className="mt-2 shrink-0 border-t border-border pt-2 dark:border-border-dark">
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" disabled={outlineDraft.length >= MAX_GUIDED_STAGES} onClick={addOutlineStage} className="inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-40"><Plus size={12} />添加阶段</button>
-              <button type="button" onClick={saveOutlineEdit} className="rounded-full bg-[#111317] px-2.5 py-1 text-[11px] font-medium text-white transition-opacity hover:opacity-90">保存大纲</button>
-              <button type="button" onClick={cancelOutlineEdit} className="rounded-full border border-border px-2.5 py-1 text-[11px] text-text-secondary hover:bg-surface-muted dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">取消</button>
+              <button type="button" onClick={saveOutlineEdit} className="rounded-md bg-ink-950 px-3 py-1.5 text-[11px] font-medium text-canvas transition-colors hover:bg-accent">保存大纲</button>
+              <button type="button" onClick={cancelOutlineEdit} className="rounded-md border border-border px-3 py-1.5 text-[11px] text-text-secondary transition-colors hover:bg-surface-muted">取消</button>
             </div>
             {outlineError && <p role="alert" className="mt-1 text-[11px] leading-4 text-danger">{outlineError}</p>}
           </div>}
           <ColumnResizer side="right" width={leftWidth} min={LEFT_MIN} max={leftLimit} defaultWidth={DEFAULT_GUIDED_LAYOUT.leftWidth} label="调整大纲宽度" onResize={width => setLayout(current => ({ ...current, leftWidth: width }))} />
         </aside>}
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-panel border border-border bg-surface dark:border-border-dark dark:bg-surface-dark">
-          <div className="flex shrink-0 items-center gap-3 border-b border-border px-5 py-3 dark:border-border-dark">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/10 text-accent"><MessageCircle size={18} /></span>
-            <div className="min-w-0"><h2 className="text-sm font-semibold text-text-primary dark:text-text-dark-primary">AI 教练</h2><p className="truncate text-xs text-text-muted dark:text-text-dark-muted">{planning ? '正在规划学习大纲…' : activeTopic ? `正在学习 · ${currentStage?.name ?? ''}` : '输入主题，开始学习'}</p></div>
+        <section className="flex min-h-[520px] flex-col overflow-hidden rounded-card border border-border bg-surface min-[1360px]:min-h-0">
+          <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-accent-soft text-accent"><MessageCircle size={16} /></span>
+            <div className="min-w-0"><h2 className="text-[13px] font-semibold text-text-primary">AI 教练</h2><p className="truncate text-meta text-text-muted">{planning ? '正在规划学习大纲…' : activeTopic ? `正在学习 · ${currentStage?.name ?? ''}` : '输入主题，开始学习'}</p></div>
             {busy && <div className="ml-auto flex items-center gap-3 text-xs text-text-muted"><span role="status">{planning ? '正在规划…' : '正在生成…'}</span><button type="button" onClick={() => { cancelled.current = true; controller.current?.abort() }} className="text-accent hover:underline">停止生成</button></div>}
           </div>
           <div ref={scrollRef} onScroll={() => { const box = scrollRef.current; if (box) followReply.current = box.scrollHeight - box.scrollTop - box.clientHeight < 80 }} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-6" aria-label="学习对话">
-            {!messages.length && !planning && <div className="mx-auto flex h-full min-h-48 max-w-lg flex-col items-center justify-center text-center"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10 text-accent"><Sparkles size={22} /></div><h3 className="mt-4 text-lg font-semibold text-text-primary dark:text-text-dark-primary">今天想学什么？</h3><p className="mt-2 text-sm leading-6 text-text-secondary dark:text-text-dark-secondary">从一个知识点开始。AI 会先规划学习大纲，再带你完成概念讲解、选择题、问答题和编程练习。</p><div className="mt-5 flex flex-wrap justify-center gap-2" aria-label="学习主题建议">{['二分查找', '动态规划', '图的遍历'].map(suggestion => <button key={suggestion} type="button" onClick={() => setTopic(suggestion)} className="rounded-full border border-border px-3 py-1.5 text-xs text-text-secondary transition-colors hover:border-accent hover:text-accent dark:border-border-dark dark:text-text-dark-secondary">{suggestion}</button>)}</div></div>}
+            {!messages.length && !planning && <div className="mx-auto flex h-full min-h-48 max-w-lg flex-col items-center justify-center text-center"><div className="flex h-11 w-11 items-center justify-center rounded-lg bg-accent-soft text-accent"><Sparkles size={20} /></div><h3 className="mt-4 text-[18px] font-semibold tracking-title text-text-primary">今天想学什么？</h3><p className="mt-2 text-body text-text-secondary">从一个知识点开始。AI 会先规划学习大纲，再带你完成概念讲解、选择题、问答题和编程练习。</p><div className="mt-5 flex flex-wrap justify-center gap-2" aria-label="学习主题建议">{['二分查找', '动态规划', '图的遍历'].map(suggestion => <button key={suggestion} type="button" onClick={() => setTopic(suggestion)} className="rounded-md border border-border px-3 py-1.5 text-meta text-text-secondary transition-colors hover:border-ink-450 hover:text-text-primary">{suggestion}</button>)}</div></div>}
             {messages.map(message => {
               const question = choiceQuestions[message.id]
               const choices = question ? parseChoices(message.content) : []
@@ -673,7 +677,7 @@ export default function GuidedLearningPage() {
                       const selected = (canAnswer ? picked || lastPick : lastPick) === choice.label
                       return <button key={choice.label} type="button" aria-pressed={selected}
                         disabled={!canAnswer || busy || mode === 'FOCUS'} onClick={() => setPicked(choice.label)}
-                        className={`flex w-full items-start gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors ${selected ? 'border-accent bg-accent/10 text-text-primary dark:text-text-dark-primary' : 'border-border hover:border-accent/60 dark:border-border-dark'} disabled:cursor-not-allowed disabled:opacity-60`}>
+                        className={`flex w-full items-start gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors ${selected ? 'border-accent bg-accent-soft text-text-primary dark:text-text-dark-primary' : 'border-border hover:border-accent/60 dark:border-border-dark'} disabled:cursor-not-allowed disabled:opacity-60`}>
                         <strong className="shrink-0">{choice.label}</strong><span>{choice.body}</span>
                       </button>
                     })}
@@ -691,7 +695,7 @@ export default function GuidedLearningPage() {
             <div ref={bottomRef} />
           </div>
           <div className="shrink-0 border-t border-border p-3 dark:border-border-dark sm:p-4">
-            {!activeTopic ? <div className="flex gap-2"><input aria-label="学习知识点" value={topic} onChange={event => setTopic(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) void start() }} placeholder="输入知识点，例如二分查找" className="min-w-0 flex-1 rounded-card border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft" /><button disabled={!topic.trim() || busy || mode === 'FOCUS'} onClick={() => void start()} className="inline-flex items-center gap-1.5 rounded-card bg-accent px-4 text-sm text-white disabled:opacity-50">开始学习 <ArrowRight size={15} /></button></div> : <div className="space-y-2"><textarea aria-label="回复教练" value={draft} onChange={event => setDraft(event.target.value)} placeholder={isCodeStage ? '对题目有疑问？在这里追问教练…' : '输入回答、问题或代码…'} className="w-full resize-y rounded-card border border-border bg-surface p-3 text-sm outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft" rows={2} /><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-text-muted dark:text-text-dark-muted">{currentStage?.type === 'choice' && !answered ? '从题卡中选择一项。' : currentStage?.type === 'short' && !answered ? '提交答案后，教练会给出反馈。' : isCodeStage && !answered ? <>在代码区完成实现，然后提交代码。{!rightOpen && <button type="button" onClick={() => setLayout(current => ({ ...current, rightOpen: true }))} className="ml-1 text-accent hover:underline">打开代码区</button>}</> : ''}</span><div className="flex gap-2">{stage < stages.length - 1 && <button disabled={busy || mode === 'FOCUS' || (stageNeedsAnswer(currentStage) && !answered)} onClick={() => void enterStage(stage + 1)} className="rounded-card border border-border px-3 py-2 text-sm disabled:opacity-40 dark:border-border-dark">下一步：{stages[stage + 1].name}</button>}{stageNeedsAnswer(currentStage) && !answered && currentQuestionMissing && <button disabled={busy || mode === 'FOCUS'} onClick={() => void enterStage(stage)} className="rounded-card border border-border px-3 py-2 text-sm disabled:opacity-50">重新出题</button>}{currentStage?.type === 'short' && !answered && <button disabled={busy || !draft.trim() || mode === 'FOCUS'} onClick={() => void submitAnswer(draft)} className="rounded-card bg-accent px-4 py-2 text-sm text-white disabled:opacity-50">提交答案</button>}<button disabled={busy || !draft.trim() || mode === 'FOCUS'} onClick={() => void send()} className="inline-flex items-center gap-1.5 rounded-card border border-border px-4 py-2 text-sm text-text-primary disabled:opacity-50 dark:border-border-dark dark:text-text-dark-primary">追问 <Send size={14} /></button></div></div></div>}
+            {!activeTopic ? <div className="flex gap-2"><input aria-label="学习知识点" value={topic} onChange={event => setTopic(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) void start() }} placeholder="输入知识点，例如二分查找" className="min-w-0 flex-1 rounded-md border border-line-300 bg-surface px-3 py-2 text-body outline-none transition-colors placeholder:text-text-muted focus:border-accent" /><button disabled={!topic.trim() || busy || mode === 'FOCUS'} onClick={() => void start()} className="inline-flex items-center gap-1.5 rounded-md bg-ink-950 px-4 text-body font-medium text-canvas transition-colors hover:bg-accent disabled:opacity-50">开始学习 <ArrowRight size={15} /></button></div> : <div className="space-y-2"><textarea aria-label="回复教练" value={draft} onChange={event => setDraft(event.target.value)} placeholder={isCodeStage ? '对题目有疑问？在这里追问教练…' : '输入回答、问题或代码…'} className="w-full resize-y rounded-card border border-border bg-surface p-3 text-sm outline-none focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft" rows={2} /><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-text-muted dark:text-text-dark-muted">{currentStage?.type === 'choice' && !answered ? '从题卡中选择一项。' : currentStage?.type === 'short' && !answered ? '提交答案后，教练会给出反馈。' : isCodeStage && !answered ? <>在代码区完成实现，然后提交代码。{!rightOpen && <button type="button" onClick={() => setLayout(current => ({ ...current, rightOpen: true }))} className="ml-1 text-accent hover:underline">打开代码区</button>}</> : ''}</span><div className="flex gap-2">{stage < stages.length - 1 && <button disabled={busy || mode === 'FOCUS' || (stageNeedsAnswer(currentStage) && !answered)} onClick={() => void enterStage(stage + 1)} className="rounded-md border border-border px-3 py-2 text-meta disabled:opacity-40">下一步：{stages[stage + 1].name}</button>}{stageNeedsAnswer(currentStage) && !answered && currentQuestionMissing && <button disabled={busy || mode === 'FOCUS'} onClick={() => void enterStage(stage)} className="rounded-md border border-border px-3 py-2 text-meta disabled:opacity-50">重新出题</button>}{currentStage?.type === 'short' && !answered && <button disabled={busy || !draft.trim() || mode === 'FOCUS'} onClick={() => void submitAnswer(draft)} className="rounded-md bg-ink-950 px-4 py-2 text-body font-medium text-canvas transition-colors hover:bg-accent disabled:opacity-50">提交答案</button>}<button disabled={busy || !draft.trim() || mode === 'FOCUS'} onClick={() => void send()} className="inline-flex items-center gap-1.5 rounded-card border border-border px-4 py-2 text-sm text-text-primary disabled:opacity-50 dark:border-border-dark dark:text-text-dark-primary">追问 <Send size={14} /></button></div></div></div>}
             {mode === 'FOCUS' && <p className="mt-2 text-sm text-text-muted">专注解题期间教练已静默，结束专注后继续学习。</p>}
           </div>
         </section>
@@ -700,8 +704,8 @@ export default function GuidedLearningPage() {
           role={codeFloatingActive ? 'dialog' : undefined}
           aria-label={codeFloatingActive ? '编程题代码浮窗' : undefined}
           className={codeFloatingActive
-            ? 'fixed flex min-h-0 min-w-0 flex-col overflow-hidden rounded-panel border border-border bg-surface shadow-2xl dark:border-border-dark dark:bg-surface-dark'
-            : 'relative flex h-[420px] min-h-0 min-w-0 flex-col lg:h-full'}
+            ? 'fixed flex min-h-0 min-w-0 flex-col overflow-hidden rounded-card border border-border bg-surface shadow-2xl dark:border-border-dark dark:bg-surface-dark'
+            : 'relative flex h-[420px] min-h-0 min-w-0 flex-col min-[1360px]:h-full'}
           style={codeFloatingActive
             ? (codeMaximized
               ? { left: 8, top: 8, right: 8, bottom: 8, width: 'auto', height: 'auto', zIndex: 92 }
@@ -710,7 +714,7 @@ export default function GuidedLearningPage() {
         >
           <section className={codeFloatingActive
             ? 'flex min-h-0 flex-1 flex-col overflow-hidden'
-            : 'flex min-h-0 flex-1 flex-col overflow-hidden rounded-panel border border-border bg-surface dark:border-border-dark dark:bg-surface-dark'}
+            : 'flex min-h-0 flex-1 flex-col overflow-hidden rounded-card border border-border bg-surface dark:border-border-dark dark:bg-surface-dark'}
             aria-label="编程题代码区">
             <GuidedLeetCodePanel
               stageId={currentStage?.id ?? ''}

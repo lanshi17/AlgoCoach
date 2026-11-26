@@ -14,14 +14,14 @@ import type { CoachStyle, ModelProviderConfig, TrainingGoal } from '@/types'
 import { CUSTOM_PROVIDER_PRESET, PROTOCOL_OPTIONS, PROVIDER_PRESETS, providerFromPreset } from '@/services/providerPresets'
 import { DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_OUTPUT_TOKENS } from '@/services/providerPresets'
 import Button from '@/components/Common/Button'
-import PageHeader from '@/components/Common/PageHeader'
+import PageShell from '@/components/Common/PageShell'
 import Switch from '@/components/Common/Switch'
 
 const control =
-  'h-9 w-full rounded-[10px] border border-line-300 bg-surface px-3 text-sm text-text-primary outline-none transition-colors ' +
-  'placeholder:text-text-muted focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft dark:text-text-dark-primary'
+  'h-9 w-full rounded-md border border-line-300 bg-surface px-3 text-body text-text-primary outline-none transition-colors ' +
+  'placeholder:text-text-muted focus:border-accent'
 const field = `mt-1 ${control}`
-const label = 'text-xs text-text-secondary dark:text-text-dark-secondary'
+const label = 'text-meta text-text-secondary'
 
 function formatAutoSyncFailure(failure: AutoSyncFailure): string {
   const when = new Date(failure.at).toLocaleString()
@@ -304,13 +304,10 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="flex-1 min-h-0 overflow-y-auto bg-canvas px-6 py-7 dark:bg-[#0B0C0F]">
-      <div className="mx-auto max-w-3xl">
-        <PageHeader title="设置" icon={<SlidersHorizontal size={18} />} />
-
-        <section className="space-y-5 rounded-panel border border-border bg-surface p-7 dark:border-border-dark dark:bg-surface-dark">
+    <PageShell title="设置" icon={<SlidersHorizontal size={18} />} width="narrow">
+        <section className="space-y-6 rounded-card border border-border bg-surface p-6 sm:p-7">
           <div>
-            <label htmlFor="training-goal" className="block text-sm font-medium text-text-primary dark:text-text-dark-primary">训练目标</label>
+            <label htmlFor="training-goal" className="block text-[13px] font-medium text-text-primary">训练目标</label>
             <select id="training-goal" value={goal} onChange={event => setGoal(event.target.value as TrainingGoal)}
               className={`${field} max-w-sm`}>
               <option value="contest">OI / xCPC 竞赛训练</option>
@@ -319,8 +316,8 @@ export default function SettingsPage() {
             </select>
           </div>
 
-          <div className="border-t border-border pt-5 dark:border-border-dark">
-            <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">本地 Workspace</p>
+          <div className="border-t border-border pt-6">
+            <p className="text-[13px] font-semibold text-text-primary">本地 Workspace</p>
             <p className="mt-1 text-xs leading-5 text-text-secondary dark:text-text-dark-secondary">不同 workspace 的练习本、复盘、草稿和任务板相互隔离。切换后应用会重新载入。</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <select aria-label="本地 Workspace" value={getWorkspaceId()} onChange={event => changeWorkspace(event.target.value)} className={`${control} max-w-sm`}>
@@ -334,8 +331,8 @@ export default function SettingsPage() {
             {workspaceMessage && <p role="status" className="mt-2 text-xs text-text-secondary dark:text-text-dark-secondary">{workspaceMessage}</p>}
           </div>
 
-          <div className="space-y-4 border-t border-border pt-5 dark:border-border-dark">
-            <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">AI 教练</p>
+          <div className="space-y-4 border-t border-border pt-6">
+            <p className="text-[13px] font-semibold text-text-primary">AI 教练</p>
             <div className="flex items-center justify-between gap-4">
               <span className="text-sm text-text-primary dark:text-text-dark-primary">自动赛后复盘</span>
               <Switch label="自动赛后复盘" checked={coachPrefs.autoReview}
@@ -363,8 +360,8 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="border-t border-border pt-5 dark:border-border-dark">
-            <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">模型 Provider</p>
+          <div className="border-t border-border pt-6">
+            <p className="text-[13px] font-semibold text-text-primary">模型 Provider</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <label className={label}>预设
                 <select aria-label="模型 Provider 预设" value={providerDraft.id} onChange={event => chooseProvider(event.target.value)}
@@ -419,15 +416,15 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-4 border-t border-border pt-5 dark:border-border-dark">
-            <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">题库登录</p>
+          <div className="flex items-center justify-between gap-4 border-t border-border pt-6">
+            <p className="text-[13px] font-semibold text-text-primary">题库登录</p>
             <Button onClick={() => navigate('/settings/platforms')} disabled={mode === 'FOCUS'}>管理</Button>
           </div>
 
-          <div className="border-t border-border pt-5 dark:border-border-dark">
+          <div className="border-t border-border pt-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">本地数据备份</p>
+                <p className="text-[13px] font-semibold text-text-primary">本地数据备份</p>
                 <p className="mt-1 text-xs text-text-secondary dark:text-text-dark-secondary">导入只补充本机没有的任务、笔记、练习记录和复盘；已有记录保持不变。</p>
               </div>
               <div className="flex flex-wrap items-center gap-3">
@@ -458,10 +455,10 @@ export default function SettingsPage() {
             )}
           </div>
 
-          <div className="border-t border-border pt-5 dark:border-border-dark">
+          <div className="border-t border-border pt-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-xl">
-                <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">跨设备掌握度与复习计划</p>
+                <p className="text-[13px] font-semibold text-text-primary">跨设备掌握度与复习计划</p>
                 <p className="mt-1 text-xs leading-5 text-text-secondary dark:text-text-dark-secondary">在一台设备导出 JSON，在另一台导入。知识点取较高掌握度、较大训练次数和较新时间；复习计划按更新时间取较新状态，通知记录仍保留在本机。重复导入不会重复计数，也不含提交记录、对话或代码。</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -505,8 +502,7 @@ export default function SettingsPage() {
             </div>
           </div>
         </section>
-      </div>
-    </main>
+    </PageShell>
   )
 }
 

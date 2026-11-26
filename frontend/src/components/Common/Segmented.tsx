@@ -1,5 +1,3 @@
-import React from 'react'
-
 type Option<T extends string> = { value: T; label: string }
 
 type Props<T extends string> = {
@@ -18,7 +16,7 @@ export default function Segmented<T extends string>({ value, options, onChange, 
     <div
       role="group"
       aria-label={label}
-      className="inline-flex h-9 items-center gap-0.5 rounded-full border border-border p-0.5 dark:border-border-dark"
+      className="inline-flex h-9 items-center gap-0.5 rounded-md border border-border bg-surface p-0.5"
     >
       {options.map(option => (
         <button
@@ -26,10 +24,10 @@ export default function Segmented<T extends string>({ value, options, onChange, 
           type="button"
           aria-pressed={value === option.value}
           onClick={() => onChange(option.value)}
-          className={`h-8 rounded-full px-3 text-xs transition-[background-color,color] duration-150 ${
+          className={`h-8 rounded-[6px] px-3 text-meta transition-[background-color,color] duration-150 ${
             value === option.value
-              ? 'bg-accent text-white'
-              : 'text-text-secondary hover:bg-surface-muted dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted'
+              ? 'bg-ink-950 text-canvas'
+              : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary'
           }`}
         >
           {option.label}

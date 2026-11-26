@@ -6,7 +6,7 @@ import { LOCAL_PRACTICE_PROBLEMS } from '@/services/localPractice'
 import { buildModeLayout, dailyQuizForProblem, getWeekActivity, LEARNING_MODE_OPTIONS, readLearningSpaceLayout, type LearningBlockId, type LearningMode, type LearningSpaceLayout, writeLearningSpaceLayout } from '@/services/learningSpace'
 import { BlockCard } from '@/components/Learning/BlockCard'
 import { Badge } from '@/components/Common/Badge'
-import PageHeader from '@/components/Common/PageHeader'
+import PageShell from '@/components/Common/PageShell'
 import Button from '@/components/Common/Button'
 import { agentService } from '@/services/agentService'
 import type { AgentProfile } from '@/types'
@@ -76,26 +76,24 @@ export default function LearningSpacePage() {
   const visibleBlocks = layout.blocks.filter(block => block.visible)
   const taskDate = new Date().toISOString().slice(0, 10)
 
-  return <main className="min-h-0 flex-1 overflow-y-auto bg-canvas px-6 py-7 dark:bg-[#0B0C0F]">
-    <div className="mx-auto max-w-[1440px]">
-      <PageHeader
-        title="学习空间"
-        icon={<LayoutDashboard size={20} />}
-        actions={
-          <Button size="sm" variant="secondary" onClick={() => setEditing(value => !value)} aria-pressed={editing}>
-            {editing ? <Check size={15} /> : <Plus size={15} />}
-            {editing ? '完成整理' : '整理模块'}
-          </Button>
-        }
-      />
-
-      <section className="mb-3 rounded-panel bg-surface p-7 dark:bg-surface-dark">
+  return (
+    <PageShell
+      title="学习空间"
+      icon={<LayoutDashboard size={18} />}
+      actions={
+        <Button size="sm" variant="secondary" onClick={() => setEditing(value => !value)} aria-pressed={editing}>
+          {editing ? <Check size={15} /> : <Plus size={15} />}
+          {editing ? '完成整理' : '整理模块'}
+        </Button>
+      }
+    >
+      <section className="mb-3 rounded-panel border border-border bg-surface p-6 sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="max-w-xl">
-            <h2 className="text-balance text-xl font-semibold tracking-title text-text-primary dark:text-text-dark-primary">今天，从一小段代码开始</h2>
-            <p className="mt-2 text-sm leading-5 tracking-cn text-text-secondary dark:text-text-dark-secondary">先理解，再编码，最后让 Agent 根据你的过程安排下一次练习。</p>
+            <h2 className="text-balance text-[20px] font-semibold leading-7 tracking-title text-text-primary">今天，从一小段代码开始</h2>
+            <p className="mt-1.5 text-body text-text-secondary">先理解，再编码，最后让 Agent 根据你的过程安排下一次练习。</p>
           </div>
-          <div className="grid w-full grid-cols-3 gap-0.5 rounded-full bg-surface-muted p-0.5 sm:flex sm:w-auto dark:bg-surface-dark-muted" role="tablist" aria-label="学习模式">
+          <div className="grid w-full grid-cols-3 gap-0.5 rounded-md bg-surface-muted p-0.5 sm:flex sm:w-auto" role="tablist" aria-label="学习模式">
             {LEARNING_MODE_OPTIONS.map(option => (
               <button
                 key={option.id}
@@ -103,35 +101,35 @@ export default function LearningSpacePage() {
                 role="tab"
                 aria-selected={layout.mode === option.id}
                 onClick={() => setMode(option.id)}
-                className={`h-8 min-w-0 whitespace-nowrap rounded-full px-1.5 text-[13px] leading-5 tracking-cn transition-[background-color,color,font-weight] duration-150 sm:px-3 sm:text-sm
+                className={`h-8 min-w-0 whitespace-nowrap rounded-[6px] px-1.5 text-meta leading-5 tracking-cn transition-[background-color,color] duration-150 sm:px-3
                   ${layout.mode === option.id
-                    ? 'bg-surface font-medium text-accent dark:bg-surface-dark'
-                    : 'text-text-secondary hover:text-text-primary dark:text-text-dark-secondary dark:hover:text-text-dark-primary'}`}
+                    ? 'bg-ink-950 font-medium text-canvas'
+                    : 'text-text-secondary hover:text-text-primary'}`}
               >
                 {option.label}
               </button>
             ))}
           </div>
         </div>
-        <p className="mt-6 border-t border-border pt-4 text-xs leading-5 tracking-cn text-text-secondary dark:border-border-dark dark:text-text-dark-secondary">
+        <p className="mt-5 border-t border-border pt-3.5 text-meta tracking-cn text-text-secondary">
           {LEARNING_MODE_OPTIONS.find(option => option.id === layout.mode)?.description}
         </p>
       </section>
 
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-card bg-surface px-5 py-4 dark:bg-surface-dark">
-        <span className="text-sm text-text-secondary dark:text-text-dark-secondary">导入课程资料和笔记，让教练在相关问题中检索参考。</span>
-        <button type="button" onClick={() => navigate('/knowledge/library')} className="inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"><BookOpen size={16} />管理学习资料 <ArrowRight size={15} /></button>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-card border border-border bg-surface px-5 py-3.5">
+        <span className="text-body text-text-secondary">导入课程资料和笔记，让教练在相关问题中检索参考。</span>
+        <button type="button" onClick={() => navigate('/knowledge/library')} className="inline-flex items-center gap-1.5 text-body font-medium text-accent hover:underline"><BookOpen size={15} />管理学习资料 <ArrowRight size={14} /></button>
       </div>
-      {dueReviews.length > 0 && !visibleBlocks.some(block => block.id === 'review') && <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-card border border-accent/30 bg-surface px-4 py-3 text-sm dark:bg-surface-dark"><span className="text-text-secondary dark:text-text-dark-secondary">有 {dueReviews.length} 条笔记到期复习。</span><button type="button" onClick={() => saveLayout({ ...layout, blocks: layout.blocks.map(block => block.id === 'review' ? { ...block, visible: true } : block) })} className="font-medium text-accent hover:underline">查看到期复习</button></div>}
-      {editing && <div className="mb-3 flex items-center justify-between rounded-card border border-border bg-surface px-4 py-3 text-sm dark:border-border-dark dark:bg-surface-dark"><span className="text-text-secondary dark:text-text-dark-secondary">隐藏的模块不会删除数据，可以随时恢复。</span><button type="button" onClick={restoreBlocks} className="inline-flex items-center gap-1.5 font-medium text-accent hover:underline"><RotateCcw size={14} />恢复全部模块</button></div>}
-      {suggestion && <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-card border border-accent/30 bg-surface px-4 py-3 text-sm dark:bg-surface-dark"><span className="text-text-secondary dark:text-text-dark-secondary"><span className="font-medium text-text-primary dark:text-text-dark-primary">模式建议（基于练习记录）：</span>{suggestion.reason}</span><button type="button" onClick={() => saveLayout(buildModeLayout(suggestion.suggestedMode))} className="inline-flex h-8 items-center rounded-full bg-[#111317] px-3 text-xs font-medium tracking-cn text-white transition-opacity hover:opacity-90">切换模式</button></div>}
+      {dueReviews.length > 0 && !visibleBlocks.some(block => block.id === 'review') && <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-card border border-accent/30 bg-surface px-4 py-3 text-body"><span className="text-text-secondary">有 {dueReviews.length} 条笔记到期复习。</span><button type="button" onClick={() => saveLayout({ ...layout, blocks: layout.blocks.map(block => block.id === 'review' ? { ...block, visible: true } : block) })} className="font-medium text-accent hover:underline">查看到期复习</button></div>}
+      {editing && <div className="mb-3 flex items-center justify-between rounded-card border border-border bg-surface px-4 py-3 text-body"><span className="text-text-secondary">隐藏的模块不会删除数据，可以随时恢复。</span><button type="button" onClick={restoreBlocks} className="inline-flex items-center gap-1.5 font-medium text-accent hover:underline"><RotateCcw size={14} />恢复全部模块</button></div>}
+      {suggestion && <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-card border border-accent/30 bg-surface px-4 py-3 text-body"><span className="text-text-secondary"><span className="font-medium text-text-primary">模式建议（基于练习记录）：</span>{suggestion.reason}</span><button type="button" onClick={() => saveLayout(buildModeLayout(suggestion.suggestedMode))} className="inline-flex h-8 items-center rounded-md bg-ink-950 px-3 text-meta font-medium tracking-cn text-canvas transition-colors hover:bg-accent">切换模式</button></div>}
 
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {visibleBlocks.map(block => <React.Fragment key={block.id}>{renderBlock(block.id, { navigate, records, pendingRecords, dueReviews, weekActivity, nextProblem, activeProblem, topicCounts, mode, editing, removeBlock, profile, onReviewSaved: setReviewEntries, tasks, onTaskCreate: addTask, onTaskMove: (taskId, status) => setTasks(moveLearningTask(taskId, status)), onTaskArchive: (taskId, archived) => setTasks(setLearningTaskArchived(taskId, archived)), onTaskNote: (taskId, note) => setTasks(setLearningTaskNote(taskId, note)), dragOverTaskId, onTaskDragStart: startTaskDrag, onTaskDragOver: highlightTaskDrop, onTaskDrop: dropTask, onTaskDragEnd: endTaskDrag, onTaskKeyboardMove: moveTaskByKeyboard, taskDate })}</React.Fragment>)}
       </div>
-      {!visibleBlocks.length && <section className="rounded-panel bg-surface p-10 text-center dark:bg-surface-dark"><p className="text-sm text-text-secondary dark:text-text-dark-secondary">学习空间是空的。</p><button type="button" onClick={restoreBlocks} className="mt-3 font-medium text-accent hover:underline">恢复默认模块</button></section>}
-    </div>
-  </main>
+      {!visibleBlocks.length && <section className="rounded-panel border border-border bg-surface p-10 text-center"><p className="text-body text-text-secondary">学习空间是空的。</p><button type="button" onClick={restoreBlocks} className="mt-3 font-medium text-accent hover:underline">恢复默认模块</button></section>}
+    </PageShell>
+  )
 }
 
 type RenderContext = {
@@ -366,7 +364,7 @@ function TaskRow({ task, dragOver, onStatus, onArchive, onNote, onReorder, onDra
           className="w-full resize-none rounded-card border border-border bg-surface px-2 py-1 text-xs tracking-cn text-text-primary outline-none transition-colors focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft dark:text-text-dark-primary"
         />
         <div className="mt-1 flex items-center gap-2">
-          <button type="button" onClick={() => { onNote(noteDraft); setEditingNote(false) }} className="rounded-full bg-[#111317] px-2.5 py-0.5 text-[11px] font-medium text-white transition-opacity hover:opacity-90">保存备注</button>
+          <button type="button" onClick={() => { onNote(noteDraft); setEditingNote(false) }} className="rounded-md bg-ink-950 px-2.5 py-1 text-[11px] font-medium text-canvas transition-colors hover:bg-accent">保存备注</button>
           <button type="button" onClick={() => { setNoteDraft(task.note ?? ''); setEditingNote(false) }} className="rounded-full border border-border px-2.5 py-0.5 text-[11px] text-text-secondary hover:bg-surface-muted dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">取消</button>
           <span className="ml-auto text-[10px] tabular-nums text-text-muted dark:text-text-dark-muted">{noteDraft.length}/{MAX_LEARNING_TASK_NOTE_LENGTH}</span>
         </div>
@@ -424,7 +422,7 @@ function ReviewBlock({ records, dueReviews, allRecords, activeProblem, mode, onS
       <p className="mt-5 text-sm font-medium tracking-cn text-text-primary dark:text-text-dark-primary">{current.title}</p>
       <p className="mt-1 text-xs tracking-cn text-text-secondary dark:text-text-dark-secondary">{current.topics.join(' · ') || '自由练习'} · {current.codeLength} 字符</p>
       <textarea value={note} onChange={event => setNote(event.target.value)} rows={3} placeholder="写下思路、复杂度和一个边界条件" className="mt-4 w-full resize-none rounded-card border border-border bg-surface px-3 py-2 text-sm tracking-cn text-text-primary outline-none transition-colors focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft dark:text-text-dark-primary" />
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><button type="button" disabled={!note.trim()} onClick={() => { try { onSave(current, note); setNote(''); setSaveError('') } catch { setSaveError('保存失败，请检查本地存储空间。') } }} className="inline-flex h-9 items-center gap-1.5 rounded-full bg-[#111317] px-4 text-sm font-medium tracking-cn text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">保存复盘 <Check size={15} /></button><button type="button" disabled={!note.trim() || !!unavailableReason} onClick={() => onDiscuss(note, current)} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-4 text-sm font-medium tracking-cn text-text-secondary transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40 dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">问 Agent <Sparkles size={14} /></button></div><span className="text-xs text-text-secondary dark:text-text-dark-secondary">保存后移出队列</span></div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><button type="button" disabled={!note.trim()} onClick={() => { try { onSave(current, note); setNote(''); setSaveError('') } catch { setSaveError('保存失败，请检查本地存储空间。') } }} className="inline-flex h-9 items-center gap-1.5 rounded-md bg-ink-950 px-4 text-body font-medium tracking-cn text-canvas transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40">保存复盘 <Check size={15} /></button><button type="button" disabled={!note.trim() || !!unavailableReason} onClick={() => onDiscuss(note, current)} className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-4 text-sm font-medium tracking-cn text-text-secondary transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40 dark:border-border-dark dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">问 Agent <Sparkles size={14} /></button></div><span className="text-xs text-text-secondary dark:text-text-dark-secondary">保存后移出队列</span></div>
       {saveError && <p role="alert" className="mt-2 text-xs text-danger">{saveError}</p>}
       {unavailableReason && <p className="mt-2 text-xs text-text-secondary dark:text-text-dark-secondary">{unavailableReason}</p>}
     </> : <p className="mt-5 text-sm leading-5 tracking-cn text-text-secondary dark:text-text-dark-secondary">每次结束专注都会留下记录。你可以填写复盘笔记，并在需要时主动发给教练。</p>}

@@ -4,21 +4,20 @@ type Variant = 'primary' | 'secondary' | 'ghost'
 type Size = 'sm' | 'md'
 
 const BASE =
-  'inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-medium tracking-cn ' +
+  'inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium tracking-cn ' +
   'transition-[background-color,border-color,color,opacity] duration-150 disabled:cursor-not-allowed disabled:opacity-40'
 
 const VARIANT: Record<Variant, string> = {
-  primary: 'bg-ink-950 text-white hover:opacity-90',
+  primary: 'bg-ink-950 text-canvas hover:bg-accent',
   secondary:
-    'border border-line-300 text-ink-900 hover:border-[#C9CFDB] ' +
-    'dark:border-border-dark dark:text-text-dark-primary dark:hover:border-[#3A404C]',
-  ghost: 'text-ink-700 hover:bg-surface-muted dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted',
+    'border border-line-300 bg-surface text-text-primary hover:border-ink-450 hover:bg-surface-soft',
+  ghost: 'text-text-secondary hover:bg-surface-muted hover:text-text-primary',
 }
 
-// 36px is the measured console action height. Size only changes type and inset.
+// 36px is the console action height. Size only changes type and inset.
 const SIZE: Record<Size, string> = {
-  sm: 'h-9 px-3.5 text-xs',
-  md: 'h-9 px-[18px] text-sm',
+  sm: 'h-8 px-3 text-meta',
+  md: 'h-9 px-4 text-body',
 }
 
 type Props = React.ButtonHTMLAttributes<HTMLButtonElement> & {

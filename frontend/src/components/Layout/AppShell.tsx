@@ -115,19 +115,19 @@ export default function AppShell() {
   }, [])
 
   if (authState === 'checking') {
-    return <div role="status" aria-live="polite" aria-busy="true" className="flex h-full items-center justify-center gap-2 text-sm text-text-muted dark:text-text-dark-muted">
-      <Loader2 size={16} className="animate-spin" /> 正在连接 AlgoCoach…
+    return <div role="status" aria-live="polite" aria-busy="true" className="flex h-full items-center justify-center gap-2 bg-canvas text-meta text-text-muted">
+      <Loader2 size={15} className="animate-spin" /> 正在连接 AlgoCoach…
     </div>
   }
   if (authState === 'offline') {
-    return <div className="flex h-full w-full flex-col overflow-hidden bg-canvas dark:bg-[#0B0C0F]">
-      <div role="alert" className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4 py-2 text-xs text-text-secondary dark:border-border-dark dark:bg-surface-dark-soft dark:text-text-dark-secondary">
+    return <div className="flex h-full w-full flex-col overflow-hidden bg-canvas">
+      <div role="alert" className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4 py-2 text-meta text-text-secondary">
         <div className="flex min-w-0 items-center gap-2">
-          <AlertCircle size={15} className="shrink-0" />
-          <span className="truncate"><strong className="font-medium">无法连接 Java 网关。</strong> 题库和判题暂不可用，本地练习仍可用。</span>
+          <AlertCircle size={14} className="shrink-0 text-warning" />
+          <span className="truncate"><strong className="font-medium text-text-primary">无法连接 Java 网关。</strong> 题库和判题暂不可用，本地练习仍可用。</span>
         </div>
         <button onClick={() => void checkAuth()} className="inline-flex shrink-0 items-center gap-1.5 text-accent hover:underline">
-          <RefreshCw size={13} /> 重新连接
+          <RefreshCw size={12} /> 重新连接
         </button>
       </div>
       <div className="flex min-h-0 flex-1">
@@ -140,12 +140,12 @@ export default function AppShell() {
     </div>
   }
   return (
-    <div className="flex h-full w-full overflow-hidden bg-canvas dark:bg-[#0B0C0F]">
+    <div className="flex h-full w-full overflow-hidden bg-canvas">
       {cookieInvalid && (
-        <div role="alert" className="fixed bottom-4 left-1/2 z-[100] flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 rounded-card border border-warning/30 bg-surface px-3 py-2 text-sm text-text-primary dark:bg-surface-dark dark:text-text-dark-primary">
+        <div role="alert" className="fixed bottom-4 left-1/2 z-[100] flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 rounded-lg border border-warning/30 bg-surface px-3 py-2 text-meta text-text-primary shadow-modal">
           <span>LeetCode 登录态已失效，题目列表和提交可能无法使用。</span>
           <Link to="/settings/platforms" className="shrink-0 font-medium text-accent hover:underline">重新配置</Link>
-          <button type="button" aria-label="关闭 Cookie 失效提示" onClick={() => setCookieInvalid(false)} className="shrink-0 text-text-muted hover:text-text-primary dark:text-text-dark-muted dark:hover:text-text-dark-primary">×</button>
+          <button type="button" aria-label="关闭 Cookie 失效提示" onClick={() => setCookieInvalid(false)} className="shrink-0 text-text-muted hover:text-text-primary">×</button>
         </div>
       )}
 
@@ -186,7 +186,7 @@ function AppRoutes() {
 }
 
 function PageLoading() {
-  return <div className="flex flex-1 items-center justify-center text-sm text-text-muted dark:text-text-dark-muted">正在打开页面…</div>
+  return <div className="flex flex-1 items-center justify-center bg-canvas text-meta text-text-muted">正在打开页面…</div>
 }
 
 type WorkspacePanelKey = 'problem' | 'editor' | 'chat'
@@ -464,14 +464,14 @@ function Workspace() {
 
   const panelClass = (key: WorkspacePanelKey, dockedWidthClass: string) => {
     if (isFloating(key)) {
-      return 'fixed flex min-h-0 min-w-0 flex-col overflow-hidden rounded-panel border border-border bg-surface shadow-2xl dark:border-border-dark dark:bg-surface-dark'
+      return 'fixed flex min-h-0 min-w-0 flex-col overflow-hidden rounded-panel border border-border bg-surface shadow-modal'
     }
     // FOCUS must stay hidden at xl too; `xl:flex` is only for the normal tab
     // switching below the wide breakpoint.
     const visibility = key === 'chat' && chatSuppressed
       ? 'hidden'
       : `${panel === key ? 'flex' : 'hidden'} xl:flex`
-    return `${visibility} relative w-full min-h-0 min-w-0 flex-col overflow-visible bg-surface xl:rounded-card xl:border xl:border-border xl:shadow-none dark:bg-surface-dark ${dockedWidthClass}`
+    return `${visibility} relative w-full min-h-0 min-w-0 flex-col overflow-visible bg-surface xl:rounded-[12px] xl:border xl:border-border xl:shadow-light ${dockedWidthClass}`
   }
 
   const panelStyle = (key: WorkspacePanelKey): React.CSSProperties | undefined => {
@@ -496,7 +496,7 @@ function Workspace() {
       <div
         key={`placeholder-${key}`}
         aria-label={`${label}已独立为浮窗`}
-        className={`hidden min-h-0 flex-col items-center justify-center gap-2 rounded-card border border-dashed border-border bg-surface/40 text-xs text-text-muted xl:flex dark:border-border-dark dark:bg-surface-dark/40 dark:text-text-dark-muted ${widthClass}`}
+        className={`hidden min-h-0 flex-col items-center justify-center gap-2 rounded-[12px] border border-dashed border-line-300 bg-surface/40 text-meta text-text-muted xl:flex ${widthClass}`}
       >
         <span>{label}已独立为浮窗</span>
         <button type="button" onClick={() => setPanelMode(key, 'docked')} className="rounded-full border border-border px-2.5 py-1 text-[11px] transition-colors hover:border-accent/60 hover:text-accent dark:border-border-dark">
@@ -513,21 +513,21 @@ function Workspace() {
   return (
     <>
       <Header />
-      <nav aria-label="工作区面板" className="flex shrink-0 gap-1 bg-canvas px-3 py-2 dark:bg-[#0B0C0F] xl:hidden">
+      <nav aria-label="工作区面板" className="flex shrink-0 gap-1 border-b border-border bg-surface px-3 py-2 xl:hidden">
         {([
           ['problem', '题目'], ['editor', '编辑器'], ...(mode === 'FOCUS' ? [] : [['chat', 'AI 教练']] as const),
         ] as const).map(([value, label]) => (
           <button key={value} type="button" aria-pressed={panel === value}
             onClick={() => setPanel(value)}
-            className={`flex-1 rounded-full px-2 py-2 text-sm tracking-cn transition-[background-color,color,font-weight] ${panel === value
-              ? 'bg-border font-medium text-accent dark:bg-surface-dark-muted'
-              : 'text-text-secondary hover:bg-surface-muted dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted'}`}>
+            className={`flex-1 rounded-md px-2 py-1.5 text-meta tracking-cn transition-[background-color,color] ${panel === value
+              ? 'bg-accent-soft font-medium text-accent'
+              : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary'}`}>
             {label}
           </button>
         ))}
       </nav>
-      <div aria-label="面板布局" className="hidden shrink-0 items-center gap-2 bg-canvas px-3 py-1.5 text-xs text-text-muted dark:bg-[#0B0C0F] dark:text-text-dark-muted xl:flex">
-        <span className="mr-auto">拖拽分隔线调整宽度；独立后浮窗可拖动</span>
+      <div aria-label="面板布局" className="hidden h-9 shrink-0 items-center gap-1.5 border-b border-border bg-surface px-4 text-[11px] text-text-muted xl:flex">
+        <span className="mr-auto font-mono text-label uppercase">布局</span>
         <select
           aria-label="布局预设"
           value={activePreset}
@@ -536,7 +536,7 @@ function Workspace() {
             const value = event.target.value
             if (value !== 'custom') applyPreset(value as WorkspacePresetId | 'saved')
           }}
-          className="rounded-full border border-border bg-canvas px-2.5 py-1 text-xs text-text-secondary outline-none transition-colors hover:border-accent/60 dark:border-border-dark dark:bg-[#0B0C0F] dark:text-text-dark-secondary"
+          className="h-7 rounded-[6px] border border-border bg-surface px-2 text-[11px] text-text-secondary outline-none transition-colors hover:border-accent/60"
         >
           {WORKSPACE_PRESETS.map(preset => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
           {layout.customPreset && <option value="saved">我的布局</option>}
@@ -552,13 +552,12 @@ function Workspace() {
               aria-label={`${item.label}：${floating ? '嵌入布局' : '独立为浮窗'}`}
               title={floating ? `将${item.label}嵌入布局` : `将${item.label}独立为浮窗`}
               onClick={() => setPanelMode(item.key, floating ? 'docked' : 'floating')}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${floating
-                ? 'border-accent/30 bg-accent/10 text-accent'
-                : 'border-border text-text-secondary hover:border-accent/60 hover:text-accent dark:border-border-dark dark:text-text-dark-secondary'}`}
+              className={`inline-flex h-7 items-center gap-1 rounded-[6px] border px-2 text-[11px] transition-colors ${floating
+                ? 'border-accent/30 bg-accent-soft text-accent'
+                : 'border-border text-text-secondary hover:border-ink-450 hover:text-text-primary'}`}
             >
-              {floating ? <PanelTop size={13} /> : <ExternalLink size={13} />}
+              {floating ? <PanelTop size={12} /> : <ExternalLink size={12} />}
               <span>{item.label}</span>
-              <span className="text-[10px] opacity-70">{floating ? '嵌入' : '独立'}</span>
             </button>
           )
         })}
@@ -567,9 +566,9 @@ function Workspace() {
           aria-label="保存当前布局为我的布局"
           title="把当前题目/教练栏宽度保存为「我的布局」"
           onClick={savePreset}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-text-secondary transition-colors hover:border-accent/60 hover:text-accent dark:border-border-dark dark:text-text-dark-secondary"
+          className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-border px-2 text-[11px] text-text-secondary transition-colors hover:border-ink-450 hover:text-text-primary"
         >
-          <Save size={13} />
+          <Save size={12} />
           <span>保存</span>
         </button>
         <button
@@ -577,15 +576,15 @@ function Workspace() {
           aria-label="重置面板布局"
           title="重置宽度、停靠状态和浮窗位置"
           onClick={resetLayout}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-text-secondary transition-colors hover:border-accent/60 hover:text-accent dark:border-border-dark dark:text-text-dark-secondary"
+          className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-border px-2 text-[11px] text-text-secondary transition-colors hover:border-ink-450 hover:text-text-primary"
         >
-          <RotateCcw size={13} />
+          <RotateCcw size={12} />
           <span>重置</span>
         </button>
       </div>
       <div
         ref={workspaceRef}
-        className="flex flex-1 min-h-0 gap-3 overflow-visible bg-canvas px-3 pb-3 dark:bg-[#0B0C0F] xl:gap-3"
+        className="flex flex-1 min-h-0 gap-3 overflow-visible bg-canvas px-3 pb-3"
         style={{ '--problem-w': `${problemWidth}px`, '--chat-w': `${chatWidth}px` } as React.CSSProperties}
       >
         {renderPlaceholder('problem', '题目')}
@@ -599,7 +598,7 @@ function Workspace() {
           onPointerDownCapture={isFloating('problem') ? () => setFrontPanel('problem') : undefined}
         >
           {renderChrome('problem', '题目')}
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-card">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[12px]">
             {(isWide || panel === 'problem') && <MemoProblemPanel />}
           </div>
           {isFloating('problem') && !layout.maximized.problem && <FloatingPanelResizeHandle label="调整题目浮窗大小" rect={layout.floats.problem} onResize={rect => updateFloat('problem', rect)} />}
@@ -617,7 +616,7 @@ function Workspace() {
           onPointerDownCapture={isFloating('editor') ? () => setFrontPanel('editor') : undefined}
         >
           {renderChrome('editor', '编辑器')}
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-card">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[12px]">
             {(isWide || panel === 'editor') && <MemoEditorPanel />}
           </div>
           {isFloating('editor') && !layout.maximized.editor && <FloatingPanelResizeHandle label="调整编辑器浮窗大小" rect={layout.floats.editor} onResize={rect => updateFloat('editor', rect)} />}
@@ -634,7 +633,7 @@ function Workspace() {
           onPointerDownCapture={isFloating('chat') ? () => setFrontPanel('chat') : undefined}
         >
           {renderChrome('chat', 'AI 教练')}
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-card">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[12px]">
             {/* Keep the chat mounted on narrow screens while it is hidden. A
                 pending coach reply must survive a panel switch; ChatPanel
                 already aborts requests when its problem or mode changes. */}

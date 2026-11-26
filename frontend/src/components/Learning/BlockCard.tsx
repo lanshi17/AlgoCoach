@@ -13,17 +13,17 @@ const BLOCK_LABELS: Record<LearningBlockId, string> = {
 }
 
 export function BlockCard({ id, children, className = '', onRemove }: { id: LearningBlockId; children: React.ReactNode; className?: string; onRemove?: () => void }) {
-  return <section className={`flex flex-col rounded-panel bg-surface p-6 dark:bg-surface-dark ${className}`} aria-labelledby={`learning-block-${id}`}>
-    <div className="mb-5 flex items-center justify-between gap-3">
-      <h2 id={`learning-block-${id}`} className="text-xl font-semibold tracking-title text-text-primary dark:text-text-dark-primary">{BLOCK_LABELS[id]}</h2>
+  return <section className={`flex flex-col rounded-card border border-border bg-surface p-5 sm:p-6 ${className}`} aria-labelledby={`learning-block-${id}`}>
+    <div className="mb-4 flex items-center justify-between gap-3">
+      <h2 id={`learning-block-${id}`} className="text-[15px] font-semibold tracking-title text-text-primary">{BLOCK_LABELS[id]}</h2>
       {onRemove && (
         <button
           type="button"
           onClick={onRemove}
           aria-label={`移除${BLOCK_LABELS[id]}`}
-          className="-mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text-secondary transition-colors duration-150 hover:bg-surface-muted hover:text-text-primary dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted dark:hover:text-text-dark-primary"
+          className="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-text-secondary transition-colors duration-150 hover:bg-surface-muted hover:text-text-primary"
         >
-          <X size={16} />
+          <X size={15} />
         </button>
       )}
     </div>

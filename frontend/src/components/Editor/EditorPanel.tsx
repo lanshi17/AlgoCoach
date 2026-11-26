@@ -39,7 +39,6 @@ export default function EditorPanel() {
     <div className="code-workbench flex h-full flex-col">
       <div className="code-toolbar" aria-label="代码工作区状态">
         <div className="code-toolbar-title">
-          <span className="code-toolbar-dots" aria-hidden="true"><i /><i /><i /></span>
           <span>代码区</span>
           <span className="code-file" title={fileName}>{fileName}</span>
         </div>

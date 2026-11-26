@@ -230,91 +230,85 @@ export default function Header() {
     : ''
 
   return (
-    <header className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-canvas px-3 py-3 dark:bg-[#0B0C0F] xl:h-[84px] xl:flex-nowrap xl:px-6 xl:py-0">
-      <div className="flex min-w-0 flex-1 basis-full items-center gap-3 xl:basis-auto xl:min-w-[180px]">
-        <div className="min-w-0">
-          <p className="hidden text-xs tracking-cn text-text-muted dark:text-text-dark-muted xl:block">算法练习室 · 今日一页</p>
-          <h1 className="truncate font-editorial text-lg font-semibold tracking-title text-text-primary dark:text-text-dark-primary">
-            {activeProblem ? (activeProblem.titleCn ?? activeProblem.title) : '选择一页练习'}
-          </h1>
-        </div>
+    <header className="flex shrink-0 flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-border bg-surface px-4 py-2.5 xl:h-[60px] xl:flex-nowrap xl:px-5 xl:py-0">
+      <div className="flex min-w-0 flex-1 basis-full items-center gap-2.5 xl:basis-auto xl:min-w-[160px]">
+        <h1 className="truncate text-[15px] font-semibold tracking-title text-text-primary">
+          {activeProblem ? (activeProblem.titleCn ?? activeProblem.title) : '选择一页练习'}
+        </h1>
         {activeProblem && <Badge difficulty={activeProblem.difficulty} />}
       </div>
 
-      <select
-        aria-label="编程语言"
-        value={lang}
-        onChange={event => setLang(event.target.value as CodeLanguage)}
-        disabled={mode === 'FOCUS'}
-        className="h-9 shrink-0 rounded-full border border-border bg-surface px-3 text-sm tracking-cn text-text-secondary
-                   dark:border-border-dark dark:bg-surface-dark-soft
-                   dark:text-text-dark-secondary outline-none disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {LANGUAGE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>
-
-      <div className="flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-surface-muted px-3
-                      text-sm tracking-cn dark:bg-surface-dark-muted">
-        {mode === 'FOCUS' && <Lock size={12} className="text-focus" />}
-        <span className={mode === 'FOCUS' ? 'text-focus font-medium' : mode === 'REVIEW' ? 'text-success font-medium' : 'text-text-secondary dark:text-text-dark-secondary'}>
+      <div className="flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-surface-soft px-2 text-meta tracking-cn">
+        <span className={`h-1.5 w-1.5 rounded-full ${mode === 'FOCUS' ? 'bg-focus' : mode === 'REVIEW' ? 'bg-success' : 'bg-text-muted'}`} />
+        <span className={mode === 'FOCUS' ? 'font-medium text-focus' : mode === 'REVIEW' ? 'font-medium text-success' : 'text-text-secondary'}>
           {MODE_LABEL[mode]}
         </span>
+        {mode === 'FOCUS' && <Lock size={11} className="text-focus" aria-hidden="true" />}
       </div>
 
       {mode === 'FOCUS' && (
         <span role="timer" aria-label={remainingTimeSec === undefined
           ? `专注用时 ${formatDuration(focusDurationSec)}`
           : `专注用时 ${formatDuration(focusDurationSec)}，剩余 ${formatDuration(remainingTimeSec)}`}
-          className="shrink-0 whitespace-nowrap font-mono text-xs tabular-nums text-text-secondary dark:text-text-dark-secondary">
+          className="shrink-0 whitespace-nowrap rounded-md border border-border px-2 py-1 font-mono text-[11px] tabular-nums text-text-secondary">
           {formatDuration(focusDurationSec)}
           {remainingTimeSec !== undefined && <span className="ml-1.5 text-accent">· 剩余 {formatDuration(remainingTimeSec)}</span>}
         </span>
       )}
 
-      {mode === 'REVIEW' && (
-        <button onClick={enterFocus}
-          className="h-9 shrink-0 whitespace-nowrap rounded-full border border-border px-4 text-sm font-medium tracking-cn
-                     dark:border-border-dark text-text-secondary hover:bg-surface-muted
-                     dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted">
-          继续做题
-        </button>
-      )}
+      <select
+        aria-label="编程语言"
+        value={lang}
+        onChange={event => setLang(event.target.value as CodeLanguage)}
+        disabled={mode === 'FOCUS'}
+        className="h-8 shrink-0 rounded-md border border-line-300 bg-surface px-2 text-meta tracking-cn text-text-secondary
+                   outline-none transition-colors hover:border-ink-450 focus:border-accent
+                   disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {LANGUAGE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
 
-      {mode === 'FOCUS' && (
-        <button onClick={() => { setLastSubmission(null); exitFocus() }} disabled={isBusy}
-          className="h-9 shrink-0 whitespace-nowrap rounded-full border border-border px-4 text-sm font-medium tracking-cn
-                     dark:border-border-dark text-text-secondary hover:bg-surface-muted
-                     dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted disabled:opacity-40">
-          结束专注
-        </button>
-      )}
+      <div className="ml-auto flex items-center gap-1.5">
+        {mode === 'REVIEW' && (
+          <button onClick={enterFocus}
+            className="h-8 shrink-0 whitespace-nowrap rounded-md border border-line-300 px-3 text-meta font-medium tracking-cn
+                       text-text-secondary transition-colors hover:border-ink-450 hover:text-text-primary">
+            继续做题
+          </button>
+        )}
 
-      {activeProblem && mode === 'FOCUS' && <>
-        <button onClick={onRun} disabled={!canRun || isBusy}
-          aria-label="运行"
-          aria-busy={runLoading}
-          aria-describedby={judgeCapabilityNote ? 'judge-capability-note' : undefined}
-          className="flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border px-4 text-sm font-medium tracking-cn
-                     dark:border-border-dark text-text-secondary dark:text-text-dark-secondary hover:bg-surface-muted
-                     dark:hover:bg-surface-dark-muted disabled:opacity-40 transition-[background-color,border-color,color] duration-150">
-          {runLoading ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-          {runLoading ? '运行中' : '运行'}
-        </button>
-        <button onClick={onSubmit} disabled={!judgeRunnable || isBusy}
-          aria-label="提交"
-          aria-busy={submitLoading}
-          aria-describedby={judgeCapabilityNote ? 'judge-capability-note' : undefined}
-          className="flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-[#111317] px-[18px] text-sm font-medium tracking-cn text-white transition-opacity hover:opacity-90
-                     disabled:bg-surface-muted disabled:text-text-muted
-                     dark:disabled:bg-surface-dark-muted dark:disabled:text-text-dark-muted
-                     disabled:cursor-not-allowed disabled:opacity-100">
-          {submitLoading ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-          {submitLoading ? '提交中' : '提交'}
-        </button>
-      </>}
+        {mode === 'FOCUS' && (
+          <button onClick={() => { setLastSubmission(null); exitFocus() }} disabled={isBusy}
+            className="h-8 shrink-0 whitespace-nowrap rounded-md border border-line-300 px-3 text-meta font-medium tracking-cn
+                       text-text-secondary transition-colors hover:border-ink-450 hover:text-text-primary disabled:opacity-40">
+            结束专注
+          </button>
+        )}
+
+        {activeProblem && mode === 'FOCUS' && <>
+          <button onClick={onRun} disabled={!canRun || isBusy}
+            aria-label="运行"
+            aria-busy={runLoading}
+            aria-describedby={judgeCapabilityNote ? 'judge-capability-note' : undefined}
+            className="flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-line-300 px-3 text-meta font-medium tracking-cn
+                       text-text-secondary transition-colors hover:border-ink-450 hover:text-text-primary disabled:opacity-40">
+            {runLoading ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
+            {runLoading ? '运行中' : '运行'}
+          </button>
+          <button onClick={onSubmit} disabled={!judgeRunnable || isBusy}
+            aria-label="提交"
+            aria-busy={submitLoading}
+            aria-describedby={judgeCapabilityNote ? 'judge-capability-note' : undefined}
+            className="flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-ink-950 px-3.5 text-meta font-medium tracking-cn text-canvas transition-colors hover:bg-accent
+                       disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-text-muted">
+            {submitLoading ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+            {submitLoading ? '提交中' : '提交'}
+          </button>
+        </>}
+      </div>
 
       {judgeCapabilityNote && <span id="judge-capability-note" role="status"
-        className="basis-full truncate text-[11px] text-warning dark:text-amber-300 xl:basis-auto xl:max-w-[280px]"
+        className="basis-full truncate text-[11px] text-warning xl:basis-auto xl:max-w-[280px]"
         title={judgeCapabilityNote}>
         {judgeCapabilityNote}
       </span>}

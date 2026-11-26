@@ -56,8 +56,8 @@ frontend/
     ├── components/
     │   ├── Layout/
     │   │   ├── AppShell.tsx        # 顶层布局：Sidebar + Header + 三栏
-    │   │   ├── Sidebar.tsx         # Qwen 风格可折叠左侧导航
-    │   │   ├── Header.tsx          # 题目标题、mode 徽章、运行/提交按钮
+    │   │   ├── Sidebar.tsx         # 分组左侧导航（248/68px 两形态）
+    │   │   ├── Header.tsx          # 60px 工作区顶栏：题目、模式、计时、运行/提交
     │   │   ├── ColumnResizer.tsx   # 可拖拽/键盘调整的分隔条（只报告宽度）
     │   │   ├── FloatingPanelChrome.tsx      # 浮窗标题栏：拖动、最大化、嵌入
     │   │   ├── FloatingPanelResizeHandle.tsx # 浮窗右下角缩放柄
@@ -80,6 +80,7 @@ frontend/
     │   └── Common/
     │       ├── Badge.tsx           # 难度徽章
     │       ├── Button.tsx          # 唯一按钮原语（primary/secondary/ghost）
+    │       ├── PageShell.tsx       # 控制台页面滚动层、留白与宽度契约
     │       └── PageHeader.tsx      # 唯一页面标题（图标 + 标题 + 右侧操作）
     └── pages/
         ├── LearningSpacePage.tsx    # Block 学习空间：摘要、练习、复盘、计划、洞察
@@ -96,6 +97,22 @@ frontend/
 
 ## 3. 已有组件详细规格
 
+### 3.0 外壳视觉系统（2026-11 shell）
+
+**色调**：中性灰画布 + 纯白面板 + 1px 分隔线，强调色为 `#4A45E8`（暗色 `#9A96FF`）。所有表面、文字、边框 token 都在 `index.css` 的 `:root` / `:root.dark` 中通过 CSS 变量切换；组件只写 `bg-surface` / `text-text-secondary`，不再成对书写 `dark:*` 别名。暗色画布 `#0B0C0E`，面板 `#121417`。
+
+**形状与字号**：
+- 控件 8px 圆角，容器 12px（`rounded-card`），大面板 16px（`rounded-panel`）；只有难度与状态标签保留全圆角。
+- 字号 token：`display` 28、`page` 22、`section` 13、`body` 13.5、`meta` 12、`label` 10.5（拉丁大写标签）；数字使用 `tabular-nums`。
+- 强调色只用于当前状态、链接和焦点；主操作按钮统一为 `bg-ink-950 text-canvas`，悬停转 accent。
+
+**页面骨架**：
+- `PageShell` 统一控制台页面的滚动层、左右留白和页头。`width="wide"` = 1200px（学习空间、进度、图谱、笔记、知识库），`width="narrow"` = 880px（设置、题库登录）。
+- `PageHeader` 是唯一页头：图标方框 + 22px 标题 + 右侧操作，底部 1px 分隔线；禁止 eyebrow / kicker / 副标题。
+- 编码工作区不使用 `PageShell`：它由 60px `Header`、36px 布局条和三栏画布组成，见 3.1。
+- 引导式学习页只在 `>=1360px` 启用三栏网格；更窄时大纲、教练、代码区纵向堆叠并由整页滚动。堆叠状态不写回栏宽，避免把桌面宽度永久压到最小值。
+- 移动端 (`<md`) 使用 56px 六项底部标签栏；页面留白降为 20px。
+
 ### 3.1 AppShell.tsx
 
 **职责**：顶层布局容器，组合 Sidebar + Header + 三栏工作区，并管理三栏的宽度、停靠/浮动状态和持久化。
@@ -106,7 +123,7 @@ frontend/
 - `useEffect` 监听 `theme` 变化，切换 `<html>` 的 `dark` class
 - 当 `mode === 'FOCUS'` 时，在顶部渲染 `focus-mode-bar`（红色细条 + 脉冲动画）
 - 三栏宽度由 `WorkspaceLayout` 状态驱动：题目栏默认 `420px`、对话栏默认 `360px`（各 280–720 / 260–560），编辑器栏 `flex-1`。`>=1280px` 时在每个面板边缘渲染 `ColumnResizer`，宽度写入 CSS 变量 `--problem-w` / `--chat-w`
-- `xl` 布局工具条提供四个预设（均衡 / 宽编辑器 / 宽题目 / 宽教练）、「我的布局」保存、重置，以及每个面板的「独立/嵌入」开关
+- `xl` 顶栏为 60px，其下是 36px 布局条：四个预设（均衡 / 宽编辑器 / 宽题目 / 宽教练）、「我的布局」保存、重置，以及每个面板的「独立/嵌入」开关；三栏之间 12px 间距、12px 圆角、1px 边框
 - 面板「独立」后改为 `position: fixed` 浮窗，由 `FloatingPanelChrome` 拖动、最大化，由 `FloatingPanelResizeHandle` 缩放；被浮动的面板在网格中留下同宽占位块，内容组件始终挂载，切换停靠状态不会重建 Monaco 或聊天
 - 布局通过 `layoutStorage.packLayout`（版本信封）写入 `workspaceStorageKey('algocoach.workspaceLayout')`，120ms 防抖；`useLayoutStorageSync` 接收其他标签页的 `storage` 事件
 - `useLayoutStorageSync` / `ResizeObserver` 分别处理跨标签页和窗口尺寸变化；窗口缩放时用 `clampFloatRect` 把浮窗拉回视口
@@ -122,29 +139,30 @@ frontend/
 
 ### 3.2 Sidebar.tsx
 
-**职责**：Qwen 风格可折叠左侧 icon 导航。
+**职责**：可折叠左侧导航。同一个组件有两种形态：控制台 248px 文字栏、编码工作区 68px 图标栏。
 
 **Props**：无
 
 **内部状态**：
 - 从 store 读取 `sidebarExpanded`、`toggleSidebar`、`theme`、`toggleTheme`
-- `NAV_ITEMS` 常量定义六个导航项及其目标路径：`/home`（学习空间）/ `/workspace`（编码练习）/ `/progress`（刷题进度）/ `/knowledge`（侧栏“知识图谱”）/ `/notebook`（学习笔记）/ `/settings`（设置）
+- 顶部品牌区：墨色方块标志 + 「算法练习室 / AlgoCoach」字标；折叠时只留标志
+- 导航分组：训练（学习空间、编码练习）、档案（刷题进度、知识图谱、学习笔记）、系统（设置）
 
 **关键逻辑**：
-- 折叠时宽 `72px`，展开时 `272px`，通过 `transition-[width] duration-200` 平滑过渡；`/workspace`（编码练习）固定使用 `72px` 图标栏，且不显示展开/折叠按钮
-- 底部提供主题切换按钮：图标随当前主题变化，展开时文字显示可切换到的模式（“深色模式”或“浅色模式”）
-- 展开/折叠按钮固定在底部，图标用 `ChevronLeft/Right`
+- 折叠 `68px`、展开 `248px`，`transition-[width] duration-200`；`/workspace` 强制 68px 且隐藏展开按钮
+- 当前项：accent-soft 背景 + 左侧 2px 强调条 + accent 图标；未选中项 hover 使用 `surface-muted`
+- 底部是主题切换和展开/折叠，展开时显示文字，折叠时保留 `aria-label` 与 `title`
 
 **已实现**：
-- `NAV_ITEMS` 使用 `/home`、`/workspace`、`/progress`、`/knowledge`、`/notebook`、`/settings` 路径；`NavLink` 负责切换和当前项高亮。
+- 六个目标路径：`/home`、`/workspace`、`/progress`、`/knowledge`、`/notebook`、`/settings`；`NavLink` 负责切换和当前项高亮。
 - `/` 与未知路径默认重定向至 `/home`（学习空间）。
 - `/progress` 使用 Agent 本地 profile 数据，`/knowledge/graph` 使用 profile 与掌握路径数据；`/settings` 提供偏好设置，`/settings/platforms` 是 LeetCode / AcWing / 杭电 HDU 三平台登录态的统一入口。
 - `/knowledge/library` 提供用户知识库管理：选择本地 ONNX 或 OpenAI-compatible embedding、上传 TXT/Markdown/JSON/CSV/HTML/PDF/DOCX/ZIP、重建索引和删除源文件。
-- AppShell 启动时只检查 Java Gateway（探测超时后进入离线态）；网关不可用时保留完整桌面工作区并显示重试入口，本地练习本仍可打开。LeetCode 未登录不会阻挡工作区，题库请求失败时在题目面板内显示平台错误并提供登录设置入口。
+- AppShell 启动时只检查 Java Gateway（探测超时后进入离线态）；网关不可用时保留完整桌面工作区并显示重试入口，本地练习本仍可打开。LeetCode 未登录不会阻挡工作区，题库请求失败时在题目面板内显示中文错误并提供登录设置入口。
 
 ### 3.3 Header.tsx
 
-**职责**：顶栏，显示题目标题、难度徽章、语言选择、mode 徽章、运行/提交按钮、主题切换。
+**职责**：编码工作区顶栏（60px），显示题目标题、难度徽章、mode 状态、FOCUS 计时、语言选择、运行/提交按钮。
 
 **Props**：无
 

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { agentService } from '@/services/agentService'
 import { queueCapabilityHandoff } from '@/services/deepTutorCapabilities'
 import Button from '@/components/Common/Button'
-import PageHeader from '@/components/Common/PageHeader'
+import PageShell from '@/components/Common/PageShell'
 import Segmented from '@/components/Common/Segmented'
 import { makeGraph } from './graphLayout'
 import type { AgentProfile, MasteryPath } from '@/types'
@@ -59,29 +59,26 @@ export default function KnowledgeGraphPage() {
   const selected = profile?.topics.find(topic => topic.topic === selectedTopic)
 
   return (
-    <main className="flex-1 min-h-0 overflow-y-auto bg-canvas px-6 py-7 dark:bg-[#0B0C0F]">
-      <div className="mx-auto max-w-6xl">
-        <PageHeader
-          title="知识图谱"
-          icon={<BarChart3 size={18} />}
-          actions={<>
-            <Button size="sm" onClick={() => navigate('/knowledge/library')}><BookOpen size={14} />知识库</Button>
-            <Segmented
-              label="视图"
-              value={listView ? 'list' : 'graph'}
-              options={[{ value: 'graph', label: '图谱' }, { value: 'list', label: '列表' }] as const}
-              onChange={value => setListView(value === 'list')}
-            />
-            <Button size="sm" onClick={() => void load()} disabled={loading} aria-busy={loading} aria-label="刷新知识图谱">
-              <RefreshCw size={14} />刷新
-            </Button>
-          </>}
+    <PageShell
+      title="知识图谱"
+      icon={<BarChart3 size={18} />}
+      actions={<>
+        <Button size="sm" onClick={() => navigate('/knowledge/library')}><BookOpen size={14} />知识库</Button>
+        <Segmented
+          label="视图"
+          value={listView ? 'list' : 'graph'}
+          options={[{ value: 'graph', label: '图谱' }, { value: 'list', label: '列表' }] as const}
+          onChange={value => setListView(value === 'list')}
         />
-
+        <Button size="sm" onClick={() => void load()} disabled={loading} aria-busy={loading} aria-label="刷新知识图谱">
+          <RefreshCw size={14} />刷新
+        </Button>
+      </>}
+    >
         {loading ? <Loading /> : error ? <ErrorState message={error} onRetry={() => void load()} /> : !profile?.topics.length ? (
-          <div className="flex min-h-72 flex-col items-center justify-center gap-3 rounded-panel border border-border bg-surface text-center dark:border-border-dark dark:bg-surface-dark">
-            <BarChart3 size={28} className="text-text-muted dark:text-text-dark-muted" />
-            <p className="text-sm text-text-secondary dark:text-text-dark-secondary">完成并提交题目后，掌握度图谱会从真实训练记录中逐步生成。</p>
+          <div className="flex min-h-72 flex-col items-center justify-center gap-3 rounded-panel border border-dashed border-line-300 bg-surface text-center">
+            <BarChart3 size={26} className="text-text-muted" />
+            <p className="max-w-sm text-body text-text-secondary">完成并提交题目后，掌握度图谱会从真实训练记录中逐步生成。</p>
           </div>
         ) : (
           <>
@@ -202,8 +199,7 @@ export default function KnowledgeGraphPage() {
             )}
           </>
         )}
-      </div>
-    </main>
+    </PageShell>
   )
 }
 
@@ -212,33 +208,32 @@ function MasteryPathCard({ path, onOpenCoach }: { path: MasteryPath; onOpenCoach
     review: '到期复习', reinforce: '强化基础', practice: '变式练习', apply: '综合应用',
   }
 
-  return <section className="mb-5 rounded-panel border border-accent/30 bg-surface p-5 dark:bg-surface-dark">
+  return <section className="mb-4 rounded-card border border-accent/25 bg-surface p-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent"><Route size={19} /></span>
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent"><Route size={18} /></span>
         <div>
-          <p className="text-xs uppercase tracking-[0.16em] text-accent">Mastery Path</p>
-          <h2 className="mt-1 text-base font-semibold text-text-primary dark:text-text-dark-primary">下一步学习路径</h2>
-          <p className="mt-1 text-xs text-text-secondary dark:text-text-dark-secondary">按到期复习与当前掌握度排序，每一步都说明为什么现在做。</p>
+          <h2 className="text-[15px] font-semibold tracking-title text-text-primary">下一步学习路径</h2>
+          <p className="mt-1 text-meta text-text-secondary">按到期复习与当前掌握度排序，每一步都说明为什么现在做。</p>
         </div>
       </div>
-      <button type="button" onClick={onOpenCoach} className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">让导师带我走 <ArrowRight size={14} /></button>
+      <button type="button" onClick={onOpenCoach} className="inline-flex items-center gap-1 text-meta font-medium text-accent hover:underline">让导师带我走 <ArrowRight size={14} /></button>
     </div>
     {path.steps.length ? <div className="mt-4 grid gap-2 md:grid-cols-2">
-      {path.steps.slice(0, 6).map(step => <div key={`${step.position}-${step.topic}`} className="rounded-card border border-border bg-surface-soft p-3 dark:border-border-dark dark:bg-surface-dark-soft">
+      {path.steps.slice(0, 6).map(step => <div key={`${step.position}-${step.topic}`} className="rounded-lg border border-border bg-surface-soft p-3">
         <div className="flex items-start gap-3">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-white">{step.position}</span>
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent text-[11px] font-semibold text-white">{step.position}</span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="truncate text-sm font-semibold text-text-primary dark:text-text-dark-primary">{step.topic}</h3>
-              <span className="text-xs text-text-secondary dark:text-text-dark-secondary">{Math.round(step.mastery * 100)}% · {actionLabel[step.recommendedAction]}</span>
+              <h3 className="truncate text-body font-semibold text-text-primary">{step.topic}</h3>
+              <span className="text-meta text-text-secondary">{Math.round(step.mastery * 100)}% · {actionLabel[step.recommendedAction]}</span>
             </div>
-            <p className="mt-1 text-xs leading-5 text-text-secondary dark:text-text-dark-secondary">{step.reason}</p>
+            <p className="mt-1 text-meta leading-5 text-text-secondary">{step.reason}</p>
             {step.dueReviews.length > 0 && <p className="mt-2 flex items-center gap-1 text-[11px] text-accent"><Clock3 size={12} /> {step.dueReviews.length} 个复习题到期</p>}
           </div>
         </div>
       </div>)}
-    </div> : <p className="mt-4 rounded-card bg-surface-soft px-3 py-3 text-xs text-text-secondary dark:bg-surface-dark-soft dark:text-text-dark-secondary">{path.emptyReason ?? '完成一次练习后，这里会出现可执行的学习路径。'}</p>}
+    </div> : <p className="mt-4 rounded-md bg-surface-soft px-3 py-3 text-meta text-text-secondary">{path.emptyReason ?? '完成一次练习后，这里会出现可执行的学习路径。'}</p>}
   </section>
 }
 
@@ -247,15 +242,15 @@ function shortLabel(value: string): string {
 }
 
 function Loading() {
-  return <div role="status" aria-live="polite" aria-busy="true" className="flex min-h-64 items-center justify-center gap-2 text-sm text-text-muted dark:text-text-dark-muted">
-    <Loader2 size={16} className="animate-spin" /> 正在读取知识点…
+  return <div role="status" aria-live="polite" aria-busy="true" className="flex items-center gap-2 rounded-card border border-border bg-surface px-5 py-6 text-body text-text-muted">
+    <Loader2 size={15} className="animate-spin" /> 正在读取知识点…
   </div>
 }
 
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return <div role="alert" className="flex min-h-64 flex-col items-center justify-center gap-3 text-center">
-    <AlertCircle size={24} className="text-danger" />
-    <p className="text-sm text-text-secondary dark:text-text-dark-secondary">{message}</p>
-    <button type="button" onClick={onRetry} aria-label="重试读取知识图谱" className="text-sm text-accent hover:underline">重试</button>
+  return <div role="alert" className="flex flex-col items-start gap-3 rounded-card border border-border bg-surface p-5 sm:flex-row sm:items-center">
+    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-danger/10 text-danger"><AlertCircle size={18} /></span>
+    <p className="min-w-0 flex-1 text-body text-text-secondary">{message}</p>
+    <Button size="sm" onClick={onRetry} aria-label="重试读取知识图谱">重试</Button>
   </div>
 }

@@ -3,20 +3,44 @@ import { BarChart3, BookOpen, ChevronLeft, ChevronRight, Code2, LayoutDashboard,
 import { NavLink, useLocation } from 'react-router-dom'
 import { useAppStore } from '@/stores/useAppStore'
 
-const NAV_ITEMS = [
-  { to: '/home', icon: LayoutDashboard, label: '学习空间' },
-  { to: '/workspace', icon: Code2, label: '编码练习' },
-  { to: '/progress', icon: Trophy, label: '刷题进度' },
-  { to: '/knowledge', icon: BarChart3, label: '知识图谱' },
-  { to: '/notebook', icon: BookOpen, label: '学习笔记' },
-  { to: '/settings', icon: Settings, label: '设置' },
-] as const
+type NavItem = { to: string; icon: typeof Code2; label: string }
+
+const NAV_GROUPS: ReadonlyArray<{ label: string; items: ReadonlyArray<NavItem> }> = [
+  {
+    label: '训练',
+    items: [
+      { to: '/home', icon: LayoutDashboard, label: '学习空间' },
+      { to: '/workspace', icon: Code2, label: '编码练习' },
+    ],
+  },
+  {
+    label: '档案',
+    items: [
+      { to: '/progress', icon: Trophy, label: '刷题进度' },
+      { to: '/knowledge', icon: BarChart3, label: '知识图谱' },
+      { to: '/notebook', icon: BookOpen, label: '学习笔记' },
+    ],
+  },
+]
+
+const SETTINGS_ITEM: NavItem = { to: '/settings', icon: Settings, label: '设置' }
+
+function BrandMark() {
+  return (
+    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-ink-950 text-canvas">
+      <svg viewBox="0 0 20 20" width="18" height="18" fill="none" aria-hidden="true">
+        <path d="M7.4 5.4 3.6 10l3.8 4.6M12.6 5.4 16.4 10l-3.8 4.6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="10" cy="10" r="1.4" fill="currentColor" />
+      </svg>
+    </span>
+  )
+}
 
 /**
  * One navigation model, two shapes.
  *
- * Console routes use the 272px labelled rail. The workspace is a dense
- * three-pane surface, so it keeps the 72px icon rail regardless of the stored
+ * Console routes use the 248px labelled rail. The workspace is a dense
+ * three-pane surface, so it keeps the 68px icon rail regardless of the stored
  * preference; expanding it there squeezes the editor to an unusable width.
  */
 export default function Sidebar() {
@@ -30,63 +54,87 @@ export default function Sidebar() {
   const compactRoute = pathname.startsWith('/workspace')
   const expanded = !compactRoute && sidebarExpanded
 
+  const rowClass = (active: boolean) =>
+    `relative flex h-10 items-center rounded-md text-body font-medium transition-colors duration-150
+     ${expanded ? 'w-full gap-3 px-3' : 'mx-auto w-10 justify-center'}
+     ${active
+      ? 'bg-accent-soft text-text-primary'
+      : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary'}`
+
   return (
     <aside
-      className={`hidden h-full shrink-0 flex-col bg-canvas transition-[width] duration-200 md:flex dark:bg-[#0B0C0F]
-                  ${expanded ? 'w-[272px]' : 'w-[72px]'}`}
+      className={`hidden h-full shrink-0 flex-col border-r border-border bg-surface transition-[width] duration-200 md:flex
+                  ${expanded ? 'w-[248px]' : 'w-[68px]'}`}
     >
-      <div className={`flex h-[84px] shrink-0 items-center gap-3 ${expanded ? 'pl-6' : 'justify-center'}`}>
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-white">
-          <Code2 size={18} />
-        </span>
+      <div className={`flex h-[60px] shrink-0 items-center border-b border-border ${expanded ? 'gap-2.5 px-5' : 'justify-center'}`}>
+        <BrandMark />
         {expanded && (
           <span className="min-w-0 whitespace-nowrap">
-            <span className="block text-sm font-medium tracking-cn text-text-primary dark:text-text-dark-primary">算法练习室</span>
-            <span className="mt-0.5 block font-mono text-[9px] uppercase tracking-[0.14em] text-text-muted dark:text-text-dark-muted">local code desk</span>
+            <span className="block text-body font-semibold tracking-cn text-text-primary">算法练习室</span>
+            <span className="mt-0.5 block font-mono text-[9.5px] uppercase tracking-[0.14em] text-text-muted">AlgoCoach</span>
           </span>
         )}
       </div>
 
-      <nav aria-label="主导航" className={`flex flex-1 flex-col gap-1 py-4 ${expanded ? 'px-5' : 'px-3'}`}>
-        {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
+      <nav aria-label="主导航" className={`flex flex-1 flex-col py-4 ${expanded ? 'px-3' : 'px-2.5'}`}>
+        {NAV_GROUPS.map((group, index) => (
+          <div key={group.label} className={index ? 'mt-5' : ''}>
+            {expanded
+              ? <p className="px-3 pb-1.5 text-label font-medium text-text-muted">{group.label}</p>
+              : index > 0 && <div className="mx-2 mb-3 border-t border-border" />}
+            <div className="flex flex-col gap-0.5">
+              {group.items.map(({ to, icon: Icon, label }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={to === '/home'}
+                  title={expanded ? undefined : label}
+                  aria-label={expanded ? undefined : label}
+                  className={({ isActive }) => rowClass(isActive)}
+                >
+                  {({ isActive }) => (
+                    <>
+                      {isActive && <span className="absolute left-0 top-2.5 bottom-2.5 w-[2px] rounded-full bg-accent" />}
+                      <Icon size={18} className={`shrink-0 ${isActive ? 'text-accent' : 'text-text-muted'}`} />
+                      {expanded && <span className="min-w-0 truncate">{label}</span>}
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        <div className="mt-5">
+          {expanded && <p className="px-3 pb-1.5 text-label font-medium text-text-muted">系统</p>}
           <NavLink
-            key={to}
-            to={to}
-            end={to === '/home'}
-            title={expanded ? undefined : label}
-            aria-label={expanded ? undefined : label}
-            className={({ isActive }) =>
-              `relative flex h-9 items-center rounded-full text-body tracking-cn transition-[background-color,color,font-weight] duration-150
-               ${expanded ? 'w-full pl-10 pr-3' : 'mx-auto w-10 justify-center'}
-               ${isActive
-                 ? 'bg-border font-medium text-text-primary dark:bg-surface-dark-muted dark:text-text-dark-primary'
-                 : 'text-text-secondary hover:bg-surface-muted hover:font-medium hover:text-text-primary dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted dark:hover:text-text-dark-primary'}`
-            }
+            to={SETTINGS_ITEM.to}
+            title={expanded ? undefined : SETTINGS_ITEM.label}
+            aria-label={expanded ? undefined : SETTINGS_ITEM.label}
+            className={({ isActive }) => rowClass(isActive)}
           >
             {({ isActive }) => (
               <>
-                <span className={`absolute top-0 flex h-9 w-5 items-center justify-center ${expanded ? 'left-2' : 'left-1/2 -translate-x-1/2'} ${isActive ? 'text-accent' : ''}`}>
-                  <Icon size={20} className="shrink-0" />
-                </span>
-                {expanded && <span className="min-w-0 truncate">{label}</span>}
+                {isActive && <span className="absolute left-0 top-2.5 bottom-2.5 w-[2px] rounded-full bg-accent" />}
+                <Settings size={18} className={`shrink-0 ${isActive ? 'text-accent' : 'text-text-muted'}`} />
+                {expanded && <span className="min-w-0 truncate">{SETTINGS_ITEM.label}</span>}
               </>
             )}
           </NavLink>
-        ))}
+        </div>
       </nav>
 
-      <div className={`mb-4 flex flex-col gap-1 ${expanded ? 'px-5' : 'px-3'}`}>
+      <div className={`mb-3 flex flex-col gap-0.5 border-t border-border pt-3 ${expanded ? 'px-3' : 'px-2.5'}`}>
         <button
           type="button"
           onClick={toggleTheme}
           aria-label="切换主题"
           title={expanded ? undefined : '切换主题'}
-          className={`relative flex h-9 items-center rounded-full text-body tracking-cn text-text-secondary transition-[background-color,color,font-weight] duration-150 hover:bg-surface-muted hover:font-medium hover:text-text-primary dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted dark:hover:text-text-dark-primary
-                      ${expanded ? 'w-full pl-10 pr-3' : 'mx-auto w-10 justify-center'}`}
+          className={`${rowClass(false)} text-left`}
         >
-          <span className={`absolute top-0 flex h-9 w-5 items-center justify-center ${expanded ? 'left-2' : 'left-1/2 -translate-x-1/2'}`}>
-            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-          </span>
+          {theme === 'dark'
+            ? <Sun size={18} className="shrink-0 text-text-muted" />
+            : <Moon size={18} className="shrink-0 text-text-muted" />}
           {expanded && <span className="truncate">{theme === 'dark' ? '浅色模式' : '深色模式'}</span>}
         </button>
 
@@ -97,12 +145,11 @@ export default function Sidebar() {
             aria-label={sidebarExpanded ? '收起侧边栏' : '展开侧边栏'}
             aria-expanded={sidebarExpanded}
             title={expanded ? undefined : '展开侧边栏'}
-            className={`relative flex h-9 items-center rounded-full text-body tracking-cn text-text-secondary transition-[background-color,color,font-weight] duration-150 hover:bg-surface-muted hover:font-medium hover:text-text-primary dark:text-text-dark-secondary dark:hover:bg-surface-dark-muted dark:hover:text-text-dark-primary
-                        ${expanded ? 'w-full pl-10 pr-3' : 'mx-auto w-10 justify-center'}`}
+            className={`${rowClass(false)} text-left`}
           >
-            <span className={`absolute top-0 flex h-9 w-5 items-center justify-center ${expanded ? 'left-2' : 'left-1/2 -translate-x-1/2'}`}>
-              {sidebarExpanded ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
-            </span>
+            {sidebarExpanded
+              ? <ChevronLeft size={18} className="shrink-0 text-text-muted" />
+              : <ChevronRight size={18} className="shrink-0 text-text-muted" />}
             {expanded && <span className="truncate">收起侧栏</span>}
           </button>
         )}

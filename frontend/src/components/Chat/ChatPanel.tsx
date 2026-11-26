@@ -241,13 +241,13 @@ export default function ChatPanel() {
   return (
     <div className="relative flex h-full flex-col bg-surface dark:bg-surface-dark">
       {/* Panel header */}
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-5 dark:border-border-dark">
-        <Sparkles size={18} className="text-accent" />
-        <span className="shrink-0 text-lg font-semibold tracking-title text-text-primary dark:text-text-dark-primary">
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-4">
+        <Sparkles size={16} className="text-accent" />
+        <span className="shrink-0 text-[13px] font-semibold tracking-title text-text-primary">
           AI 教练
         </span>
         <span
-          className="ml-auto max-w-[48%] truncate text-xs tracking-cn text-text-muted dark:text-text-dark-muted"
+          className="ml-auto max-w-[48%] truncate text-[11px] tracking-cn text-text-muted"
           title={`${provider.name} · ${provider.model || '未配置模型'}`}
         >
           {provider.name} · {provider.model || '未配置模型'}
@@ -261,10 +261,10 @@ export default function ChatPanel() {
       }} className="min-h-0 flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {!isFocus && messages.length === 0 && !loading && !animation && (
           <div className="mx-1 my-8 border-y border-border py-6 dark:border-border-dark">
-            <h2 className="text-lg font-semibold tracking-title text-text-primary dark:text-text-dark-primary">
+            <h2 className="text-[15px] font-semibold tracking-title text-text-primary">
               先写下你的观察
             </h2>
-            <p className="mt-2 max-w-[30ch] text-sm leading-5 tracking-cn text-text-secondary dark:text-text-dark-secondary">
+            <p className="mt-2 max-w-[30ch] text-body leading-5 tracking-cn text-text-secondary">
               从题意、算法猜想或卡住的地方开始。教练会按竞赛训练的节奏陪你逐步验证。
             </p>
           </div>
@@ -344,8 +344,7 @@ export default function ChatPanel() {
       {/* Input box */}
       <div className="flex-shrink-0 border-t border-border dark:border-border-dark p-3">
         {isFocus ? (
-          <div className="flex h-9 items-center justify-center gap-2 rounded-full border border-border px-3 text-sm tracking-cn text-text-muted
-                          dark:border-border-dark dark:text-text-dark-muted">
+          <div className="flex h-9 items-center justify-center gap-2 rounded-md border border-border px-3 text-meta tracking-cn text-text-muted">
             <Lock size={13} className="text-focus" />
             专注解题中，AI 已静默
           </div>
@@ -388,9 +387,8 @@ export default function ChatPanel() {
                   id="chat-training-phase"
                   value={trainingPhase}
                   onChange={e => setChatPhase(e.target.value as TrainingPhase)}
-                  className="h-9 rounded-full border border-border bg-surface px-3 text-sm tracking-cn dark:border-border-dark
-                             text-text-primary dark:text-text-dark-primary outline-none
-                             transition-colors focus:border-accent dark:focus:border-accent"
+                  className="h-8 rounded-md border border-line-300 bg-surface px-2 text-meta tracking-cn
+                             text-text-primary outline-none transition-colors focus:border-accent"
                 >
                   {TRAINING_PHASES.map(phase => (
                     <option key={phase.value} value={phase.value}>{phase.label}</option>
@@ -414,10 +412,9 @@ export default function ChatPanel() {
                   }}
                   placeholder="不限"
                   aria-describedby="chat-time-remaining-help"
-                    className="h-9 w-16 rounded-full border border-border bg-surface px-3 text-sm tracking-cn dark:border-border-dark
-                             text-text-primary dark:text-text-dark-primary outline-none
-                             transition-colors focus:border-accent dark:focus:border-accent
-                             placeholder:text-text-muted dark:placeholder:text-text-dark-muted"
+                    className="h-8 w-16 rounded-md border border-line-300 bg-surface px-2 text-meta tracking-cn
+                             text-text-primary outline-none transition-colors focus:border-accent
+                             placeholder:text-text-muted"
                 />
                 <span id="chat-time-remaining-help" className="sr-only">
                   留空表示不限时；教练收到的剩余时间会扣除累计专注用时
@@ -439,14 +436,12 @@ export default function ChatPanel() {
                   if (e.nativeEvent.isComposing || e.keyCode === 229) return
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send() }
                 }}
-                placeholder="问 AI 教练…（Shift+Enter 换行）"
+                placeholder="问 AI 教练…"
                 aria-label="发送给 AI 教练的消息"
                 rows={2}
-                className="h-12 flex-1 resize-none rounded-card bg-surface px-4 py-3 text-sm tracking-cn
-                           dark:bg-surface-dark-soft border border-border dark:border-border-dark
-                           text-text-primary dark:text-text-dark-primary outline-none
-                           focus:border-accent dark:focus:border-accent transition-colors
-                           placeholder:text-text-muted dark:placeholder:text-text-dark-muted"
+                className="h-12 flex-1 resize-none rounded-md border border-line-300 bg-surface px-3.5 py-3 text-body tracking-cn
+                           text-text-primary outline-none transition-colors focus:border-accent
+                           placeholder:text-text-muted"
               />
               <button
                 onClick={loading ? stop : () => void send()}
@@ -454,7 +449,7 @@ export default function ChatPanel() {
                 aria-busy={loading}
                 title={loading ? '停止生成' : '发送消息（Enter）'}
                 aria-label={loading ? '停止生成' : '发送消息'}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#111317] text-white transition-opacity duration-150 hover:opacity-90
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-ink-950 text-canvas transition-colors duration-150 hover:bg-accent
                            disabled:opacity-40"
               >
                 {loading ? <Square size={14} fill="currentColor" /> : <Send size={16} />}

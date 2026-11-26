@@ -397,9 +397,9 @@ export default function ProblemPanel() {
   return (
     <div className="flex flex-col h-full">
       {/* Title block */}
-      <div className="flex-shrink-0 px-5 py-4 border-b editorial-rule">
+      <div className="flex-shrink-0 border-b border-border px-5 py-3.5">
         <div className="mb-2 flex items-center justify-between gap-3">
-          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-text-muted dark:text-text-dark-muted">
+          <span className="font-mono text-[11px] text-text-muted">
             {activeProblem.platformId}
           </span>
           <div className="flex items-center gap-3">
@@ -426,7 +426,7 @@ export default function ProblemPanel() {
             <span className="badge bg-accent/10 text-accent">每日一题</span>
           )}
         </div>
-        <h1 className="mb-2 font-editorial text-xl font-semibold tracking-title text-text-primary dark:text-text-dark-primary">
+        <h1 className="mb-2 text-[17px] font-semibold leading-6 tracking-title text-text-primary">
           {activeProblem.titleCn ?? activeProblem.title}
         </h1>
         {restoredStatementStatus !== 'idle' && (
@@ -474,12 +474,11 @@ export default function ProblemPanel() {
 
       {/* Start CTA — only in PREP */}
       {mode === 'PREP' && (
-        <div className="flex-shrink-0 p-4 border-t border-border dark:border-border-dark
-                        bg-surface-soft dark:bg-surface-dark-soft">
+        <div className="flex-shrink-0 border-t border-border bg-surface-soft p-4">
           <button
             onClick={enterFocus}
-            className="flex h-9 w-full items-center justify-center gap-2 rounded-full bg-[#111317] px-[18px]
-                       text-sm font-medium tracking-cn text-white transition-opacity duration-150 hover:opacity-90"
+            className="flex h-9 w-full items-center justify-center gap-2 rounded-md bg-ink-950 px-4
+                       text-body font-medium tracking-cn text-canvas transition-colors duration-150 hover:bg-accent"
           >
             <Play size={14} /> 开始做题
           </button>
@@ -499,10 +498,21 @@ function topicLabel(platform: PickerPlatform, topicId: string): string {
 }
 
 function getErrorMessage(error: unknown): string {
-  if (typeof error === 'object' && error !== null && 'response' in error) {
-    const response = (error as { response?: { data?: { message?: string } } }).response
-    if (response?.data?.message) return response.data.message
+  if (error && typeof error === 'object' && 'response' in error) {
+    const response = error.response
+    if (response && typeof response === 'object') {
+      if ('data' in response && response.data && typeof response.data === 'object'
+        && 'message' in response.data && typeof response.data.message === 'string' && response.data.message) {
+        return response.data.message
+      }
+      if ('status' in response && typeof response.status === 'number') {
+        return `题库服务返回 ${response.status}，请确认 Java 网关和平台登录状态后重试。`
+      }
+    }
   }
-  if (error instanceof Error) return error.message
-  return '请求失败，请检查网关和平台 Cookie 后重试'
+  if (error instanceof Error) {
+    if (/timeout/i.test(error.message)) return '题库请求超时，请确认 Java 网关正在运行。'
+    if (/network error|failed to fetch/i.test(error.message)) return '无法连接 Java 网关，请确认网关正在运行。'
+  }
+  return '题库请求失败，请确认 Java 网关和平台登录状态后重试。'
 }
