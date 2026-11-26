@@ -4,10 +4,10 @@ Type: refactor
 Tier: T2
 Tooling: repo-native (omp, 2026-11-26)
 Risk: medium
-Design status: draft
+Design status: approved (user, 2026-11-26)
 Implementation: implemented
 Verification: passed
-Evidence: valid (EVIDENCE-184/185/186/187)
+Evidence: valid (EVIDENCE-188/189/190/191 for the current tree; 184–187 recorded the initial shell pass)
 
 ## Objective
 
@@ -173,4 +173,90 @@ Browser QA (Chromium via the browser helper; light and dark):
 Residual: the app-level gateway-offline banner and the problem panel's
 "题库服务返回 500" alert both appear while the Java gateway is stopped; the
 second is the panel's own fetch state and is intentionally kept, now in Chinese.
-The design is not marked `approved`: that status belongs to the user.
+Design approved by the user on 2026-11-26.
+
+## Follow-up quality gate (2026-11-26)
+
+Scope: accessibility and state-fit corrections; no route, workflow, shortcut,
+FOCUS rule, persistence key, or gateway contract changed.
+
+- Light `text-muted` moves from `#868D97` (3.04:1 on canvas) to `#646B78`
+  (4.87:1 canvas, 5.36:1 white); `--code-muted` and code error text use the same
+  palette. Monaco's paper/ink themes mirror `--code-*`; the old `#111317`
+  surface and `#5B58FF` accent are retired.
+- Mobile shell controls are 44px tall: the per-panel switcher, guided header,
+  guided composer, dashboard mode control, and page-header buttons. Desktop
+  keeps the 32/36px compact heights.
+- Guided columns no longer persist rendered clamps. A `1440 → 390 → 1440` pass
+  rendered `230 / 462 / 420` → stacked `358` → `230 / 462 / 420` while
+  `algocoach.guidedLayout` stayed at `230/420`.
+- The knowledge empty state is the upload control (focusable, disabled while
+  busy); the offline banner wraps its recovery text instead of truncating it.
+- The dashboard mode selector is a `group` of `aria-pressed` buttons rather than
+  a tablist with no tabpanels.
+
+Environment: Linux 7.0.0-43-generic x64; Node v24.13.0 / npm 11.17.0; Vitest
+1.6.1 (jsdom); Chromium via the browser helper. Input manifest: the 9 changed
+source/doc files, excluding this record; aggregate digest
+`fab3cabcc01506b08ca684b9191cb37176a9af137e4f37c1333c21caf67f1c5f` over
+sorted `sha256<two spaces>path` lines.
+
+```text
+EVIDENCE-188  frontend typecheck
+task: TASK-2026-11-26-app-shell-visual-system
+target_entities: MOD-SHELL, MOD-WORKSPACE-LAYOUT
+checker: tsc
+command: npx tsc --noEmit
+cwd: frontend/
+started_at / finished_at: 2026-11-26T13:50:36Z / 2026-11-26T13:50:38Z
+exit_code: 0
+result: no diagnostics
+```
+
+```text
+EVIDENCE-189  frontend lint
+task: TASK-2026-11-26-app-shell-visual-system
+checker: eslint
+command: npm run lint
+cwd: frontend/
+started_at / finished_at: 2026-11-26T13:50:38Z / 2026-11-26T13:50:39Z
+exit_code: 0
+result: eslint src --ext ts,tsx, no warnings
+```
+
+```text
+EVIDENCE-190  frontend tests
+task: TASK-2026-11-26-app-shell-visual-system
+checker: vitest
+command: npm test
+cwd: frontend/
+started_at / finished_at: 2026-11-26T13:50:39Z / 2026-11-26T13:50:43Z
+exit_code: 0
+result: 48 files, 314 tests passed
+```
+
+```text
+EVIDENCE-191  docs links
+task: TASK-2026-11-26-app-shell-visual-system
+checker: check-docs-links.py
+command: python3 scripts/check-docs-links.py docs/frontend.md
+cwd: repository root
+started_at / finished_at: 2026-11-26T13:50:36Z / 2026-11-26T13:50:36Z
+exit_code: 0
+result: checked 0 links and 0 id references in 1 file — ok
+```
+
+Browser QA (Chromium via the browser helper):
+- `1440×900` light/dark: guided columns `230 / 462 / 420`, workspace panels
+  end 12px inside the viewport, Monaco dark background `rgb(18,20,23)` equals
+  the editor panel.
+- `390×844` all ten routes: `scrollWidth === clientWidth`; the per-panel
+  switcher, guided header, composer, dashboard mode control, and page-header
+  buttons all measure ≥44px; no shell target under 44px remains.
+- Contrast measured from computed styles: muted text 4.87:1 on canvas and
+  5.36:1 on white; the offline banner wraps to two lines at 390px without
+  losing the "本地练习仍可用" recovery hint.
+- Interaction: resetting the guided layout to `230/420`, narrowing to 390 and
+  widening to 1440 restores the same columns and leaves storage unchanged; the
+  knowledge empty-state button is the only upload affordance besides the
+  header action. No console errors on any captured route.

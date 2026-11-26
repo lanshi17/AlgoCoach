@@ -37,7 +37,7 @@
     --ink-450-rgb: 138 144 152;
     --text-primary-rgb: 21 23 27;
     --text-secondary-rgb: 86 93 104;
-    --text-muted-rgb: 134 141 151;
+    --text-muted-rgb: 100 107 120;
     --accent-rgb: 74 69 232;
     --accent-hover-rgb: 59 54 217;
     --accent-soft-rgb: 238 237 253;
@@ -320,7 +320,7 @@
     --code-panel-raised: #FFFFFF;
     --code-rule: #E2E4E8;
     --code-ink: #15171B;
-    --code-muted: #868D97;
+    --code-muted: #646B78;
     --code-focus: #4A45E8;
     --code-focus-soft: #EEEDFD;
     background: var(--code-bg);
@@ -448,17 +448,11 @@
 
   .code-output-panel pre { color: var(--code-ink); }
   .code-output-panel .code-muted { color: var(--code-muted); }
-  .code-output-panel .code-error { color: #c45a56; }
-  .dark .code-output-panel .code-error { color: #f19a91; }
+  .code-output-panel .code-error { color: rgb(var(--danger-rgb)); }
   .code-error-box {
     @apply rounded-lg border p-3;
-    border-color: rgb(196 90 86 / 0.28);
-    background: rgb(196 90 86 / 0.08);
-    color: #b34f4b;
-  }
-  .dark .code-error-box {
-    border-color: rgb(241 154 145 / 0.28);
-    background: rgb(241 154 145 / 0.08);
-    color: #f19a91;
+    border-color: rgb(var(--danger-rgb) / 0.28);
+    background: rgb(var(--danger-rgb) / 0.08);
+    color: rgb(var(--danger-rgb));
   }
 }

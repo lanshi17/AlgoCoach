@@ -133,7 +133,7 @@ function ProblemPicker(input: ProblemPickerProps) {
         </button>
       </div>
       {error && (
-        <p role="alert" className="text-[11px]" style={{ color: 'var(--code-error, #d33)' }}>
+        <p role="alert" className="text-[11px]" style={{ color: 'rgb(var(--danger-rgb))' }}>
           {error} <a href="/settings/platforms" className="underline">去配置</a>
         </p>
       )}

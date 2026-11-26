@@ -14,10 +14,10 @@ const VARIANT: Record<Variant, string> = {
   ghost: 'text-text-secondary hover:bg-surface-muted hover:text-text-primary',
 }
 
-// 36px is the console action height. Size only changes type and inset.
+// 36px is the console action height; touch layouts get a 44px target.
 const SIZE: Record<Size, string> = {
-  sm: 'h-8 px-3 text-meta',
-  md: 'h-9 px-4 text-body',
+  sm: 'h-11 px-4 text-meta md:h-8 md:px-3',
+  md: 'h-11 px-4 text-body md:h-9',
 }
 
 type Props = React.ButtonHTMLAttributes<HTMLButtonElement> & {

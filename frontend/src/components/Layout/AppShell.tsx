@@ -124,9 +124,9 @@ export default function AppShell() {
       <div role="alert" className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-surface px-4 py-2 text-meta text-text-secondary">
         <div className="flex min-w-0 items-center gap-2">
           <AlertCircle size={14} className="shrink-0 text-warning" />
-          <span className="truncate"><strong className="font-medium text-text-primary">无法连接 Java 网关。</strong> 题库和判题暂不可用，本地练习仍可用。</span>
+          <span className="text-pretty leading-5"><strong className="font-medium text-text-primary">无法连接 Java 网关。</strong> 题库和判题暂不可用，本地练习仍可用。</span>
         </div>
-        <button onClick={() => void checkAuth()} className="inline-flex shrink-0 items-center gap-1.5 text-accent hover:underline">
+        <button onClick={() => void checkAuth()} className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-accent hover:bg-accent-soft">
           <RefreshCw size={12} /> 重新连接
         </button>
       </div>
@@ -144,8 +144,8 @@ export default function AppShell() {
       {cookieInvalid && (
         <div role="alert" className="fixed bottom-4 left-1/2 z-[100] flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-3 rounded-lg border border-warning/30 bg-surface px-3 py-2 text-meta text-text-primary shadow-modal">
           <span>LeetCode 登录态已失效，题目列表和提交可能无法使用。</span>
-          <Link to="/settings/platforms" className="shrink-0 font-medium text-accent hover:underline">重新配置</Link>
-          <button type="button" aria-label="关闭 Cookie 失效提示" onClick={() => setCookieInvalid(false)} className="shrink-0 text-text-muted hover:text-text-primary">×</button>
+          <Link to="/settings/platforms" className="inline-flex h-8 shrink-0 items-center rounded-md px-2 font-medium text-accent hover:bg-surface-muted">重新配置</Link>
+          <button type="button" aria-label="关闭 Cookie 失效提示" onClick={() => setCookieInvalid(false)} className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-text-muted hover:bg-surface-muted hover:text-text-primary">×</button>
         </div>
       )}
 
@@ -519,7 +519,7 @@ function Workspace() {
         ] as const).map(([value, label]) => (
           <button key={value} type="button" aria-pressed={panel === value}
             onClick={() => setPanel(value)}
-            className={`flex-1 rounded-md px-2 py-1.5 text-meta tracking-cn transition-[background-color,color] ${panel === value
+            className={`inline-flex min-h-11 flex-1 items-center justify-center rounded-md px-2 py-1.5 text-meta tracking-cn transition-[background-color,color] ${panel === value
               ? 'bg-accent-soft font-medium text-accent'
               : 'text-text-secondary hover:bg-surface-muted hover:text-text-primary'}`}>
             {label}

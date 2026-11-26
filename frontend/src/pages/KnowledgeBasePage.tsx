@@ -135,11 +135,12 @@ export default function KnowledgeBasePage() {
           <input ref={inputRef} className="hidden" type="file" multiple accept=".txt,.md,.markdown,.rst,.log,.json,.csv,.tsv,.yaml,.yml,.html,.htm,.pdf,.docx,.zip" onChange={event => { void upload(Array.from(event.target.files ?? [])); event.currentTarget.value = '' }} />
         </div>
         <div className="mt-4 divide-y divide-border dark:divide-border-dark">
-          {!status?.sources.length ? <div className="my-4 flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-line-300 px-6 py-10 text-center">
+          {!status?.sources.length ? <button type="button" onClick={() => inputRef.current?.click()} disabled={busy} aria-label="上传源文件"
+            className="my-4 flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-line-300 px-6 py-10 text-center transition-colors hover:border-accent/60 hover:bg-surface-soft focus-visible:border-accent disabled:cursor-not-allowed disabled:opacity-50">
             <FileText size={20} className="text-text-muted" />
-            <p className="text-body text-text-secondary">还没有源文件</p>
-            <p className="max-w-xs text-meta text-text-muted">上传后，教练会在相关问题中检索这些资料。</p>
-          </div> : status.sources.map(source => <div key={source.id} className="flex items-center justify-between gap-3 py-3 text-body">
+            <span className="block text-body text-text-secondary">还没有源文件</span>
+            <span className="block max-w-xs text-meta text-text-muted">点击选择文件，或用右上角按钮上传；上传后，教练会在相关问题中检索这些资料。</span>
+          </button> : status.sources.map(source => <div key={source.id} className="flex items-center justify-between gap-3 py-3 text-body">
             <div className="min-w-0"><p className="truncate text-text-primary">{source.name}</p><p className="text-meta text-text-muted">{formatBytes(source.bytes)} · {new Date(source.updatedAt * 1000).toLocaleString()}</p></div>
             <button type="button" aria-label={`删除 ${source.name}`} onClick={() => void remove(source)} disabled={busy} className="shrink-0 text-text-muted hover:text-danger"><Trash2 size={15} /></button>
           </div>)}

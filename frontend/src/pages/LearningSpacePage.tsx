@@ -93,15 +93,14 @@ export default function LearningSpacePage() {
             <h2 className="text-balance text-[20px] font-semibold leading-7 tracking-title text-text-primary">今天，从一小段代码开始</h2>
             <p className="mt-1.5 text-body text-text-secondary">先理解，再编码，最后让 Agent 根据你的过程安排下一次练习。</p>
           </div>
-          <div className="grid w-full grid-cols-3 gap-0.5 rounded-md bg-surface-muted p-0.5 sm:flex sm:w-auto" role="tablist" aria-label="学习模式">
+          <div className="grid w-full grid-cols-3 gap-0.5 rounded-md bg-surface-muted p-0.5 sm:flex sm:w-auto" role="group" aria-label="学习模式">
             {LEARNING_MODE_OPTIONS.map(option => (
               <button
                 key={option.id}
                 type="button"
-                role="tab"
-                aria-selected={layout.mode === option.id}
+                aria-pressed={layout.mode === option.id}
                 onClick={() => setMode(option.id)}
-                className={`h-8 min-w-0 whitespace-nowrap rounded-[6px] px-1.5 text-meta leading-5 tracking-cn transition-[background-color,color] duration-150 sm:px-3
+                className={`h-11 min-w-0 whitespace-nowrap rounded-[6px] px-1.5 text-meta leading-5 tracking-cn transition-[background-color,color] duration-150 sm:px-3 md:h-8
                   ${layout.mode === option.id
                     ? 'bg-ink-950 font-medium text-canvas'
                     : 'text-text-secondary hover:text-text-primary'}`}
