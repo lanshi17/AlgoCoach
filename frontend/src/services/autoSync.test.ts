@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MasteryBundle, MasteryImportResult } from '@/types'
 import { agentService } from './agentService'
-import { normalizeHubUrl, readAutoSyncSettings, readLastAutoSync, readLastAutoSyncFailure, runAutoSync, saveAutoSyncSettings, type AutoSyncResult } from './autoSync'
+import { normalizeHubUrl, readAutoSyncSettings, readLastAutoSync, readLastAutoSyncFailure, runAutoSync, saveAutoSyncSettings, startAutoSyncLoop, type AutoSyncResult } from './autoSync'
 
 const localBundle: MasteryBundle = {
   format: 'algocoach-mastery-v2', exportedAt: '2026-01-01T00:00:00', workspaceId: 'local-default',
@@ -103,5 +103,64 @@ describe('automatic device sync', () => {
 
     await expect(runAutoSync()).rejects.toThrow('500')
     expect(readLastAutoSyncFailure()?.message).toBe('本地 Agent 请求失败（500），请确认服务正在运行。')
+  })
+})
+
+describe('automatic sync schedule', () => {
+  it('runs on mount, interval, visibility return, and online, then stops cleanly', () => {
+    vi.useFakeTimers()
+    const descriptor = Object.getOwnPropertyDescriptor(document, 'visibilityState')
+    let visibility: DocumentVisibilityState = 'visible'
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility })
+    const run = vi.fn(() => Promise.resolve({ status: 'disabled' }))
+
+    try {
+      const stop = startAutoSyncLoop(run, 60_000)
+      expect(run).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(60_000)
+      expect(run).toHaveBeenCalledTimes(2)
+
+      visibility = 'hidden'
+      vi.advanceTimersByTime(60_000)
+      document.dispatchEvent(new Event('visibilitychange'))
+      expect(run).toHaveBeenCalledTimes(2)
+
+      visibility = 'visible'
+      document.dispatchEvent(new Event('visibilitychange'))
+      expect(run).toHaveBeenCalledTimes(3)
+
+      window.dispatchEvent(new Event('online'))
+      expect(run).toHaveBeenCalledTimes(4)
+
+      stop()
+      vi.advanceTimersByTime(60_000)
+      document.dispatchEvent(new Event('visibilitychange'))
+      window.dispatchEvent(new Event('online'))
+      expect(run).toHaveBeenCalledTimes(4)
+    } finally {
+      if (descriptor) Object.defineProperty(document, 'visibilityState', descriptor)
+      else Reflect.deleteProperty(document, 'visibilityState')
+      vi.useRealTimers()
+    }
+  })
+
+  it('swallows a rejected runner so the loop stays alive', async () => {
+    vi.useFakeTimers()
+    const descriptor = Object.getOwnPropertyDescriptor(document, 'visibilityState')
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    const run = vi.fn(() => Promise.reject(new Error('offline')))
+    try {
+      const stop = startAutoSyncLoop(run, 60_000)
+      await Promise.resolve()
+      expect(run).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(60_000)
+      expect(run).toHaveBeenCalledTimes(2)
+      stop()
+    } finally {
+      if (descriptor) Object.defineProperty(document, 'visibilityState', descriptor)
+      else Reflect.deleteProperty(document, 'visibilityState')
+      vi.useRealTimers()
+    }
   })
 })

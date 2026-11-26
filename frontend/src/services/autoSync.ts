@@ -83,6 +83,28 @@ export function runAutoSync(): Promise<AutoSyncResult> {
   return inFlight
 }
 
+/**
+ * Run auto sync on mount, on the interval, when the tab becomes visible, and
+ * when connectivity returns. The injected runner keeps tests deterministic.
+ */
+export function startAutoSyncLoop(run: () => Promise<unknown> = runAutoSync, intervalMs = 60_000): () => void {
+  const attempt = () => {
+    if (document.visibilityState !== 'visible') return
+    void run().catch(() => { /* runAutoSync records and reports failures */ })
+  }
+  attempt()
+  const timer = window.setInterval(attempt, intervalMs)
+  const onVisibility = () => { if (document.visibilityState === 'visible') attempt() }
+  const onOnline = () => attempt()
+  document.addEventListener('visibilitychange', onVisibility)
+  window.addEventListener('online', onOnline)
+  return () => {
+    window.clearInterval(timer)
+    document.removeEventListener('visibilitychange', onVisibility)
+    window.removeEventListener('online', onOnline)
+  }
+}
+
 async function syncOnce(): Promise<AutoSyncResult> {
   const settings = readAutoSyncSettings()
   if (!settings.enabled || !settings.hubUrl || !settings.token) return { status: 'disabled' }

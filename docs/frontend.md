@@ -544,7 +544,7 @@ interface AppState {
 
 设置页的「跨设备掌握度与复习计划」导出/导入 `algocoach-mastery-v2` JSON：`GET /api/agent/memory/mastery-export` 返回 `{format, exportedAt, workspaceId, topics, reviewSchedules}`，`POST /api/agent/memory/mastery-import` 合并到当前 workspace。知识点取较高 `mastery`、较大 `attempts` 和较新 `lastSeen`；复习计划按 `updatedAt` 取较新状态，通知字段（`notified_on` / `last_notified_at`）保留本机，远程 `source_episode_id` 不导入。重复导入、双向导入和乱序导入都收敛；不导入提交记录、对话、代码或训练统计。前端接受 v1 包（仅知识点）和 v2 包，校验 JSON、格式、条目字段、取值范围和 5000 条上限；文件超过 2 MB 直接拒绝。来源 workspace 与当前不同时只提示，不阻止合并。
 
-自动同步使用同一个 v2 包和同一个合并规则：设置页填写共享同步服务的 Gateway 地址和 `ALGOCOACH_SYNC_TOKEN` 后，前端在启动、每 60 秒、页面重新可见和网络恢复时，先导出本地包，`POST {hub}/api/agent/memory/sync?workspaceId=...`（带 `X-AlgoCoach-Sync-Token`），再把服务端合并后的包导入本机。服务端未配置令牌时端点返回 503；令牌错误返回 403。两台设备必须使用相同 workspace ID；跨 Origin 访问时，hub 的 Gateway 还要通过 `ALGOCOACH_ALLOWED_ORIGINS` 放行网页 Origin。令牌只保存在本机 localStorage，不进入导出包、日志或 Git。后台失败会记录时间与最长 200 字的安全错误并通知设置页；成功同步清除该记录，失败不会打断训练，也不会记录令牌或请求包体。
+自动同步使用同一个 v2 包和同一个合并规则：设置页填写共享同步服务的 Gateway 地址和 `ALGOCOACH_SYNC_TOKEN` 后，前端在启动、每 60 秒、页面重新可见和网络恢复时，先导出本地包，`POST {hub}/api/agent/memory/sync?workspaceId=...`（带 `X-AlgoCoach-Sync-Token`），再把服务端合并后的包导入本机。定时器与 visibility/online 监听由 `startAutoSyncLoop` 统一管理，注入 runner 的测试覆盖启动、间隔、隐藏跳过、恢复可见、online 和清理。服务端未配置令牌时端点返回 503；令牌错误返回 403。两台设备必须使用相同 workspace ID；跨 Origin 访问时，hub 的 Gateway 还要通过 `ALGOCOACH_ALLOWED_ORIGINS` 放行网页 Origin。令牌只保存在本机 localStorage，不进入导出包、日志或 Git。后台失败会记录时间与最长 200 字的安全错误并通知设置页；成功同步清除该记录，失败不会打断训练，也不会记录令牌或请求包体。
 
 ---
 
