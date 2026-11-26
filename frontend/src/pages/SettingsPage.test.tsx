@@ -213,4 +213,28 @@ describe('provider setup return path', () => {
     const messages = Array.from(element.querySelectorAll('[role="status"]')).map(node => node.textContent ?? '')
     expect(messages.some(text => text.includes('启用自动同步需要填写同步服务地址和令牌'))).toBe(true)
   })
+
+  it('restores a background failure and clears it after a successful sync', async () => {
+    localStorage.setItem('algocoach.autoSync', JSON.stringify({ enabled: true, hubUrl: 'http://hub', token: 'secret' }))
+    localStorage.setItem('algocoach.autoSyncFailure', JSON.stringify({
+      at: '2026-02-05T00:00:00Z',
+      message: '同步服务返回 403',
+    }))
+    await act(async () => {
+      root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><SettingsPage /></MemoryRouter>)
+    })
+    const statuses = () => Array.from(element.querySelectorAll('[role="status"]')).map(node => node.textContent ?? '')
+    expect(statuses().some(text => text.includes('上次自动同步失败'))).toBe(true)
+
+    act(() => window.dispatchEvent(new CustomEvent('algocoach:auto-sync', {
+      detail: { status: 'failed', at: '2026-02-05T00:01:00Z', message: '同步服务返回 503' },
+    })))
+    expect(statuses().some(text => text.includes('后台同步失败：同步服务返回 503'))).toBe(true)
+
+    act(() => window.dispatchEvent(new CustomEvent('algocoach:auto-sync', {
+      detail: { status: 'synced', at: '2026-02-05T00:02:00Z', counts: {} },
+    })))
+    expect(statuses().some(text => text.includes('后台同步完成'))).toBe(true)
+    expect(statuses().some(text => text.includes('失败'))).toBe(false)
+  })
 })

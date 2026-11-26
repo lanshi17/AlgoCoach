@@ -8,7 +8,7 @@ import { agentService } from '@/services/agentService'
 import { leetcodeService } from '@/services/leetcodeService'
 import { createWorkspaceExport } from '@/services/workspaceExport'
 import { parseMasteryBundle } from '@/services/masterySync'
-import { normalizeHubUrl, readAutoSyncSettings, readLastAutoSync, runAutoSync, saveAutoSyncSettings, type AutoSyncResult, type AutoSyncSettings } from '@/services/autoSync'
+import { normalizeHubUrl, readAutoSyncSettings, readLastAutoSync, readLastAutoSyncFailure, runAutoSync, saveAutoSyncSettings, type AutoSyncFailure, type AutoSyncResult, type AutoSyncSettings } from '@/services/autoSync'
 import type { CoachStyle, ModelProviderConfig, TrainingGoal } from '@/types'
 import { CUSTOM_PROVIDER_PRESET, PROTOCOL_OPTIONS, PROVIDER_PRESETS, providerFromPreset } from '@/services/providerPresets'
 import { DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_OUTPUT_TOKENS } from '@/services/providerPresets'
@@ -21,6 +21,11 @@ const control =
   'placeholder:text-text-muted focus:border-accent dark:border-border-dark dark:bg-surface-dark-soft dark:text-text-dark-primary'
 const field = `mt-1 ${control}`
 const label = 'text-xs text-text-secondary dark:text-text-dark-secondary'
+
+function formatAutoSyncFailure(failure: AutoSyncFailure): string {
+  const when = new Date(failure.at).toLocaleString()
+  return `上次自动同步失败：${when} · ${failure.message}`
+}
 
 export default function SettingsPage() {
   const navigate = useNavigate()
@@ -41,8 +46,11 @@ export default function SettingsPage() {
   const [masteryError, setMasteryError] = useState(false)
   const masteryFileRef = useRef<HTMLInputElement>(null)
   const [autoSync, setAutoSync] = useState<AutoSyncSettings>(() => readAutoSyncSettings())
-  const [autoSyncMessage, setAutoSyncMessage] = useState('')
-  const [autoSyncError, setAutoSyncError] = useState(false)
+  const [initialAutoSyncFailure] = useState<AutoSyncFailure | null>(() => (
+    readAutoSyncSettings().enabled ? readLastAutoSyncFailure() : null
+  ))
+  const [autoSyncMessage, setAutoSyncMessage] = useState(() => initialAutoSyncFailure ? formatAutoSyncFailure(initialAutoSyncFailure) : '')
+  const [autoSyncError, setAutoSyncError] = useState(Boolean(initialAutoSyncFailure))
   const [autoSyncing, setAutoSyncing] = useState(false)
   const [lastAutoSync, setLastAutoSync] = useState<string | null>(() => readLastAutoSync())
   const [providerMessage, setProviderMessage] = useState('')
@@ -220,6 +228,11 @@ export default function SettingsPage() {
   useEffect(() => {
     const onAutoSync = (event: Event) => {
       const detail = (event as CustomEvent<AutoSyncResult>).detail
+      if (detail?.status === 'failed') {
+        setAutoSyncError(true)
+        setAutoSyncMessage(`后台同步失败：${detail.message ?? '未知错误'}`)
+        return
+      }
       if (detail?.status !== 'synced') return
       setLastAutoSync(detail.at ?? null)
       setAutoSyncError(false)
@@ -410,7 +423,7 @@ export default function SettingsPage() {
                 <p className="text-xs font-medium text-text-primary dark:text-text-dark-primary">自动同步（共享同步服务）</p>
                 <Switch label="自动跨设备同步" checked={autoSync.enabled} onChange={enabled => updateAutoSync({ enabled })} />
               </div>
-              <p className="mt-1 text-xs leading-5 text-text-secondary dark:text-text-dark-secondary">两台设备连接同一个同步服务，每 60 秒、页面重新可见或网络恢复时自动交换。服务端需设置 `ALGOCOACH_SYNC_TOKEN`，并允许当前网页 Origin；令牌只保存在本机浏览器。</p>
+              <p className="mt-1 text-xs leading-5 text-text-secondary dark:text-text-dark-secondary">两台设备连接同一个同步服务，每 60 秒、页面重新可见或网络恢复时自动交换。服务端需设置 <code className="font-mono">ALGOCOACH_SYNC_TOKEN</code>，并允许当前网页 Origin；令牌只保存在本机浏览器。</p>
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 <input aria-label="同步服务地址" value={autoSync.hubUrl} onChange={event => updateAutoSync({ hubUrl: event.target.value })} placeholder="http://192.168.1.10:8080" className={control} />
                 <input aria-label="同步令牌" type="password" autoComplete="off" value={autoSync.token} onChange={event => updateAutoSync({ token: event.target.value })} placeholder="ALGOCOACH_SYNC_TOKEN" className={control} />

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MasteryBundle, MasteryImportResult } from '@/types'
 import { agentService } from './agentService'
-import { normalizeHubUrl, readAutoSyncSettings, readLastAutoSync, runAutoSync, saveAutoSyncSettings } from './autoSync'
+import { normalizeHubUrl, readAutoSyncSettings, readLastAutoSync, readLastAutoSyncFailure, runAutoSync, saveAutoSyncSettings, type AutoSyncResult } from './autoSync'
 
 const localBundle: MasteryBundle = {
   format: 'algocoach-mastery-v2', exportedAt: '2026-01-01T00:00:00', workspaceId: 'local-default',
@@ -69,5 +69,39 @@ describe('automatic device sync', () => {
     await expect(runAutoSync()).rejects.toThrow('503')
     expect(importMastery).not.toHaveBeenCalled()
     expect(readLastAutoSync()).toBeNull()
+  })
+
+  it('records a safe failure and clears it after a successful retry', async () => {
+    vi.spyOn(agentService, 'exportMastery').mockResolvedValue(localBundle)
+    vi.spyOn(agentService, 'importMastery').mockResolvedValue(counts)
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ bundle: hubBundle }) })
+    vi.stubGlobal('fetch', fetchMock)
+    saveAutoSyncSettings({ enabled: true, hubUrl: 'http://hub', token: 'super-secret-token' })
+    const events: AutoSyncResult[] = []
+    const onSync = (event: Event) => { events.push((event as CustomEvent<AutoSyncResult>).detail) }
+    window.addEventListener('algocoach:auto-sync', onSync)
+
+    await expect(runAutoSync()).rejects.toThrow('Failed to fetch')
+    const failure = readLastAutoSyncFailure()
+    expect(failure?.message).toContain('无法连接同步服务')
+    expect(failure?.message).not.toContain('super-secret-token')
+    expect(events.some(item => item.status === 'failed')).toBe(true)
+    expect(readLastAutoSync()).toBeNull()
+
+    const result = await runAutoSync()
+    expect(result.status).toBe('synced')
+    expect(readLastAutoSyncFailure()).toBeNull()
+    expect(events.some(item => item.status === 'synced')).toBe(true)
+    window.removeEventListener('algocoach:auto-sync', onSync)
+  })
+
+  it('explains a local Agent failure instead of leaking the HTTP wrapper', async () => {
+    vi.spyOn(agentService, 'exportMastery').mockRejectedValue(new Error('Request failed with status code 500'))
+    saveAutoSyncSettings({ enabled: true, hubUrl: 'http://hub', token: 'secret' })
+
+    await expect(runAutoSync()).rejects.toThrow('500')
+    expect(readLastAutoSyncFailure()?.message).toBe('本地 Agent 请求失败（500），请确认服务正在运行。')
   })
 })
