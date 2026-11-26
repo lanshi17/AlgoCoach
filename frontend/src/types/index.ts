@@ -204,10 +204,21 @@ export interface MasteryBundleTopic {
 }
 
 export interface MasteryBundle {
-  format: 'algocoach-mastery-v1'
+  format: 'algocoach-mastery-v1' | 'algocoach-mastery-v2'
   exportedAt: string
   workspaceId: string
   topics: MasteryBundleTopic[]
+  reviewSchedules?: ReviewScheduleBundle[]
+}
+
+export interface ReviewScheduleBundle {
+  problemId: string
+  dueAt: string
+  intervalDays: number
+  mastery: number
+  attempts: number
+  topics: string[]
+  updatedAt: string
 }
 
 export interface MasteryImportResult {
@@ -216,6 +227,9 @@ export interface MasteryImportResult {
   imported: number
   updated: number
   unchanged: number
+  schedulesImported: number
+  schedulesUpdated: number
+  schedulesUnchanged: number
 }
 
 export interface KnowledgeEmbeddingConfig {

@@ -174,15 +174,20 @@ describe('provider setup return path', () => {
   it('imports a mastery bundle and reports merged counts', async () => {
     const importMastery = vi.spyOn(agentService, 'importMastery').mockResolvedValue({
       ok: true, workspaceId: 'local-default', imported: 1, updated: 2, unchanged: 3,
+      schedulesImported: 1, schedulesUpdated: 2, schedulesUnchanged: 3,
     })
     await act(async () => {
       root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><SettingsPage /></MemoryRouter>)
     })
     const bundle = {
-      format: 'algocoach-mastery-v1',
+      format: 'algocoach-mastery-v2',
       exportedAt: '2026-01-01T00:00:00',
       workspaceId: 'remote-device',
       topics: [{ topic: '二分查找', mastery: 0.5, attempts: 1, lastSeen: '' }],
+      reviewSchedules: [{
+        problemId: 'two-sum', dueAt: '2026-02-10T00:00:00', intervalDays: 5,
+        mastery: 0.5, attempts: 1, topics: ['二分查找'], updatedAt: '2026-02-05T00:00:00',
+      }],
     }
     const file = new File([JSON.stringify(bundle)], 'mastery.json', { type: 'application/json' })
     Object.defineProperty(file, 'text', { value: async () => JSON.stringify(bundle) })
@@ -190,9 +195,10 @@ describe('provider setup return path', () => {
     Object.defineProperty(input, 'files', { value: [file] })
     await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })) })
 
-    expect(importMastery).toHaveBeenCalledWith(expect.objectContaining({ format: 'algocoach-mastery-v1' }))
+    expect(importMastery).toHaveBeenCalledWith(expect.objectContaining({ format: 'algocoach-mastery-v2' }))
     const messages = Array.from(element.querySelectorAll('[role="status"]')).map(node => node.textContent ?? '')
     expect(messages.some(text => text.includes('已合并 1 个新知识点'))).toBe(true)
+    expect(messages.some(text => text.includes('复习计划新增 1 条、更新 2 条'))).toBe(true)
     expect(messages.some(text => text.includes('来源 workspace：remote-device'))).toBe(true)
   })
 })

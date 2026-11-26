@@ -83,7 +83,7 @@ frontend/
     │       └── PageHeader.tsx      # 唯一页面标题（图标 + 标题 + 右侧操作）
     └── pages/
         ├── LearningSpacePage.tsx    # Block 学习空间：摘要、练习、复盘、计划、洞察
-        ├── SettingsPage.tsx        # 目标/AI 教练/Provider/题库登录/导出/跨设备掌握度
+        ├── SettingsPage.tsx        # 目标/AI 教练/Provider/题库登录/导出/跨设备同步
         ├── ProgressPage.tsx        # 训练进度
         ├── KnowledgeGraphPage.tsx  # 掌握关系图
         ├── KnowledgeBasePage.tsx   # 用户知识库、Embedding 与源文件管理
@@ -538,7 +538,7 @@ interface AppState {
 
 语言偏好、训练目标和主题保存在当前浏览器；数据导出下载 Agent 训练记忆 ZIP 与 Gateway 提交历史 JSON。提交历史导出包含用户提交代码，LeetCode Cookie 不导出。
 
-设置页的「跨设备掌握度」导出/导入主题级聚合 JSON：`GET /api/agent/memory/mastery-export` 返回 `{format, exportedAt, workspaceId, topics}`，`POST /api/agent/memory/mastery-import` 合并到当前 workspace。每主题取较高 `mastery`、较大 `attempts` 和较新 `lastSeen`，因此重复导入、双向导入和乱序导入都收敛；不导入提交记录、对话、代码、复习计划或训练统计。导入前前端校验 JSON、格式、条目字段、取值范围和 5000 条上限；文件超过 2 MB 直接拒绝。来源 workspace 与当前不同时只提示，不阻止合并。
+设置页的「跨设备掌握度与复习计划」导出/导入 `algocoach-mastery-v2` JSON：`GET /api/agent/memory/mastery-export` 返回 `{format, exportedAt, workspaceId, topics, reviewSchedules}`，`POST /api/agent/memory/mastery-import` 合并到当前 workspace。知识点取较高 `mastery`、较大 `attempts` 和较新 `lastSeen`；复习计划按 `updatedAt` 取较新状态，通知字段（`notified_on` / `last_notified_at`）保留本机，远程 `source_episode_id` 不导入。重复导入、双向导入和乱序导入都收敛；不导入提交记录、对话、代码或训练统计。前端接受 v1 包（仅知识点）和 v2 包，校验 JSON、格式、条目字段、取值范围和 5000 条上限；文件超过 2 MB 直接拒绝。来源 workspace 与当前不同时只提示，不阻止合并。
 
 ---
 

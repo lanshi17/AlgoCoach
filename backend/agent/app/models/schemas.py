@@ -5,6 +5,7 @@ keeps ``agent/router.py`` focused on routing. Field names are part of the
 existing API contract (the frontend and the Java gateway use them verbatim),
 so they must not be renamed without a coordinated client change.
 """
+from datetime import datetime
 from typing import Any, Final, Literal
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
@@ -190,8 +191,8 @@ class MemoryRecordResponse(BaseModel):
     ok: bool = True
 
 
-MASTERY_BUNDLE_FORMAT: Final[Literal["algocoach-mastery-v1"]] = "algocoach-mastery-v1"
-MasteryBundleFormat = Literal["algocoach-mastery-v1"]
+MASTERY_BUNDLE_FORMAT_V2: Final[Literal["algocoach-mastery-v2"]] = "algocoach-mastery-v2"
+MasteryBundleFormat = Literal["algocoach-mastery-v1", "algocoach-mastery-v2"]
 
 
 class MasteryBundleTopic(BaseModel):
@@ -210,6 +211,46 @@ class MasteryBundleTopic(BaseModel):
         return value.strip()
 
 
+class ReviewScheduleBundle(BaseModel):
+    """One problem's spaced-repetition state inside a sync bundle."""
+
+    problemId: str = Field(min_length=1, max_length=64)
+    dueAt: str = Field(min_length=1, max_length=32)
+    intervalDays: int = Field(ge=1, le=3650)
+    mastery: float = Field(ge=0, le=1)
+    attempts: int = Field(ge=0, le=1_000_000)
+    topics: list[str] = Field(default_factory=list, max_length=50)
+    updatedAt: str = Field(min_length=1, max_length=32)
+
+    @field_validator("problemId", mode="before")
+    @classmethod
+    def _problem_text(cls, value: object) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("problemId must be a non-empty string")
+        return value.strip()
+
+    @field_validator("dueAt", "updatedAt", mode="before")
+    @classmethod
+    def _timestamp_text(cls, value: object) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("timestamp must be a non-empty string")
+        try:
+            datetime.fromisoformat(value)
+        except ValueError as exc:
+            raise ValueError("timestamp must be ISO-8601") from exc
+        return value
+
+    @field_validator("topics")
+    @classmethod
+    def _schedule_topics(cls, topics: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for topic in topics:
+            if not isinstance(topic, str) or not topic.strip():
+                raise ValueError("topics must be a list of non-empty strings")
+            cleaned.append(topic.strip())
+        return cleaned
+
+
 class MasteryImportRequest(BaseModel):
     """Body of ``POST /memory/mastery-import``.
 
@@ -221,16 +262,18 @@ class MasteryImportRequest(BaseModel):
     format: MasteryBundleFormat
     workspaceId: str | None = Field(default=None, max_length=128)
     exportedAt: str | None = Field(default=None, max_length=64)
-    topics: list[MasteryBundleTopic] = Field(max_length=5000)
+    topics: list[MasteryBundleTopic] = Field(default_factory=list, max_length=5000)
+    reviewSchedules: list[ReviewScheduleBundle] = Field(default_factory=list, max_length=5000)
 
 
 class MasteryExportResponse(BaseModel):
-    """Portable mastery snapshot returned by ``GET /memory/mastery-export``."""
+    """Portable mastery + review snapshot returned by the export endpoint."""
 
-    format: MasteryBundleFormat = MASTERY_BUNDLE_FORMAT
+    format: Literal["algocoach-mastery-v2"] = MASTERY_BUNDLE_FORMAT_V2
     exportedAt: str
     workspaceId: str
     topics: list[MasteryBundleTopic]
+    reviewSchedules: list[ReviewScheduleBundle]
 
 
 class MasteryImportResponse(BaseModel):
@@ -239,6 +282,9 @@ class MasteryImportResponse(BaseModel):
     imported: int
     updated: int
     unchanged: int
+    schedulesImported: int
+    schedulesUpdated: int
+    schedulesUnchanged: int
 
 
 class GeneratedAnimationRequest(BaseModel):

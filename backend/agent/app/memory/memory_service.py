@@ -134,6 +134,17 @@ def _later_timestamp(left: str | None, right: str | None) -> str:
     return left_text if left_text >= right_text else right_text
 
 
+def _timestamp_after(left: str | None, right: str | None) -> bool:
+    """True when ``left`` is strictly later than ``right``."""
+    left_text = left or ""
+    right_text = right or ""
+    left_time = _parse_iso(left_text)
+    right_time = _parse_iso(right_text)
+    if left_time and right_time:
+        return left_time > right_time
+    return left_text > right_text
+
+
 def _json_list(value: str | None) -> list[str]:
     try:
         parsed = json.loads(value or "[]")
@@ -425,15 +436,18 @@ class MemoryService:
     async def export_mastery(
         self, workspace_id: str = DEFAULT_WORKSPACE_ID,
     ) -> dict:
-        """Return a portable, topic-level mastery snapshot for one workspace.
+        """Return a portable mastery + review snapshot for one workspace.
 
-        Only semantic aggregates are exported: no episodes, code, chat, review
-        schedules, or workspace files.
+        Only semantic aggregates and review state are exported: no episodes,
+        code, chat, notifications, or workspace files.
         """
         workspace = normalize_workspace_id(workspace_id)
         async with SessionLocal() as s:
             nodes = list((await s.execute(
                 select(SemanticNode).where(SemanticNode.workspace_id == workspace)
+            )).scalars())
+            schedules = list((await s.execute(
+                select(ReviewSchedule).where(ReviewSchedule.workspace_id == workspace)
             )).scalars())
         topics = sorted(
             (
@@ -447,24 +461,42 @@ class MemoryService:
             ),
             key=lambda item: str(item["topic"]),
         )
+        review_schedules = sorted(
+            (
+                {
+                    "problemId": _logical_key(schedule.problem_id, workspace),
+                    "dueAt": schedule.due_at or "",
+                    "intervalDays": max(1, int(schedule.interval_days or 1)),
+                    "mastery": round(float(schedule.mastery), 4),
+                    "attempts": int(schedule.attempts),
+                    "topics": _json_list(schedule.topics),
+                    "updatedAt": schedule.updated_at or "",
+                }
+                for schedule in schedules
+            ),
+            key=lambda item: str(item["problemId"]),
+        )
         return {
-            "format": "algocoach-mastery-v1",
+            "format": "algocoach-mastery-v2",
             "exportedAt": _iso(utcnow()),
             "workspaceId": workspace,
             "topics": topics,
+            "reviewSchedules": review_schedules,
         }
 
     async def import_mastery(
         self,
         topics: list[dict],
+        review_schedules: list[dict] | None = None,
         workspace_id: str = DEFAULT_WORKSPACE_ID,
     ) -> dict:
-        """Merge a mastery bundle monotonically into one workspace.
+        """Merge a mastery + review bundle into one workspace.
 
-        Per topic: mastery and attempts take the larger value, lastSeen takes
-        the later timestamp. The merge is idempotent and order-independent, so
-        repeated imports and imports on both devices converge. Negative
-        evidence from another device does not lower a local estimate.
+        Topics take the monotonic join (max mastery, max attempts, later
+        lastSeen). Review schedules use last-writer-wins by ``updatedAt``
+        because the newest review state is authoritative; notification fields
+        stay local so importing cannot suppress a device's pushes. The merge is
+        idempotent and order-independent.
         """
         workspace = normalize_workspace_id(workspace_id)
         merged: dict[str, tuple[float, int, str]] = {}
@@ -482,9 +514,23 @@ class MemoryService:
                 _later_timestamp(previous[2], last_seen) if previous else last_seen,
             )
 
+        merged_schedules: dict[str, dict] = {}
+        for item in review_schedules or []:
+            problem_id = str(item.get("problemId") or "").strip()
+            due_at = str(item.get("dueAt") or "").strip()
+            updated_at = str(item.get("updatedAt") or "").strip()
+            if not problem_id or not due_at or not updated_at:
+                continue
+            previous_schedule = merged_schedules.get(problem_id)
+            if previous_schedule is None or _timestamp_after(updated_at, str(previous_schedule.get("updatedAt") or "")):
+                merged_schedules[problem_id] = item
+
         imported = 0
         updated = 0
         unchanged = 0
+        schedules_imported = 0
+        schedules_updated = 0
+        schedules_unchanged = 0
         async with SessionLocal() as s:
             for topic, (mastery, attempts, last_seen) in merged.items():
                 key = _storage_key(topic, workspace)
@@ -514,6 +560,38 @@ class MemoryService:
                     updated += 1
                 else:
                     unchanged += 1
+
+            for problem_id, item in merged_schedules.items():
+                key = _storage_key(problem_id, workspace)
+                existing_schedule = await s.get(ReviewSchedule, key)
+                remote_updated = str(item.get("updatedAt") or "").strip()
+                if existing_schedule is None:
+                    s.add(ReviewSchedule(
+                        problem_id=key,
+                        workspace_id=workspace,
+                        due_at=str(item.get("dueAt") or "").strip(),
+                        interval_days=max(1, int(item.get("intervalDays") or 1)),
+                        mastery=max(0.0, min(1.0, float(item.get("mastery") or 0))),
+                        attempts=max(0, int(item.get("attempts") or 0)),
+                        topics=json.dumps(item.get("topics") or [], ensure_ascii=False),
+                        source_episode_id=None,
+                        notified_on="",
+                        last_notified_at="",
+                        updated_at=remote_updated,
+                    ))
+                    schedules_imported += 1
+                    continue
+                if not _timestamp_after(remote_updated, existing_schedule.updated_at):
+                    schedules_unchanged += 1
+                    continue
+                existing_schedule.due_at = str(item.get("dueAt") or "").strip()
+                existing_schedule.interval_days = max(1, int(item.get("intervalDays") or 1))
+                existing_schedule.mastery = max(0.0, min(1.0, float(item.get("mastery") or 0)))
+                existing_schedule.attempts = max(0, int(item.get("attempts") or 0))
+                existing_schedule.topics = json.dumps(item.get("topics") or [], ensure_ascii=False)
+                existing_schedule.source_episode_id = None
+                existing_schedule.updated_at = remote_updated
+                schedules_updated += 1
             await s.commit()
         return {
             "ok": True,
@@ -521,6 +599,9 @@ class MemoryService:
             "imported": imported,
             "updated": updated,
             "unchanged": unchanged,
+            "schedulesImported": schedules_imported,
+            "schedulesUpdated": schedules_updated,
+            "schedulesUnchanged": schedules_unchanged,
         }
 
     async def weak_topics(

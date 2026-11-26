@@ -382,6 +382,7 @@ async def import_mastery(req: MasteryImportRequest, request: Request):
     )
     return await memory.import_mastery(
         [topic.model_dump() for topic in req.topics],
+        [schedule.model_dump() for schedule in req.reviewSchedules],
         workspace_id=workspace_id,
     )
 

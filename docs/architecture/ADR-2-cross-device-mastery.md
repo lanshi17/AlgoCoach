@@ -1,7 +1,7 @@
 # ADR-2 — cross-device mastery as a portable monotonic JSON bundle
 
 Status: draft (proposed 2026-11-26; a human owner must approve before this is `approved`)
-Related: `TASK-2026-11-26-cross-device-mastery-sync`, `ADR-1-guided-mastery-evidence`, `docs/memory-system.md`, `docs/backend-agent.md`
+Related: `TASK-2026-11-26-cross-device-mastery-sync`, `ADR-1-guided-mastery-evidence`, `ADR-3-review-schedule-sync`, `docs/memory-system.md`, `docs/backend-agent.md`
 
 ## Context
 

@@ -159,7 +159,7 @@ export default function SettingsPage() {
       const bundle = parseMasteryBundle(await file.text())
       const result = await agentService.importMastery(bundle)
       const source = bundle.workspaceId && bundle.workspaceId !== getWorkspaceId() ? `（来源 workspace：${bundle.workspaceId}）` : ''
-      setMasteryMessage(`已合并 ${result.imported} 个新知识点、更新 ${result.updated} 个，${result.unchanged} 个未变化${source}。`)
+      setMasteryMessage(`已合并 ${result.imported} 个新知识点、更新 ${result.updated} 个，${result.unchanged} 个未变化；复习计划新增 ${result.schedulesImported} 条、更新 ${result.schedulesUpdated} 条，${result.schedulesUnchanged} 条未变化${source}。`)
     } catch (cause) {
       setMasteryError(true)
       setMasteryMessage(cause instanceof Error ? cause.message : '导入掌握度失败，请确认 Agent 服务正在运行。')
@@ -321,8 +321,8 @@ export default function SettingsPage() {
           <div className="border-t border-border pt-5 dark:border-border-dark">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-xl">
-                <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">跨设备掌握度</p>
-                <p className="mt-1 text-xs leading-5 text-text-secondary dark:text-text-dark-secondary">在一台设备导出掌握度 JSON，在另一台导入。按主题取较高掌握度、较大训练次数和较新时间；重复导入不会重复计数。只同步知识点聚合，不同步提交记录、对话或代码。</p>
+                <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">跨设备掌握度与复习计划</p>
+                <p className="mt-1 text-xs leading-5 text-text-secondary dark:text-text-dark-secondary">在一台设备导出 JSON，在另一台导入。知识点取较高掌握度、较大训练次数和较新时间；复习计划按更新时间取较新状态，通知记录仍保留在本机。重复导入不会重复计数，也不含提交记录、对话或代码。</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {masteryMessage && <span role="status" aria-live="polite" className={`max-w-xs text-xs ${masteryError ? 'text-danger' : 'text-success'}`}>{masteryMessage}</span>}
