@@ -83,7 +83,7 @@ frontend/
     │       └── PageHeader.tsx      # 唯一页面标题（图标 + 标题 + 右侧操作）
     └── pages/
         ├── LearningSpacePage.tsx    # Block 学习空间：摘要、练习、复盘、计划、洞察
-        ├── SettingsPage.tsx        # 目标/AI 教练/Provider/题库登录/导出/跨设备同步
+        ├── SettingsPage.tsx        # 目标/AI 教练/Provider/题库登录/备份/跨设备同步
         ├── ProgressPage.tsx        # 训练进度
         ├── KnowledgeGraphPage.tsx  # 掌握关系图
         ├── KnowledgeBasePage.tsx   # 用户知识库、Embedding 与源文件管理
@@ -537,7 +537,9 @@ interface AppState {
 
 设置页的“题库平台 Cookie”管理 AcWing 与可选的 HDU Cookie：通过 `POST /api/platforms/{platform}/cookie` 写入本机网关 SQLite，只显示“已配置/未配置”，不回显内容。
 
-语言偏好、训练目标和主题保存在当前浏览器；数据导出下载 Agent 训练记忆 ZIP 与 Gateway 提交历史 JSON。提交历史导出包含用户提交代码，LeetCode Cookie 不导出。
+语言偏好、训练目标和主题保存在当前浏览器；数据导出现在下载 `algocoach-workspace.json`、Agent 训练记忆 ZIP 与 Gateway 提交历史 JSON。提交历史导出包含用户提交代码，LeetCode Cookie 不导出。
+
+设置页的「本地数据备份」可以导入同一 `algocoach-workspace-v1` JSON（最多 5 MB）。导入只补充当前 workspace 中不存在的任务、笔记、练习记录、复盘和复盘事件；同 id / problemId 的本机记录始终保留，不覆盖、不删除。复盘事件按 `problemId + reviewedAt + rating` 去重，重复导入幂等；练习记录已满 80 条时不会挤掉本机记录。校验失败的封套整体拒绝，单条格式无效的记录跳过并在结果中计数。布局、引导式对话、代码、Provider 密钥和 Agent 记忆不在导入范围；文件中的源 workspace 只作为提示，数据写入当前 workspace。
 
 设置页的「跨设备掌握度与复习计划」导出/导入 `algocoach-mastery-v2` JSON：`GET /api/agent/memory/mastery-export` 返回 `{format, exportedAt, workspaceId, topics, reviewSchedules}`，`POST /api/agent/memory/mastery-import` 合并到当前 workspace。知识点取较高 `mastery`、较大 `attempts` 和较新 `lastSeen`；复习计划按 `updatedAt` 取较新状态，通知字段（`notified_on` / `last_notified_at`）保留本机，远程 `source_episode_id` 不导入。重复导入、双向导入和乱序导入都收敛；不导入提交记录、对话、代码或训练统计。前端接受 v1 包（仅知识点）和 v2 包，校验 JSON、格式、条目字段、取值范围和 5000 条上限；文件超过 2 MB 直接拒绝。来源 workspace 与当前不同时只提示，不阻止合并。
 

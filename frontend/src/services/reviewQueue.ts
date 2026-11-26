@@ -48,6 +48,42 @@ export function readReviewEvents(): LocalReviewEvent[] {
   }
 }
 
+/** Add imported notes whose problemId is not already present; local notes win. */
+export function mergeReviewEntries(values: unknown[]): { added: number; skipped: number; total: number } {
+  const existing = readReviewEntries()
+  const ids = new Set(existing.map(entry => entry.problemId))
+  const added: LocalReviewEntry[] = []
+  for (const value of values) {
+    if (!isReviewEntry(value) || ids.has(value.problemId)) continue
+    ids.add(value.problemId)
+    added.push(value)
+  }
+  if (added.length) {
+    try { window.localStorage.setItem(REVIEW_KEY, JSON.stringify([...existing, ...added])) } catch { /* local storage is optional */ }
+  }
+  return { added: added.length, skipped: values.length - added.length, total: values.length }
+}
+
+/** Add imported events, deduplicating by problemId + reviewedAt + rating. */
+export function mergeReviewEvents(values: unknown[]): { added: number; skipped: number; total: number } {
+  const existing = readReviewEvents()
+  const keys = new Set(existing.map(event => reviewEventKey(event)))
+  const added: LocalReviewEvent[] = []
+  for (const value of values) {
+    if (!isReviewEvent(value) || keys.has(reviewEventKey(value))) continue
+    keys.add(reviewEventKey(value))
+    added.push(value)
+  }
+  if (added.length) {
+    try { window.localStorage.setItem(REVIEW_EVENTS_KEY, JSON.stringify([...existing, ...added])) } catch { /* local storage is optional */ }
+  }
+  return { added: added.length, skipped: values.length - added.length, total: values.length }
+}
+
+function reviewEventKey(event: LocalReviewEvent): string {
+  return `${event.problemId}\u0000${event.reviewedAt}\u0000${event.rating}`
+}
+
 export function saveReviewEntry(problemId: string, note: string, record?: LocalPracticeRecord): LocalReviewEntry[] {
   const entries = readReviewEntries()
   const previous = entries.find(entry => entry.problemId === problemId)

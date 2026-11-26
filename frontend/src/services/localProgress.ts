@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid'
 import { getWorkspaceId, workspaceStorageKey } from './deepTutorCapabilities'
 
 const LOCAL_PROGRESS_KEY = workspaceStorageKey('algocoach.localPracticeRecords')
+export const MAX_LOCAL_PRACTICE_RECORDS = 80
 
 export type LocalPracticeOutcome = 'SAMPLE_PASSED' | 'SAMPLE_FAILED' | 'UNASSESSED'
 
@@ -20,14 +21,36 @@ export function readLocalPracticeRecords(): LocalPracticeRecord[] {
   try {
     const value: unknown = JSON.parse(window.localStorage.getItem(LOCAL_PROGRESS_KEY) ?? '[]')
     if (!Array.isArray(value)) return []
-    return value.filter(isLocalPracticeRecord).slice(-80)
+    return value.filter(isLocalPracticeRecord).slice(-MAX_LOCAL_PRACTICE_RECORDS)
   } catch {
     return []
   }
 }
 
+/**
+ * Add imported practice records that the current workspace does not have.
+ * Existing records are never displaced when the 80-record cap is full.
+ */
+export function mergeLocalPracticeRecords(values: unknown[]): { added: number; skipped: number; total: number } {
+  const existing = readLocalPracticeRecords()
+  const ids = new Set(existing.map(record => record.id))
+  const missing: LocalPracticeRecord[] = []
+  for (const value of values) {
+    if (!isLocalPracticeRecord(value) || ids.has(value.id)) continue
+    ids.add(value.id)
+    missing.push(value)
+  }
+  missing.sort((a, b) => b.endedAt.localeCompare(a.endedAt))
+  const added = missing.slice(0, Math.max(0, MAX_LOCAL_PRACTICE_RECORDS - existing.length))
+  if (added.length) {
+    const next = [...existing, ...added].sort((a, b) => a.endedAt.localeCompare(b.endedAt))
+    try { window.localStorage.setItem(LOCAL_PROGRESS_KEY, JSON.stringify(next)) } catch { /* local storage is optional */ }
+  }
+  return { added: added.length, skipped: values.length - added.length, total: values.length }
+}
+
 export function appendLocalPracticeRecord(record: Omit<LocalPracticeRecord, 'id'>): LocalPracticeRecord[] {
-  const next = [...readLocalPracticeRecords(), { ...record, id: nanoid(10) }].slice(-80)
+  const next = [...readLocalPracticeRecords(), { ...record, id: nanoid(10) }].slice(-MAX_LOCAL_PRACTICE_RECORDS)
   try { window.localStorage.setItem(LOCAL_PROGRESS_KEY, JSON.stringify(next)) } catch { /* local storage is optional */ }
   return next
 }

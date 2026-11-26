@@ -7,6 +7,7 @@ import { createWorkspace, getWorkspaceId, readWorkspaceManifests, switchWorkspac
 import { agentService } from '@/services/agentService'
 import { leetcodeService } from '@/services/leetcodeService'
 import { createWorkspaceExport } from '@/services/workspaceExport'
+import { importWorkspaceSnapshot, parseWorkspaceSnapshot, WORKSPACE_IMPORT_MAX_BYTES } from '@/services/workspaceImport'
 import { parseMasteryBundle } from '@/services/masterySync'
 import { normalizeHubUrl, readAutoSyncSettings, readLastAutoSync, readLastAutoSyncFailure, runAutoSync, saveAutoSyncSettings, type AutoSyncFailure, type AutoSyncResult, type AutoSyncSettings } from '@/services/autoSync'
 import type { CoachStyle, ModelProviderConfig, TrainingGoal } from '@/types'
@@ -55,6 +56,10 @@ export default function SettingsPage() {
   const [lastAutoSync, setLastAutoSync] = useState<string | null>(() => readLastAutoSync())
   const [providerMessage, setProviderMessage] = useState('')
   const [exportMessage, setExportMessage] = useState('')
+  const [workspaceImporting, setWorkspaceImporting] = useState(false)
+  const [workspaceImportMessage, setWorkspaceImportMessage] = useState('')
+  const [workspaceImportError, setWorkspaceImportError] = useState(false)
+  const workspaceFileRef = useRef<HTMLInputElement>(null)
   const [workspaces, setWorkspaces] = useState<WorkspaceManifest[]>(() => readWorkspaceManifests())
   const [workspaceName, setWorkspaceName] = useState('')
   const [workspaceMessage, setWorkspaceMessage] = useState('')
@@ -139,6 +144,44 @@ export default function SettingsPage() {
       setExportMessage('导出失败，请确认 Agent 和 Java Gateway 正常运行后重试。')
     } finally {
       setExporting(false)
+    }
+  }
+
+  const importWorkspace = async (file: File) => {
+    if (workspaceImporting) return
+    if (file.size > WORKSPACE_IMPORT_MAX_BYTES) {
+      setWorkspaceImportError(true)
+      setWorkspaceImportMessage('工作区备份不能超过 5 MB。')
+      if (workspaceFileRef.current) workspaceFileRef.current.value = ''
+      return
+    }
+    setWorkspaceImporting(true)
+    setWorkspaceImportError(false)
+    setWorkspaceImportMessage('')
+    try {
+      const snapshot = parseWorkspaceSnapshot(await file.text())
+      const result = importWorkspaceSnapshot(snapshot)
+      const counts = [
+        ['任务', result.tasks],
+        ['笔记', result.notebook],
+        ['练习记录', result.practiceRecords],
+        ['复盘', result.reviews],
+        ['复盘事件', result.reviewEvents],
+      ] as const
+      const added = counts.filter(([, count]) => count.added > 0).map(([label, count]) => `${label} ${count.added} 条`)
+      const skipped = counts.reduce((sum, [, count]) => sum + count.skipped, 0)
+      setWorkspaceImportMessage([
+        added.length ? `已补充 ${added.join('、')}。` : '没有可补充的记录。',
+        skipped ? `${skipped} 条未导入（已存在、超出本机上限或格式无效），本机记录保持不变。` : '',
+        `来源 workspace：${result.sourceWorkspaceId || '未知'}；导入到当前 workspace。`,
+        '布局、对话、代码、Provider 密钥和 Agent 记忆不导入。',
+      ].filter(Boolean).join(' '))
+    } catch (cause) {
+      setWorkspaceImportError(true)
+      setWorkspaceImportMessage(cause instanceof Error ? cause.message : '导入工作区失败。')
+    } finally {
+      setWorkspaceImporting(false)
+      if (workspaceFileRef.current) workspaceFileRef.current.value = ''
     }
   }
 
@@ -381,14 +424,38 @@ export default function SettingsPage() {
             <Button onClick={() => navigate('/settings/platforms')} disabled={mode === 'FOCUS'}>管理</Button>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-5 dark:border-border-dark">
-            <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">导出本地数据</p>
-            <div className="flex items-center gap-3">
-              {exportMessage && <span role="status" aria-live="polite" className={`text-xs ${exportMessage.includes('失败') ? 'text-danger' : 'text-success'}`}>{exportMessage}</span>}
-              <Button variant="primary" onClick={() => void exportData()} disabled={exporting} aria-busy={exporting}>
-                <Download size={15} />{exporting ? '正在导出…' : '导出数据'}
-              </Button>
+          <div className="border-t border-border pt-5 dark:border-border-dark">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">本地数据备份</p>
+                <p className="mt-1 text-xs text-text-secondary dark:text-text-dark-secondary">导入只补充本机没有的任务、笔记、练习记录和复盘；已有记录保持不变。</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                {exportMessage && <span role="status" aria-live="polite" className={`text-xs ${exportMessage.includes('失败') ? 'text-danger' : 'text-success'}`}>{exportMessage}</span>}
+                <input
+                  ref={workspaceFileRef}
+                  type="file"
+                  accept="application/json,.json"
+                  aria-label="选择工作区备份文件"
+                  className="hidden"
+                  onChange={event => {
+                    const file = event.target.files?.[0]
+                    if (file) void importWorkspace(file)
+                  }}
+                />
+                <Button onClick={() => workspaceFileRef.current?.click()} disabled={workspaceImporting} aria-busy={workspaceImporting}>
+                  <Upload size={15} />{workspaceImporting ? '正在导入…' : '导入备份'}
+                </Button>
+                <Button variant="primary" onClick={() => void exportData()} disabled={exporting} aria-busy={exporting}>
+                  <Download size={15} />{exporting ? '正在导出…' : '导出数据'}
+                </Button>
+              </div>
             </div>
+            {workspaceImportMessage && (
+              <p role="status" aria-live="polite" className={`mt-2 text-xs ${workspaceImportError ? 'text-danger' : 'text-success'}`}>
+                {workspaceImportMessage}
+              </p>
+            )}
           </div>
 
           <div className="border-t border-border pt-5 dark:border-border-dark">

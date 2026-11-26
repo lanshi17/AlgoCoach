@@ -26,7 +26,7 @@ AlgoCoach 参考 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 的公开
 
 当前发行版是单用户、本地多 workspace，默认 ID 为 `local-default`；设置页可以创建或切换 workspace，切换后应用重载。浏览器 localStorage 的练习本、复盘队列、学习空间布局、任务板、草稿和专注记录通过 `workspaceStorageKey` 归属 workspace；默认 workspace 保留旧 key 以兼容已有数据，其他 workspace 使用隔离后缀。Agent SQLite 训练记忆、ReMe 对话目录、资料索引和题目向量索引按 workspace 隔离；非默认 workspace 的题目和错误向量文档随记忆 JSON 导出。Gateway SQLite 保存平台 Cookie 和判题事实。题目代码只在本轮 REVIEW 请求中发送，不写入长期记忆。
 
-跨设备目前只同步掌握度与复习计划：设置页可以手动导出/导入 v2 包，或配置同一 hub 与 `ALGOCOACH_SYNC_TOKEN` 后自动交换；练习本、复盘事件、任务板、笔记、对话和代码仍是本机数据。
+跨设备目前只自动同步掌握度与复习计划：设置页可以手动导出/导入 v2 包，或配置同一 hub 与 `ALGOCOACH_SYNC_TOKEN` 后自动交换。任务板、笔记、练习记录和复盘可通过 `algocoach-workspace-v1` 本地备份手动补充到另一台设备，但不会自动同步；对话、代码、布局和 Provider 密钥仍不进入备份导入。
 
 ## Mastery Path 的确定性边界
 

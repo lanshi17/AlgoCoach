@@ -41,6 +41,24 @@ export function readLearningTasks(): LearningTask[] {
   }
 }
 
+/**
+ * Add imported tasks that the current workspace does not already have.
+ * Local tasks always win on an id collision; nothing is updated or deleted.
+ */
+export function mergeLearningTasks(values: unknown[]): { added: number; skipped: number; total: number } {
+  const existing = readLearningTasks()
+  const ids = new Set(existing.map(task => task.id))
+  const added: LearningTask[] = []
+  for (const value of values) {
+    const task = normalizeLearningTask(value)
+    if (!task || ids.has(task.id)) continue
+    ids.add(task.id)
+    added.push(task)
+  }
+  if (added.length) persist([...existing, ...added])
+  return { added: added.length, skipped: values.length - added.length, total: values.length }
+}
+
 export function createLearningTask(input: CreateLearningTaskInput): LearningTask[] {
   const task: LearningTask = {
     ...input,

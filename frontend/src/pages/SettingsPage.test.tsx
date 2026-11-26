@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/stores/useAppStore'
 import { agentService } from '@/services/agentService'
 import { leetcodeService } from '@/services/leetcodeService'
+import { readLearningTasks } from '@/services/learningTasks'
 import SettingsPage from './SettingsPage'
 
 function ReturnTarget() {
@@ -236,5 +237,35 @@ describe('provider setup return path', () => {
     })))
     expect(statuses().some(text => text.includes('后台同步完成'))).toBe(true)
     expect(statuses().some(text => text.includes('失败'))).toBe(false)
+  })
+
+  it('imports a workspace backup and reports the source workspace', async () => {
+    await act(async () => {
+      root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><SettingsPage /></MemoryRouter>)
+    })
+    const snapshot = {
+      format: 'algocoach-workspace-v1',
+      exportedAt: '2026-02-01T00:00:00.000Z',
+      workspaceId: 'remote-device',
+      notebook: [],
+      tasks: [{
+        id: 'imported-task', title: '导入任务', kind: 'custom', dueDate: '2026-02-03',
+        status: 'todo', archived: false, createdAt: '2026-02-01T00:00:00.000Z',
+      }],
+      practiceRecords: [],
+      reviews: [],
+      reviewEvents: [],
+      layout: { mode: 'self_paced', blocks: [] },
+    }
+    const file = new File([JSON.stringify(snapshot)], 'workspace.json', { type: 'application/json' })
+    Object.defineProperty(file, 'text', { value: async () => JSON.stringify(snapshot) })
+    const input = element.querySelector<HTMLInputElement>('input[aria-label="选择工作区备份文件"]')!
+    Object.defineProperty(input, 'files', { value: [file] })
+    await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })) })
+
+    expect(readLearningTasks().map(task => task.id)).toContain('imported-task')
+    const messages = Array.from(element.querySelectorAll('[role="status"]')).map(node => node.textContent ?? '')
+    expect(messages.some(text => text.includes('已补充 任务 1 条'))).toBe(true)
+    expect(messages.some(text => text.includes('来源 workspace：remote-device'))).toBe(true)
   })
 })

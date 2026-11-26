@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid'
 import { workspaceStorageKey } from './deepTutorCapabilities'
 
 const NOTEBOOK_KEY = workspaceStorageKey('algocoach.learningNotebook')
+export const MAX_NOTEBOOK_ENTRIES = 200
 
 export interface NotebookEntry {
   id: string
@@ -22,6 +23,27 @@ export function readNotebookEntries(): NotebookEntry[] {
   }
 }
 
+/**
+ * Add imported notes that the current workspace does not already have.
+ * Existing ids always win; the board cap prefers locally stored notes.
+ */
+export function mergeNotebookEntries(values: unknown[]): { added: number; skipped: number; total: number } {
+  const existing = readNotebookEntries()
+  const ids = new Set(existing.map(entry => entry.id))
+  const room = Math.max(0, MAX_NOTEBOOK_ENTRIES - existing.length)
+  const missing = values
+    .filter(isNotebookEntry)
+    .filter(entry => {
+      if (ids.has(entry.id)) return false
+      ids.add(entry.id)
+      return true
+    })
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  const added = missing.slice(0, room)
+  if (added.length) persist([...existing, ...added].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)))
+  return { added: added.length, skipped: values.length - added.length, total: values.length }
+}
+
 export function saveNotebookEntry(input: { id?: string; title: string; body: string; tags: string[]; author?: 'user' | 'ai' }): NotebookEntry[] {
   const entries = readNotebookEntries()
   const now = new Date().toISOString()
@@ -35,7 +57,7 @@ export function saveNotebookEntry(input: { id?: string; title: string; body: str
     updatedAt: now,
     author: current?.author ?? input.author ?? 'user',
   }
-  const next = [nextEntry, ...entries.filter(entry => entry.id !== nextEntry.id)].slice(0, 200)
+  const next = [nextEntry, ...entries.filter(entry => entry.id !== nextEntry.id)].slice(0, MAX_NOTEBOOK_ENTRIES)
   persist(next)
   return next
 }
