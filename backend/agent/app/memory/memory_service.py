@@ -123,6 +123,17 @@ def _parse_iso(value: str | None) -> datetime | None:
     return parsed
 
 
+def _later_timestamp(left: str | None, right: str | None) -> str:
+    """Keep the later ISO timestamp; fall back to lexical order if unparseable."""
+    left_text = left or ""
+    right_text = right or ""
+    left_time = _parse_iso(left_text)
+    right_time = _parse_iso(right_text)
+    if left_time and right_time:
+        return left_text if left_time >= right_time else right_text
+    return left_text if left_text >= right_text else right_text
+
+
 def _json_list(value: str | None) -> list[str]:
     try:
         parsed = json.loads(value or "[]")
@@ -410,6 +421,107 @@ class MemoryService:
                     last_seen=datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 ))
             await s.commit()
+
+    async def export_mastery(
+        self, workspace_id: str = DEFAULT_WORKSPACE_ID,
+    ) -> dict:
+        """Return a portable, topic-level mastery snapshot for one workspace.
+
+        Only semantic aggregates are exported: no episodes, code, chat, review
+        schedules, or workspace files.
+        """
+        workspace = normalize_workspace_id(workspace_id)
+        async with SessionLocal() as s:
+            nodes = list((await s.execute(
+                select(SemanticNode).where(SemanticNode.workspace_id == workspace)
+            )).scalars())
+        topics = sorted(
+            (
+                {
+                    "topic": _logical_key(node.topic, workspace),
+                    "mastery": round(float(node.mastery), 4),
+                    "attempts": int(node.attempts),
+                    "lastSeen": node.last_seen or "",
+                }
+                for node in nodes
+            ),
+            key=lambda item: str(item["topic"]),
+        )
+        return {
+            "format": "algocoach-mastery-v1",
+            "exportedAt": _iso(utcnow()),
+            "workspaceId": workspace,
+            "topics": topics,
+        }
+
+    async def import_mastery(
+        self,
+        topics: list[dict],
+        workspace_id: str = DEFAULT_WORKSPACE_ID,
+    ) -> dict:
+        """Merge a mastery bundle monotonically into one workspace.
+
+        Per topic: mastery and attempts take the larger value, lastSeen takes
+        the later timestamp. The merge is idempotent and order-independent, so
+        repeated imports and imports on both devices converge. Negative
+        evidence from another device does not lower a local estimate.
+        """
+        workspace = normalize_workspace_id(workspace_id)
+        merged: dict[str, tuple[float, int, str]] = {}
+        for item in topics:
+            topic = str(item.get("topic") or "").strip()
+            if not topic:
+                continue
+            mastery = max(0.0, min(1.0, float(item.get("mastery") or 0)))
+            attempts = max(0, int(item.get("attempts") or 0))
+            last_seen = str(item.get("lastSeen") or "")
+            previous = merged.get(topic)
+            merged[topic] = (
+                max(previous[0], mastery) if previous else mastery,
+                max(previous[1], attempts) if previous else attempts,
+                _later_timestamp(previous[2], last_seen) if previous else last_seen,
+            )
+
+        imported = 0
+        updated = 0
+        unchanged = 0
+        async with SessionLocal() as s:
+            for topic, (mastery, attempts, last_seen) in merged.items():
+                key = _storage_key(topic, workspace)
+                existing = await s.get(SemanticNode, key)
+                if existing is None:
+                    s.add(SemanticNode(
+                        topic=key,
+                        workspace_id=workspace,
+                        mastery=mastery,
+                        attempts=attempts,
+                        last_seen=last_seen,
+                    ))
+                    imported += 1
+                    continue
+                changed = False
+                if mastery > existing.mastery:
+                    existing.mastery = mastery
+                    changed = True
+                if attempts > existing.attempts:
+                    existing.attempts = attempts
+                    changed = True
+                later = _later_timestamp(existing.last_seen, last_seen)
+                if later != (existing.last_seen or ""):
+                    existing.last_seen = later
+                    changed = True
+                if changed:
+                    updated += 1
+                else:
+                    unchanged += 1
+            await s.commit()
+        return {
+            "ok": True,
+            "workspaceId": workspace,
+            "imported": imported,
+            "updated": updated,
+            "unchanged": unchanged,
+        }
 
     async def weak_topics(
         self, threshold: float = 0.6, top_n: int = 5,

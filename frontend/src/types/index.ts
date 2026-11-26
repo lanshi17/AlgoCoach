@@ -196,6 +196,28 @@ export interface MasteryPath {
   sourceSummary: { topics: number; dueReviews: number }
 }
 
+export interface MasteryBundleTopic {
+  topic: string
+  mastery: number
+  attempts: number
+  lastSeen: string
+}
+
+export interface MasteryBundle {
+  format: 'algocoach-mastery-v1'
+  exportedAt: string
+  workspaceId: string
+  topics: MasteryBundleTopic[]
+}
+
+export interface MasteryImportResult {
+  ok: boolean
+  workspaceId: string
+  imported: number
+  updated: number
+  unchanged: number
+}
+
 export interface KnowledgeEmbeddingConfig {
   provider: 'local' | 'openai-compatible'
   model: string

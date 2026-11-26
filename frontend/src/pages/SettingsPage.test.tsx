@@ -30,6 +30,7 @@ describe('provider setup return path', () => {
   afterEach(() => {
     act(() => root.unmount())
     element.remove()
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
 
@@ -168,5 +169,30 @@ describe('provider setup return path', () => {
     })
     expect(createObjectURL).toHaveBeenCalledTimes(1)
     expect(element.querySelector('[role="status"]')?.textContent).toContain('工作空间数据已导出')
+  })
+
+  it('imports a mastery bundle and reports merged counts', async () => {
+    const importMastery = vi.spyOn(agentService, 'importMastery').mockResolvedValue({
+      ok: true, workspaceId: 'local-default', imported: 1, updated: 2, unchanged: 3,
+    })
+    await act(async () => {
+      root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><SettingsPage /></MemoryRouter>)
+    })
+    const bundle = {
+      format: 'algocoach-mastery-v1',
+      exportedAt: '2026-01-01T00:00:00',
+      workspaceId: 'remote-device',
+      topics: [{ topic: '二分查找', mastery: 0.5, attempts: 1, lastSeen: '' }],
+    }
+    const file = new File([JSON.stringify(bundle)], 'mastery.json', { type: 'application/json' })
+    Object.defineProperty(file, 'text', { value: async () => JSON.stringify(bundle) })
+    const input = element.querySelector<HTMLInputElement>('input[aria-label="选择掌握度文件"]')!
+    Object.defineProperty(input, 'files', { value: [file] })
+    await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })) })
+
+    expect(importMastery).toHaveBeenCalledWith(expect.objectContaining({ format: 'algocoach-mastery-v1' }))
+    const messages = Array.from(element.querySelectorAll('[role="status"]')).map(node => node.textContent ?? '')
+    expect(messages.some(text => text.includes('已合并 1 个新知识点'))).toBe(true)
+    expect(messages.some(text => text.includes('来源 workspace：remote-device'))).toBe(true)
   })
 })

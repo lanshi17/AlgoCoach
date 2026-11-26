@@ -151,6 +151,37 @@ class AgentProxyControllerTest {
     }
 
     @Test
+    void getMasteryExportForwardsWithWorkspace() throws Exception {
+        upstreamResponse.set(jsonResponse(HttpStatus.OK, "{\"topics\":[]}"));
+
+        performAsync(get(PREFIX + "/memory/mastery-export").queryParam("workspaceId", "alpha"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.topics").isEmpty());
+
+        assertThat(captured.get().getMethod()).isEqualTo(HttpMethod.GET);
+        assertThat(captured.get().getURI().getPath()).isEqualTo("/memory/mastery-export");
+        assertThat(captured.get().getURI().getRawQuery()).isEqualTo("workspaceId=alpha");
+    }
+
+    @Test
+    void postMasteryImportForwardsBodyAndWorkspace() throws Exception {
+        upstreamResponse.set(jsonResponse(HttpStatus.OK, "{\"imported\":1}"));
+        String bundle = "{\"format\":\"algocoach-mastery-v1\",\"topics\":[]}";
+
+        performAsync(post(PREFIX + "/memory/mastery-import")
+                .queryParam("workspaceId", "alpha")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(bundle))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imported").value(1));
+
+        assertThat(captured.get().getMethod()).isEqualTo(HttpMethod.POST);
+        assertThat(captured.get().getURI().getPath()).isEqualTo("/memory/mastery-import");
+        assertThat(captured.get().getURI().getRawQuery()).isEqualTo("workspaceId=alpha");
+        assertThat(captured.get().getBodyAsString().block()).isEqualTo(bundle);
+    }
+
+    @Test
     void getMemoryMasteryPathForwardsToTheFixedAgentRoute() throws Exception {
         upstreamResponse.set(jsonResponse(HttpStatus.OK, "{\"steps\":[]}"));
 

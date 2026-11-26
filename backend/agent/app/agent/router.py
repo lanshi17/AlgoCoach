@@ -25,6 +25,9 @@ from app.models.schemas import (
     AnimateRequest,
     ChatRequest,
     GeneratedAnimationRequest,
+    MasteryExportResponse,
+    MasteryImportRequest,
+    MasteryImportResponse,
     MemoryRecordRequest,
     MemoryRecordResponse,
     TurnReplayRequest,
@@ -357,6 +360,29 @@ async def export_memory(request: Request):
         content=archive,
         media_type="application/zip",
         headers={"Content-Disposition": 'attachment; filename="algocoach-memory.zip"'},
+    )
+
+
+@router.get("/memory/mastery-export", response_model=MasteryExportResponse)
+async def export_mastery(request: Request):
+    """Return a small topic-level mastery bundle for another device."""
+    workspace_id = normalize_workspace_id(
+        request.query_params.get("workspaceId")
+        or request.query_params.get("workspace_id")
+    )
+    return await memory.export_mastery(workspace_id=workspace_id)
+
+
+@router.post("/memory/mastery-import", response_model=MasteryImportResponse)
+async def import_mastery(req: MasteryImportRequest, request: Request):
+    """Merge another device's mastery bundle into the target workspace."""
+    workspace_id = normalize_workspace_id(
+        request.query_params.get("workspaceId")
+        or request.query_params.get("workspace_id")
+    )
+    return await memory.import_mastery(
+        [topic.model_dump() for topic in req.topics],
+        workspace_id=workspace_id,
     )
 
 

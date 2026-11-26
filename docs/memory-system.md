@@ -130,6 +130,16 @@ new_mastery = clamp(old_mastery + delta, *CLAMP)
 - 引入题目难度权重：HARD 题 AC 给 +0.10，EASY 题 AC 给 +0.03。
 - 引入时间衰减：超过 30 天未练，mastery 每天 -0.005（遗忘曲线）。
 
+#### 2.3.1.1 跨设备掌握度合并
+
+本地优先架构没有云端账号，跨设备同步采用手动 JSON 包：
+
+1. 设备 A `GET /memory/mastery-export?workspaceId=...` 导出 `{format, exportedAt, workspaceId, topics:[{topic, mastery, attempts, lastSeen}]}`；只含主题级聚合。
+2. 设备 B 在设置页导入同一包，`POST /memory/mastery-import?workspaceId=...` 以 B 的查询 workspace 为目标。
+3. 每个主题按单调规则合并：`mastery = max`、`attempts = max`、`lastSeen = 较晚值`。规则幂等、可交换，双向和重复导入都收敛；远端较弱证据不会降低本机掌握度。
+4. 只写 `semantic` 聚合，不导入 `episodic`、复习计划、对话、代码或训练统计。导入的主题没有本机 episode，因此知识图谱里没有共现边，进度页统计也不包含另一台设备的提交。
+5. 导入包由前端先校验格式、字段范围与 5000 条上限，Agent 再用 Pydantic 校验一次。掌握度是本地信任数据，导入恶意文件可以抬高掌握度；该边界与手动导入工作区数据的信任模型一致。
+
 #### 2.3.2 知识图谱关系表
 
 ```sql

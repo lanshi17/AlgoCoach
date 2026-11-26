@@ -1,12 +1,13 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { Download, SlidersHorizontal } from 'lucide-react'
+import { Download, SlidersHorizontal, Upload } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { readProviderApiKey, useAppStore } from '@/stores/useAppStore'
 import { createWorkspace, getWorkspaceId, readWorkspaceManifests, switchWorkspace, type WorkspaceManifest } from '@/services/deepTutorCapabilities'
 import { agentService } from '@/services/agentService'
 import { leetcodeService } from '@/services/leetcodeService'
 import { createWorkspaceExport } from '@/services/workspaceExport'
+import { parseMasteryBundle } from '@/services/masterySync'
 import type { CoachStyle, ModelProviderConfig, TrainingGoal } from '@/types'
 import { CUSTOM_PROVIDER_PRESET, PROTOCOL_OPTIONS, PROVIDER_PRESETS, providerFromPreset } from '@/services/providerPresets'
 import { DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_OUTPUT_TOKENS } from '@/services/providerPresets'
@@ -33,6 +34,11 @@ export default function SettingsPage() {
     setCoachPrefs: state.setCoachPrefs,
   })))
   const [exporting, setExporting] = useState(false)
+  const [masteryExporting, setMasteryExporting] = useState(false)
+  const [masteryImporting, setMasteryImporting] = useState(false)
+  const [masteryMessage, setMasteryMessage] = useState('')
+  const [masteryError, setMasteryError] = useState(false)
+  const masteryFileRef = useRef<HTMLInputElement>(null)
   const [providerMessage, setProviderMessage] = useState('')
   const [exportMessage, setExportMessage] = useState('')
   const [workspaces, setWorkspaces] = useState<WorkspaceManifest[]>(() => readWorkspaceManifests())
@@ -119,6 +125,47 @@ export default function SettingsPage() {
       setExportMessage('导出失败，请确认 Agent 和 Java Gateway 正常运行后重试。')
     } finally {
       setExporting(false)
+    }
+  }
+
+  const exportMastery = async () => {
+    if (masteryExporting || masteryImporting) return
+    setMasteryExporting(true)
+    setMasteryError(false)
+    setMasteryMessage('')
+    try {
+      const bundle = await agentService.exportMastery()
+      download(new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' }), `algocoach-mastery-${bundle.workspaceId}.json`)
+      setMasteryMessage(bundle.topics.length ? `已导出 ${bundle.topics.length} 个知识点。` : '当前 workspace 还没有掌握度记录。')
+    } catch {
+      setMasteryError(true)
+      setMasteryMessage('导出掌握度失败，请确认 Agent 服务正在运行。')
+    } finally {
+      setMasteryExporting(false)
+    }
+  }
+
+  const importMasteryFile = async (file: File) => {
+    if (masteryImporting || masteryExporting) return
+    if (file.size > 2 * 1024 * 1024) {
+      setMasteryError(true)
+      setMasteryMessage('掌握度文件不能超过 2 MB。')
+      return
+    }
+    setMasteryImporting(true)
+    setMasteryError(false)
+    setMasteryMessage('')
+    try {
+      const bundle = parseMasteryBundle(await file.text())
+      const result = await agentService.importMastery(bundle)
+      const source = bundle.workspaceId && bundle.workspaceId !== getWorkspaceId() ? `（来源 workspace：${bundle.workspaceId}）` : ''
+      setMasteryMessage(`已合并 ${result.imported} 个新知识点、更新 ${result.updated} 个，${result.unchanged} 个未变化${source}。`)
+    } catch (cause) {
+      setMasteryError(true)
+      setMasteryMessage(cause instanceof Error ? cause.message : '导入掌握度失败，请确认 Agent 服务正在运行。')
+    } finally {
+      setMasteryImporting(false)
+      if (masteryFileRef.current) masteryFileRef.current.value = ''
     }
   }
 
@@ -268,6 +315,35 @@ export default function SettingsPage() {
               <Button variant="primary" onClick={() => void exportData()} disabled={exporting} aria-busy={exporting}>
                 <Download size={15} />{exporting ? '正在导出…' : '导出数据'}
               </Button>
+            </div>
+          </div>
+
+          <div className="border-t border-border pt-5 dark:border-border-dark">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-xl">
+                <p className="text-sm font-medium text-text-primary dark:text-text-dark-primary">跨设备掌握度</p>
+                <p className="mt-1 text-xs leading-5 text-text-secondary dark:text-text-dark-secondary">在一台设备导出掌握度 JSON，在另一台导入。按主题取较高掌握度、较大训练次数和较新时间；重复导入不会重复计数。只同步知识点聚合，不同步提交记录、对话或代码。</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {masteryMessage && <span role="status" aria-live="polite" className={`max-w-xs text-xs ${masteryError ? 'text-danger' : 'text-success'}`}>{masteryMessage}</span>}
+                <input
+                  ref={masteryFileRef}
+                  type="file"
+                  accept="application/json,.json"
+                  aria-label="选择掌握度文件"
+                  className="hidden"
+                  onChange={event => {
+                    const file = event.target.files?.[0]
+                    if (file) void importMasteryFile(file)
+                  }}
+                />
+                <Button onClick={() => masteryFileRef.current?.click()} disabled={masteryImporting || masteryExporting} aria-busy={masteryImporting}>
+                  <Upload size={15} />{masteryImporting ? '正在导入…' : '导入掌握度'}
+                </Button>
+                <Button variant="primary" onClick={() => void exportMastery()} disabled={masteryExporting || masteryImporting} aria-busy={masteryExporting}>
+                  <Download size={15} />{masteryExporting ? '正在导出…' : '导出掌握度'}
+                </Button>
+              </div>
             </div>
           </div>
         </section>

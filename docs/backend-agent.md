@@ -802,6 +802,26 @@ Gateway 需要调 agent 写记忆：
 
 前端通过 Gateway `GET /api/agent/memory/profile` 读取进度概览，并通过 `GET /api/agent/memory/mastery-path` 读取当前 workspace 的有序学习步骤；Gateway 分别固定代理至 Agent 的 `/memory/profile` 和 `/memory/mastery-path`。路径 runner 只读取当前 workspace 的 semantic mastery、共同训练关系和到期复习队列，到期项优先、同优先级按掌握度升序，并返回原因与建议动作。响应不包含代码或 Cookie。设置页通过 `GET /api/agent/memory/export` 下载 SQLite 记忆表、Chroma 向量文档以及 ReMe/Chroma 本地文件；Gateway 的提交历史另存 JSON，Cookie 不导出。
 
+**跨设备掌握度契约：**
+
+```json
+// GET /memory/mastery-export?workspaceId=local-default
+{
+  "format": "algocoach-mastery-v1",
+  "exportedAt": "2026-01-01T00:00:00",
+  "workspaceId": "local-default",
+  "topics": [
+    {"topic": "Array", "mastery": 0.55, "attempts": 3, "lastSeen": "2026-01-01T00:00:00"}
+  ]
+}
+
+// POST /memory/mastery-import?workspaceId=local-default
+// body: the same bundle from another device
+{ "ok": true, "workspaceId": "local-default", "imported": 1, "updated": 0, "unchanged": 0 }
+```
+
+合并按主题去重后单调取大：`mastery = max(local, remote)`、`attempts = max(local, remote)`、`lastSeen` 取较晚值，因此导入幂等且与顺序无关。只写 `semantic` 聚合，不写 episodic、复习计划、对话、代码或工作区文件；`workspaceId` 查询参数是导入目标，包内 `workspaceId` 只是来源提示。Gateway 固定代理两个端点，前端在设置页下载/上传 JSON。
+
 ---
 
 ## 11. 安全考虑

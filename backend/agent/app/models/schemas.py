@@ -5,7 +5,7 @@ keeps ``agent/router.py`` focused on routing. Field names are part of the
 existing API contract (the frontend and the Java gateway use them verbatim),
 so they must not be renamed without a coordinated client change.
 """
-from typing import Any, Literal
+from typing import Any, Final, Literal
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
@@ -188,6 +188,57 @@ class MemoryRecordResponse(BaseModel):
     """Acknowledgement returned by ``POST /memory/record``."""
 
     ok: bool = True
+
+
+MASTERY_BUNDLE_FORMAT: Final[Literal["algocoach-mastery-v1"]] = "algocoach-mastery-v1"
+MasteryBundleFormat = Literal["algocoach-mastery-v1"]
+
+
+class MasteryBundleTopic(BaseModel):
+    """One topic aggregate inside a cross-device mastery bundle."""
+
+    topic: str = Field(min_length=1, max_length=200)
+    mastery: float = Field(ge=0, le=1)
+    attempts: int = Field(ge=0, le=1_000_000)
+    lastSeen: str = Field(default="", max_length=64)
+
+    @field_validator("topic", mode="before")
+    @classmethod
+    def _topic_text(cls, value: object) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("topic must be a non-empty string")
+        return value.strip()
+
+
+class MasteryImportRequest(BaseModel):
+    """Body of ``POST /memory/mastery-import``.
+
+    ``workspaceId`` is the source device's workspace for display; the target is
+    the query parameter on the endpoint, so importing into another workspace
+    stays explicit.
+    """
+
+    format: MasteryBundleFormat
+    workspaceId: str | None = Field(default=None, max_length=128)
+    exportedAt: str | None = Field(default=None, max_length=64)
+    topics: list[MasteryBundleTopic] = Field(max_length=5000)
+
+
+class MasteryExportResponse(BaseModel):
+    """Portable mastery snapshot returned by ``GET /memory/mastery-export``."""
+
+    format: MasteryBundleFormat = MASTERY_BUNDLE_FORMAT
+    exportedAt: str
+    workspaceId: str
+    topics: list[MasteryBundleTopic]
+
+
+class MasteryImportResponse(BaseModel):
+    ok: bool = True
+    workspaceId: str
+    imported: int
+    updated: int
+    unchanged: int
 
 
 class GeneratedAnimationRequest(BaseModel):

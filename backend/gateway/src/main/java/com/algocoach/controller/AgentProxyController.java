@@ -76,6 +76,8 @@ public class AgentProxyController {
     static final String MEMORY_RECORD_PATH = "/memory/record";
     static final String MEMORY_PROFILE_PATH = "/memory/profile";
     static final String MEMORY_MASTERY_PATH = "/memory/mastery-path";
+    static final String MEMORY_MASTERY_EXPORT_PATH = "/memory/mastery-export";
+    static final String MEMORY_MASTERY_IMPORT_PATH = "/memory/mastery-import";
     static final String MEMORY_EXPORT_PATH = "/memory/export";
     static final String KNOWLEDGE_CONFIG_PATH = "/knowledge/config";
     static final String KNOWLEDGE_SOURCES_PATH = "/knowledge/sources";
@@ -190,6 +192,18 @@ public class AgentProxyController {
     @GetMapping("/memory/export")
     public Mono<ResponseEntity<byte[]>> memoryExport(HttpServletRequest request) {
         return forward(HttpMethod.GET, MEMORY_EXPORT_PATH, request, null);
+    }
+
+    @GetMapping("/memory/mastery-export")
+    public Mono<ResponseEntity<byte[]>> memoryMasteryExport(HttpServletRequest request) {
+        return forward(HttpMethod.GET, MEMORY_MASTERY_EXPORT_PATH, request, null);
+    }
+
+    @PostMapping("/memory/mastery-import")
+    public Mono<ResponseEntity<byte[]>> memoryMasteryImport(
+            HttpServletRequest request,
+            @RequestBody(required = false) byte[] body) {
+        return forward(HttpMethod.POST, MEMORY_MASTERY_IMPORT_PATH, request, body);
     }
 
     @GetMapping("/knowledge/config")

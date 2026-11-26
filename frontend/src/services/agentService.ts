@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { nanoid } from 'nanoid'
-import type { AgentProfile, AnimationJob, CoachStyle, KnowledgeEmbeddingConfig, KnowledgeSource, KnowledgeStatus, MasteryPath, ModelProviderConfig, TrainingGoal, TrainingPhase } from '@/types'
+import type { AgentProfile, AnimationJob, CoachStyle, KnowledgeEmbeddingConfig, KnowledgeSource, KnowledgeStatus, MasteryBundle, MasteryImportResult, MasteryPath, ModelProviderConfig, TrainingGoal, TrainingPhase } from '@/types'
 import { capabilityForMode, getWorkspaceId, type DeepTutorCapability } from './deepTutorCapabilities'
 
 interface ChatReply {
@@ -173,6 +173,16 @@ export const agentService = {
 
   async exportMemory(): Promise<Blob> {
     const { data } = await axios.get<Blob>(workspaceScopedPath('/api/agent/memory/export'), { responseType: 'blob' })
+    return data
+  },
+
+  async exportMastery(): Promise<MasteryBundle> {
+    const { data } = await axios.get<MasteryBundle>(workspaceScopedPath('/api/agent/memory/mastery-export'))
+    return data
+  },
+
+  async importMastery(bundle: MasteryBundle): Promise<MasteryImportResult> {
+    const { data } = await axios.post<MasteryImportResult>(workspaceScopedPath('/api/agent/memory/mastery-import'), bundle)
     return data
   },
 
