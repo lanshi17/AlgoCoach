@@ -79,7 +79,13 @@ export function capabilityForMode(mode: string): DeepTutorCapability {
 }
 
 const CAPABILITY_HANDOFF_KEY = 'algocoach.capabilityHandoff'
+export const OPEN_COACH_EVENT = 'algocoach:open-coach'
 const CAPABILITIES: readonly DeepTutorCapability[] = ['chat', 'deep_solve', 'practice', 'mastery_path', 'review']
+
+/** Open the coach panel from anywhere in the workspace; no request is sent. */
+export function requestOpenCoach(): void {
+  window.dispatchEvent(new Event(OPEN_COACH_EVENT))
+}
 
 /** Asks the next PREP or IDLE turn to run under `capability`, e.g. from the knowledge graph's guide entry. */
 export function queueCapabilityHandoff(capability: DeepTutorCapability): void {

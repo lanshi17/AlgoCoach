@@ -18,7 +18,7 @@ import ChatPanel from '@/components/Chat/ChatPanel'
 import axios from 'axios'
 import { flushLocalPracticeRecords } from '@/services/localProgress'
 import { runAutoSync } from '@/services/autoSync'
-import { workspaceStorageKey } from '@/services/deepTutorCapabilities'
+import { workspaceStorageKey, OPEN_COACH_EVENT } from '@/services/deepTutorCapabilities'
 
 let authStatusRequest: Promise<unknown> | null = null
 
@@ -341,6 +341,15 @@ function Workspace() {
   useEffect(() => {
     try { window.sessionStorage.setItem(PANEL_KEY, panel) } catch { /* keep the panel in memory */ }
   }, [panel])
+
+  useEffect(() => {
+    const openCoach = () => {
+      setPanel('chat')
+      setFrontPanel('chat')
+    }
+    window.addEventListener(OPEN_COACH_EVENT, openCoach)
+    return () => window.removeEventListener(OPEN_COACH_EVENT, openCoach)
+  }, [])
 
   useEffect(() => {
     if (mode === 'FOCUS') setPanel('editor')

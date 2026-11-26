@@ -6,6 +6,7 @@ import axios from 'axios'
 import { afterEach, expect, it, vi } from 'vitest'
 import AppShell from './AppShell'
 import { packLayout } from './layoutStorage'
+import { OPEN_COACH_EVENT } from '@/services/deepTutorCapabilities'
 
 const editorRenders = vi.hoisted(() => ({ value: 0 }))
 
@@ -346,4 +347,26 @@ it('applies a layout written by another tab', async () => {
   expect(element.querySelector<HTMLElement>('[data-workspace-panel="editor"]')?.className).toContain('fixed')
   expect(element.querySelector('[aria-label="编辑器已独立为浮窗"]')).not.toBeNull()
   act(() => root.unmount()); element.remove()
+})
+
+it('switches the mobile workspace to the coach when asked to open it', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  sessionStorage.setItem('algocoach.workspacePanel', 'problem')
+  vi.spyOn(axios, 'get').mockResolvedValue({ data: { authenticated: false } })
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+  await act(async () => {
+    root.render(<MemoryRouter initialEntries={['/workspace']} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><AppShell /></MemoryRouter>)
+  })
+  const active = () => element.querySelector('nav[aria-label="工作区面板"] button[aria-pressed="true"]')?.textContent
+  expect(active()).toBe('题目')
+
+  act(() => window.dispatchEvent(new Event(OPEN_COACH_EVENT)))
+
+  expect(active()).toBe('AI 教练')
+  expect(element.querySelector('[data-workspace-panel="chat"]')?.className).not.toContain('hidden')
+  act(() => root.unmount())
+  element.remove()
+  sessionStorage.clear()
 })

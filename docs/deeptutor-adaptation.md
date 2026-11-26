@@ -8,7 +8,7 @@ AlgoCoach 参考 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 的公开
 | --- | --- | --- |
 | Workspace | `/home` 分阶段学习对话 + `/workspace` 算法练习 | 学习进度按当前浏览器会话和 workspace 保存；原学习记录与模块入口位于 `/learning/dashboard` |
 | TurnApplicationService / TurnEngine | `agentService.chatStream` → Gateway → Python Agent → 本地 `agent_turns` ledger | 每个 turn 有稳定 ID、事件序号和 completed/failed 状态；已完成 turn 可通过 replay API 恢复，不重复调用模型 |
-| Capability | `PREP` / `IDLE` → `chat`，`FOCUS` → `practice`，`REVIEW` → `review`；知识图谱的「让导师带我走」→ 下一次 `PREP` / `IDLE` 对话使用 `mastery_path`（只生效一次，发出请求时即消费，失败后需重新点击）；`deep_solve` 目前只在 Agent 侧注册，前端尚未发送 | 前后端共享有界 registry；能力会进入请求校验和 system prompt，Agent 仍按现有训练阶段执行 |
+| Capability | `PREP` / `IDLE` → `chat`，`FOCUS` → `practice`，`REVIEW` → `review`；知识图谱的「让导师带我走」→ 下一次 `PREP` / `IDLE` 对话使用 `mastery_path`（只生效一次，发出请求时即消费，失败后需重新点击）；题目面板的「拆解思路」→ 下一次 `PREP` / `IDLE` 对话使用 `deep_solve` 并预填拆解提示 | 前后端共享有界 registry；能力会进入请求校验和 system prompt，Agent 仍按现有训练阶段执行 |
 | ToolRegistry | AgentScope tools、知识库检索、记忆工具、题库和动画工具 | 工具继续由 Python Agent 注册，前端不直接调用模型或工具 |
 | Practice | 本地算法题练习、样例运行、提交、复盘记录 | 使用 DeepTutor 对应的可解释 SM-2 风格冷启动规则；保留每次自评事件 |
 | Mastery Path | `GET /memory/mastery-path` + 知识图谱“下一步学习路径”；`mastery_path` 轮次在模型调用前读取一次路径快照 | 独立 path runner 读取当前 workspace 的 mastery、共同训练关系和到期复习队列；到期项优先，同一优先级按掌握度升序，返回每一步的原因和建议动作。快照每轮重新读取、不跨轮缓存，读取失败时由 `get_mastery_path` 工具兜底 |
@@ -26,7 +26,7 @@ AlgoCoach 参考 [HKUDS/DeepTutor](https://github.com/HKUDS/DeepTutor) 的公开
 
 当前发行版是单用户、本地多 workspace，默认 ID 为 `local-default`；设置页可以创建或切换 workspace，切换后应用重载。浏览器 localStorage 的练习本、复盘队列、学习空间布局、任务板、草稿和专注记录通过 `workspaceStorageKey` 归属 workspace；默认 workspace 保留旧 key 以兼容已有数据，其他 workspace 使用隔离后缀。Agent SQLite 训练记忆、ReMe 对话目录、资料索引和题目向量索引按 workspace 隔离；非默认 workspace 的题目和错误向量文档随记忆 JSON 导出。Gateway SQLite 保存平台 Cookie 和判题事实。题目代码只在本轮 REVIEW 请求中发送，不写入长期记忆。
 
-跨设备同步尚未实现。
+跨设备目前只同步掌握度与复习计划：设置页可以手动导出/导入 v2 包，或配置同一 hub 与 `ALGOCOACH_SYNC_TOKEN` 后自动交换；练习本、复盘事件、任务板、笔记、对话和代码仍是本机数据。
 
 ## Mastery Path 的确定性边界
 

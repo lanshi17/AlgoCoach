@@ -8,6 +8,7 @@ import { acwingService } from '@/services/acwingService'
 import { hduService } from '@/services/hduService'
 import { ACWING_TOPICS, findAcWingTopic, TRAINING_TOPICS, findTrainingTopic } from '@/services/trainingTopics'
 import { isLocalPracticeProblem, LOCAL_PRACTICE_PROBLEMS } from '@/services/localPractice'
+import { queueCapabilityHandoff, requestOpenCoach } from '@/services/deepTutorCapabilities'
 import type { Problem } from '@/types'
 import DOMPurify from 'dompurify'
 import renderMathInElement from 'katex/contrib/auto-render'
@@ -26,12 +27,13 @@ const PLATFORM_LABELS: Record<PickerPlatform, string> = {
  * Includes title, tags, difficulty, rendered statement, and a "start solving" CTA.
  */
 export default function ProblemPanel() {
-  const { activeProblem, mode, enterFocus, setActiveProblem, refreshActiveProblem } = useAppStore(useShallow(state => ({
+  const { activeProblem, mode, enterFocus, setActiveProblem, refreshActiveProblem, setChatDraft } = useAppStore(useShallow(state => ({
     activeProblem: state.activeProblem,
     mode: state.mode,
     enterFocus: state.enterFocus,
     setActiveProblem: state.setActiveProblem,
     refreshActiveProblem: state.refreshActiveProblem,
+    setChatDraft: state.setChatDraft,
   })))
   const [problems, setProblems] = useState<Problem[]>([])
   const [loadingList, setLoadingList] = useState(false)
@@ -70,6 +72,16 @@ export default function ProblemPanel() {
     ALLOW_DATA_ATTR: false,
     ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|\/|#)/i,
   })
+
+  const startDeepSolve = () => {
+    if (!activeProblem) return
+    queueCapabilityHandoff('deep_solve')
+    const key = `${activeProblem.platform}:${activeProblem.platformId}`
+    if (!useAppStore.getState().chatDrafts[key]?.trim()) {
+      setChatDraft(`请深入拆解《${activeProblem.titleCn ?? activeProblem.title}》：先说明核心模型和关键不变量，再给出正确性证明思路、时间与空间复杂度，以及一个能暴露边界错误的反例。不要直接给完整代码。`)
+    }
+    requestOpenCoach()
+  }
 
   useEffect(() => {
     const statement = statementRef.current
@@ -390,11 +402,20 @@ export default function ProblemPanel() {
           <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-text-muted dark:text-text-dark-muted">
             {activeProblem.platformId}
           </span>
-          <button onClick={() => setShowPicker(true)} disabled={mode === 'FOCUS'}
-            title={mode === 'FOCUS' ? '专注解题时不能切换题目' : '更换题目'}
-            className="text-xs text-text-muted hover:text-accent disabled:opacity-40">
-            更换题目
-          </button>
+          <div className="flex items-center gap-3">
+            {mode !== 'FOCUS' && mode !== 'REVIEW' && (
+              <button type="button" onClick={startDeepSolve} aria-label="让教练拆解当前题目"
+                title="把拆解提示填入 AI 教练，稍后由你发送"
+                className="text-xs font-medium text-accent hover:underline">
+                拆解思路
+              </button>
+            )}
+            <button onClick={() => setShowPicker(true)} disabled={mode === 'FOCUS'}
+              title={mode === 'FOCUS' ? '专注解题时不能切换题目' : '更换题目'}
+              className="text-xs text-text-muted hover:text-accent disabled:opacity-40">
+              更换题目
+            </button>
+          </div>
         </div>
         <div className="flex items-center gap-2 mb-2 flex-wrap">
           <Badge difficulty={activeProblem.difficulty} />

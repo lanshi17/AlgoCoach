@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, expect, it, vi } from 'vitest'
 import { leetcodeService } from '@/services/leetcodeService'
 import { hduService } from '@/services/hduService'
+import { agentService } from '@/services/agentService'
+import { OPEN_COACH_EVENT, takeTurnCapability } from '@/services/deepTutorCapabilities'
 import { useAppStore } from '@/stores/useAppStore'
 import type { Problem } from '@/types'
 import ProblemPanel from './ProblemPanel'
@@ -122,7 +124,8 @@ it('does not request the problem list while viewing a problem, and loads it when
   expect(listProblems).not.toHaveBeenCalled()
 
   await act(async () => {
-    element.querySelector<HTMLButtonElement>('button')?.click()
+    Array.from(element.querySelectorAll<HTMLButtonElement>('button'))
+      .find(button => button.textContent === '更换题目')!.click()
     await new Promise(resolve => setTimeout(resolve, 0))
   })
   expect(listProblems).toHaveBeenCalledTimes(1)
@@ -309,6 +312,47 @@ it('lets the user retry a failed background refresh without leaving the cached p
   expect(getProblem).toHaveBeenCalledTimes(2)
   expect(element.textContent).toContain('Updated statement')
   expect(useAppStore.getState().activeProblem?.title).toBe('Updated problem')
+  await act(async () => root.unmount())
+  element.remove()
+})
+
+it('prefills a deep-solve prompt without sending it', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  sessionStorage.clear()
+  useAppStore.setState({ ...useAppStore.getInitialState(), activeProblem: first, mode: 'REVIEW' }, true)
+  vi.spyOn(leetcodeService, 'listProblems').mockResolvedValue({ problems: [], total: 0, pageSize: 50 })
+  vi.spyOn(leetcodeService, 'getProblem').mockResolvedValue(first)
+  const chatStream = vi.spyOn(agentService, 'chatStream')
+  let opened = 0
+  const onOpen = () => { opened += 1 }
+  window.addEventListener(OPEN_COACH_EVENT, onOpen)
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const root = createRoot(element)
+
+  await act(async () => {
+    root.render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><ProblemPanel /></MemoryRouter>)
+    await new Promise(resolve => setTimeout(resolve, 0))
+  })
+  expect(element.querySelector('button[aria-label="让教练拆解当前题目"]')).toBeNull()
+
+  await act(async () => { useAppStore.setState({ mode: 'PREP' }) })
+  const button = element.querySelector<HTMLButtonElement>('button[aria-label="让教练拆解当前题目"]')
+  expect(button).not.toBeNull()
+  await act(async () => button!.click())
+
+  expect(useAppStore.getState().chatDrafts['LEETCODE:one']).toContain('请深入拆解《First problem》')
+  expect(Object.values(useAppStore.getState().chatDrafts).some(draft => draft.includes('反例'))).toBe(true)
+  expect(takeTurnCapability('PREP')).toBe('deep_solve')
+  expect(opened).toBe(1)
+  expect(chatStream).not.toHaveBeenCalled()
+
+  act(() => useAppStore.getState().setChatDraft('我的草稿'))
+  await act(async () => button!.click())
+  expect(useAppStore.getState().chatDrafts['LEETCODE:one']).toBe('我的草稿')
+  expect(takeTurnCapability('PREP')).toBe('deep_solve')
+
+  window.removeEventListener(OPEN_COACH_EVENT, onOpen)
   await act(async () => root.unmount())
   element.remove()
 })

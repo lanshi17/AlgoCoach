@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createWorkspace, getWorkspaceId, LOCAL_WORKSPACE_ID, queueCapabilityHandoff, readWorkspaceManifests, switchWorkspace, takeTurnCapability, workspaceStorageKey } from './deepTutorCapabilities'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createWorkspace, getWorkspaceId, LOCAL_WORKSPACE_ID, OPEN_COACH_EVENT, queueCapabilityHandoff, readWorkspaceManifests, requestOpenCoach, switchWorkspace, takeTurnCapability, workspaceStorageKey } from './deepTutorCapabilities'
 
 afterEach(() => localStorage.clear())
 
@@ -49,5 +49,14 @@ describe('turn capability handoff', () => {
   it('ignores a stored value that is not a registered capability', () => {
     sessionStorage.setItem('algocoach.capabilityHandoff', 'not_a_capability')
     expect(takeTurnCapability('PREP')).toBe('chat')
+  })
+
+  it('dispatches a coach-open event without queueing a capability', () => {
+    const listener = vi.fn()
+    window.addEventListener(OPEN_COACH_EVENT, listener)
+    requestOpenCoach()
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(takeTurnCapability('PREP')).toBe('chat')
+    window.removeEventListener(OPEN_COACH_EVENT, listener)
   })
 })
