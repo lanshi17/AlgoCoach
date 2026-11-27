@@ -71,7 +71,7 @@ try {
   assert.match(js.error, /cannot import name 'fetch'/)
   assert.equal(await evaluate(`window.probeSandbox('http://127.0.0.1:${port}/trap')`), 'blocked')
   assert.equal(hits, 0)
-  await send('Page.navigate', { url: `http://127.0.0.1:${vitePort}/home` })
+  await send('Page.navigate', { url: `http://127.0.0.1:${vitePort}/learning/dashboard` })
   const waitUntil = async expression => {
     for (let i = 0; i < 100; i++) {
       try { if (await evaluate(expression)) return } catch { /* navigation in progress */ }
