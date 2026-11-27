@@ -53,6 +53,10 @@ try {
     throw new Error(`UI did not reach expected state: ${expression}`)
   }
   const button = label => `[...document.querySelectorAll('button')].find(button => button.textContent.includes(${JSON.stringify(label)}))`
+  // /home is the guided page. Open the learning dashboard through its entry
+  // rather than guessing the packaged app's origin for a direct navigation.
+  await waitUntil(`!!${button('学习记录')}`)
+  await evaluate(`${button('学习记录')}.click()`)
   await waitUntil(`!!${button('打开编码练习')}`)
   await evaluate(`${button('打开编码练习')}.click()`)
   await waitUntil(`!!${button('开始做题')}`)
